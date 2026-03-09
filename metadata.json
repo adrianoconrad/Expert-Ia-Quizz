@@ -1,0 +1,5 @@
+{
+  "name": "Experte IA Quizz",
+  "description": "Gerador de quizzes interativos baseados em seus documentos, com explicações detalhadas e formatos variados (Múltipla Escolha e Cebraspe).",
+  "requestFramePermissions": []
+}

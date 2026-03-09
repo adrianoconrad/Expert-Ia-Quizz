@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  body {
+    @apply antialiased;
+  }
+}
+
+.prose h1, .prose h2, .prose h3 {
+  @apply text-white font-medium mb-4 mt-6;
+}
+
+.prose p {
+  @apply mb-4 leading-relaxed;
+}
+
+.prose strong {
+  @apply text-emerald-400 font-semibold;
+}
+
+.prose ul {
+  @apply list-disc list-inside mb-4 space-y-2;
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-black/10 rounded-full;
+  }
+}
+
+/* Print Styles */
+@media print {
+  aside, header, button:not(.print-only), .no-print {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .max-w-7xl {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+  .bg-white {
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .rounded-\[40px\], .rounded-\[32px\] {
+    border-radius: 0 !important;
+  }
+  .bg-\[\#F5F5F0\] {
+    background: #f9f9f9 !important;
+    border: 1px solid #eee !important;
+  }
+}
