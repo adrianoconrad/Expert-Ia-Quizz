@@ -15,17 +15,19 @@ export interface QuizQuestion {
 }
 
 const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || localStorage.getItem('GEMINI_API_KEY');
   if (!apiKey) {
-    throw new Error("Chave de API não encontrada. Por favor, selecione uma chave nas configurações.");
+    throw new Error("Chave de API não encontrada. Por favor, selecione uma chave nas configurações ou insira uma manualmente.");
   }
   return new GoogleGenAI({ apiKey });
 };
 
 export type QuizFormat = 'multiple-choice' | 'cebraspe' | 'both';
 
+export type ContentItem = string | { data: string; mimeType: string };
+
 export async function generateQuiz(
-  content: string | { data: string; mimeType: string } | string[], 
+  content: ContentItem | ContentItem[], 
   questionCount: number = 20,
   format: QuizFormat = 'both'
 ): Promise<QuizQuestion[]> {
@@ -38,7 +40,7 @@ export async function generateQuiz(
 
   const prompt = `
     Você é um especialista em educação e bancas de concurso (como Cebraspe).
-    Com base no conteúdo fornecido abaixo (texto, arquivo ou links), elabore exatamente ${questionCount} questões de quiz.
+    Com base no conteúdo fornecido abaixo (texto, arquivos ou links), elabore exatamente ${questionCount} questões de quiz.
     
     REGRAS:
     1. ${formatInstruction}
@@ -54,14 +56,19 @@ export async function generateQuiz(
   let contentParts: any[] = [{ text: prompt }];
   let tools: any[] = [];
 
-  if (Array.isArray(content)) {
-    // It's a list of URLs
-    contentParts.push({ text: `Analise o conteúdo destes links para gerar as questões:\n${content.join('\n')}` });
-    tools.push({ urlContext: {} });
-  } else if (typeof content === 'string') {
-    contentParts.push({ text: `CONTEÚDO:\n${content}` });
-  } else {
-    contentParts.push({ inlineData: { data: content.data, mimeType: content.mimeType } });
+  const items = Array.isArray(content) ? content : [content];
+
+  for (const item of items) {
+    if (typeof item === 'string') {
+      if (item.startsWith('http')) {
+        contentParts.push({ text: `Analise o conteúdo deste link: ${item}` });
+        if (!tools.some(t => t.urlContext)) tools.push({ urlContext: {} });
+      } else {
+        contentParts.push({ text: `CONTEÚDO:\n${item}` });
+      }
+    } else {
+      contentParts.push({ inlineData: { data: item.data, mimeType: item.mimeType } });
+    }
   }
 
   const response = await ai.models.generateContent({
@@ -84,7 +91,7 @@ export async function generateQuiz(
               items: { type: Type.STRING },
               description: "Obrigatório para multiple-choice. Para cebraspe, deixe vazio ou omita."
             },
-            correctAnswer: { type: Type.STRING, description: "Para cebraspe use 'Certo' ou 'Errado'. Para múltipla escolha, use o texto exato da opção correta." },
+            correctAnswer: { type: Type.STRING, description: "Para cebraspe use 'Certo' or 'Errado'. Para múltipla escolha, use o texto exato da opção correta." },
             explanation: { type: Type.STRING }
           },
           required: ["id", "type", "difficulty", "question", "correctAnswer", "explanation"]
@@ -104,13 +111,13 @@ export async function generateQuiz(
 }
 
 export async function generateDeepDive(
-  content: string | { data: string; mimeType: string } | string[],
+  content: ContentItem | ContentItem[],
   question: QuizQuestion
 ): Promise<string> {
   const ai = getAI();
   const prompt = `
     Você é um professor especialista. 
-    Com base no conteúdo fornecido (texto, arquivo ou links), elabore um "Deep Dive" (aprofundamento) detalhado para a seguinte questão de quiz.
+    Com base no conteúdo fornecido (texto, arquivos ou links), elabore um "Deep Dive" (aprofundamento) detalhado para a seguinte questão de quiz.
     
     QUESTÃO: ${question.question}
     RESPOSTA CORRETA: ${question.correctAnswer}
@@ -127,13 +134,19 @@ export async function generateDeepDive(
   let contentParts: any[] = [{ text: prompt }];
   let tools: any[] = [];
 
-  if (Array.isArray(content)) {
-    contentParts.push({ text: `Links de referência:\n${content.join('\n')}` });
-    tools.push({ urlContext: {} });
-  } else if (typeof content === 'string') {
-    contentParts.push({ text: `CONTEÚDO:\n${content}` });
-  } else {
-    contentParts.push({ inlineData: { data: content.data, mimeType: content.mimeType } });
+  const items = Array.isArray(content) ? content : [content];
+
+  for (const item of items) {
+    if (typeof item === 'string') {
+      if (item.startsWith('http')) {
+        contentParts.push({ text: `Link de referência: ${item}` });
+        if (!tools.some(t => t.urlContext)) tools.push({ urlContext: {} });
+      } else {
+        contentParts.push({ text: `CONTEÚDO:\n${item}` });
+      }
+    } else {
+      contentParts.push({ inlineData: { data: item.data, mimeType: item.mimeType } });
+    }
   }
 
   const response = await ai.models.generateContent({
