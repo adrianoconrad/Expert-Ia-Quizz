@@ -746,8 +746,8 @@ export default function App() {
                 <span className="text-sm font-bold uppercase tracking-wider text-black/60 dark:text-slate-500">Ajuste</span>
               </button>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-emerald-600 dark:bg-emerald-600 rounded-lg flex items-center justify-center overflow-hidden p-1">
-                  <img src="/input_file_0.png" alt="Logo" className="w-full h-full object-contain" />
+                <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                  <BrainCircuit size={20} className="text-white" />
                 </div>
                 <span className="font-semibold text-lg tracking-tight hidden sm:inline dark:text-slate-100">Quiz AI Expert</span>
               </div>
@@ -775,8 +775,8 @@ export default function App() {
                     className={cn(
                       "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all border",
                       isPaused 
-                        ? "bg-amber-100 text-amber-700 border-amber-200" 
-                        : "bg-black/5 text-black/60 border-black/5 hover:bg-black/10"
+                        ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800" 
+                        : "bg-black/5 text-black/60 border-black/5 hover:bg-black/10 dark:bg-white/10 dark:text-slate-300 dark:border-white/10 dark:hover:bg-white/20"
                     )}
                   >
                     {isPaused ? <Play size={18} /> : <Pause size={18} />}
@@ -784,7 +784,7 @@ export default function App() {
                   </button>
                   <button
                     onClick={resetQuiz}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-rose-600 hover:bg-rose-50 font-bold text-sm transition-colors border border-rose-100"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-bold text-sm transition-colors border border-rose-100 dark:border-rose-900/30 dark:text-rose-400"
                   >
                     <PlusCircle size={18} />
                     <span className="hidden sm:inline">Novo Quiz</span>
@@ -808,8 +808,8 @@ export default function App() {
                   className="max-w-2xl mx-auto text-center space-y-8"
                 >
                   <div className="flex justify-center">
-                    <div className="w-20 h-20 bg-emerald-600 rounded-3xl flex items-center justify-center shadow-xl shadow-emerald-200 dark:shadow-emerald-900/20 overflow-hidden p-3">
-                      <img src="/input_file_0.png" alt="Logo" className="w-full h-full object-contain" />
+                    <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-3xl flex items-center justify-center shadow-2xl shadow-emerald-500/30 rotate-3">
+                      <BrainCircuit size={48} className="text-white" />
                     </div>
                   </div>
                   <div className="space-y-4">
@@ -957,7 +957,7 @@ export default function App() {
                   <div className="relative">
                     <Loader2 className="w-16 h-16 text-emerald-600 dark:text-emerald-500 animate-spin" />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <img src="/input_file_0.png" alt="Logo" className="w-6 h-6 object-contain" />
+                      <BrainCircuit className="text-emerald-600/50 dark:text-emerald-400/30" size={24} />
                     </div>
                   </div>
                   <div className="text-center space-y-2">
@@ -1021,9 +1021,9 @@ export default function App() {
                               <motion.div 
                                 initial={{ scale: 0.8, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
-                                className="w-24 h-24 bg-emerald-600 dark:bg-emerald-600 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-emerald-200 dark:shadow-emerald-900/20 rotate-12 overflow-hidden p-4"
+                                className="w-24 h-24 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-emerald-500/30 rotate-12"
                               >
-                                <img src="/input_file_0.png" alt="Logo" className="w-full h-full object-contain" />
+                                <BrainCircuit size={48} className="text-white" />
                               </motion.div>
                               <div className="space-y-3 max-w-sm">
                                 <h3 className="text-3xl font-bold tracking-tight dark:text-slate-100">Pronto para o desafio?</h3>
