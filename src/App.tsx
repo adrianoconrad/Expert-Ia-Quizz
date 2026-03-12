@@ -30,13 +30,16 @@ import {
   PlusCircle,
   Link as LinkIcon,
   Sun,
-  Moon
+  Moon,
+  Send,
+  User
 } from 'lucide-react';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import mammoth from 'mammoth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { generateQuiz, QuizQuestion, QuizFormat, generateDeepDive, generateSpeech, ContentItem } from './services/geminiService';
+import { generateQuiz, QuizQuestion, QuizFormat, generateDeepDive, generateSpeech, ContentItem, chatWithProfessor } from './services/geminiService';
 import { cn } from './lib/utils';
 
 declare global {
@@ -84,6 +87,12 @@ export default function App() {
   const [manualApiKey, setManualApiKey] = useState(localStorage.getItem('GEMINI_API_KEY') || '');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   
+  // Chat with Professor
+  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'model', text: string }[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   // Settings
   const [questionCount, setQuestionCount] = useState(20);
   const [quizFormat, setQuizFormat] = useState<QuizFormat>('both');
@@ -297,11 +306,18 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatHistory]);
+
   const fetchDeepDiveForCurrentQuestion = async () => {
     const currentQ = questions[currentIndex];
     if (!currentQ || currentQ.deepDive || !lastContent) return;
 
     setIsDeepDiveLoading(true);
+    setChatHistory([]); // Reset chat for new question
     try {
       const deepDive = await generateDeepDive(lastContent, currentQ);
       const updatedQuestions = [...questions];
@@ -315,6 +331,27 @@ export default function App() {
       }
     } finally {
       setIsDeepDiveLoading(false);
+    }
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isChatLoading) return;
+
+    const userMsg = chatInput.trim();
+    setChatInput('');
+    const newHistory = [...chatHistory, { role: 'user' as const, text: userMsg }];
+    setChatHistory(newHistory);
+    setIsChatLoading(true);
+
+    try {
+      const response = await chatWithProfessor(questions[currentIndex], chatHistory, userMsg);
+      setChatHistory([...newHistory, { role: 'model' as const, text: response }]);
+    } catch (err) {
+      console.error("Chat error:", err);
+      setChatHistory([...newHistory, { role: 'model' as const, text: "Desculpe, tive um problema ao processar sua pergunta." }]);
+    } finally {
+      setIsChatLoading(false);
     }
   };
 
@@ -421,6 +458,7 @@ export default function App() {
     const nextShow = !showDeepDive;
     setShowDeepDive(nextShow);
     if (nextShow) {
+      setChatHistory([]); // Reset chat when opening
       fetchDeepDiveForCurrentQuestion();
     }
   };
@@ -1264,8 +1302,8 @@ export default function App() {
                         exit={{ opacity: 0, x: 20 }}
                         className="lg:col-span-7"
                       >
-                        <div className="bg-[#151619] dark:bg-slate-900 text-white rounded-[32px] shadow-2xl border border-white/10 dark:border-slate-800 sticky top-24 overflow-hidden flex flex-col min-h-[70vh]">
-                          <div className="bg-emerald-600/10 p-6 border-b border-white/5 dark:border-slate-800">
+                        <div className="dark bg-slate-900 text-white rounded-[32px] shadow-2xl border border-white/10 sticky top-24 overflow-hidden flex flex-col min-h-[70vh]">
+                          <div className="bg-emerald-600/10 p-6 border-b border-white/5">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
@@ -1299,7 +1337,7 @@ export default function App() {
                             <p className="text-white/40 text-xs font-medium uppercase tracking-widest">Contexto e Detalhes Técnicos</p>
                           </div>
                           
-                          <div className="p-6 space-y-6 overflow-y-auto max-h-[80vh] custom-scrollbar flex-1 flex flex-col">
+                          <div className="p-6 space-y-6 overflow-y-auto max-h-[60vh] custom-scrollbar flex-1 flex flex-col">
                             {isDeepDiveLoading ? (
                               <div className="flex-1 flex flex-col items-center justify-center space-y-4 py-12">
                                 <Loader2 className="w-10 h-10 text-emerald-400 animate-spin" />
@@ -1309,11 +1347,37 @@ export default function App() {
                               <>
                                 <div className="prose prose-invert prose-emerald max-w-none">
                                   <div className="text-white/90 leading-relaxed text-lg font-normal">
-                                    <Markdown>{currentQuestion.deepDive}</Markdown>
+                                    <Markdown remarkPlugins={[remarkGfm]}>{currentQuestion.deepDive}</Markdown>
                                   </div>
                                 </div>
 
-                                <div className="pt-8 border-t border-white/5 dark:border-slate-800">
+                                {chatHistory.length > 0 && (
+                                  <div className="space-y-6 pt-8 border-t border-white/5">
+                                    <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold mb-4">Conversa com o Professor</p>
+                                    {chatHistory.map((msg, idx) => (
+                                      <div key={idx} className={cn(
+                                        "flex gap-4",
+                                        msg.role === 'user' ? "flex-row-reverse" : "flex-row"
+                                      )}>
+                                        <div className={cn(
+                                          "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                                          msg.role === 'user' ? "bg-emerald-600" : "bg-white/10"
+                                        )}>
+                                          {msg.role === 'user' ? <User size={16} /> : <BrainCircuit size={16} />}
+                                        </div>
+                                        <div className={cn(
+                                          "max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed prose prose-invert prose-emerald prose-sm",
+                                          msg.role === 'user' ? "bg-emerald-600/20 text-emerald-50 rounded-tr-none" : "bg-white/5 text-white/80 rounded-tl-none"
+                                        )}>
+                                          <Markdown remarkPlugins={[remarkGfm]}>{msg.text}</Markdown>
+                                        </div>
+                                      </div>
+                                    ))}
+                                    <div ref={chatEndRef} />
+                                  </div>
+                                )}
+
+                                <div className="pt-8 border-t border-white/5">
                                   <div className="flex items-center gap-2 mb-4">
                                     <BrainCircuit size={16} className="text-emerald-400" />
                                     <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold">Dica de Estudo</p>
@@ -1330,6 +1394,28 @@ export default function App() {
                               </div>
                             )}
                           </div>
+
+                          {currentQuestion.deepDive && (
+                            <div className="p-4 bg-white/5 border-t border-white/5">
+                              <form onSubmit={handleSendMessage} className="relative">
+                                <input
+                                  type="text"
+                                  value={chatInput}
+                                  onChange={(e) => setChatInput(e.target.value)}
+                                  placeholder="Ficou com dúvida? Pergunte ao Professor..."
+                                  disabled={isChatLoading}
+                                  className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-6 pr-14 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-emerald-500/50 transition-all"
+                                />
+                                <button
+                                  type="submit"
+                                  disabled={!chatInput.trim() || isChatLoading}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                >
+                                  {isChatLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                                </button>
+                              </form>
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     )}

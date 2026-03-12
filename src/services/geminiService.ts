@@ -127,8 +127,9 @@ export async function generateDeepDive(
     1. Forneça uma explicação pedagógica profunda e detalhada.
     2. Use Markdown para formatar o texto (negritos, listas, etc).
     3. Foque em ajudar o aluno a entender o conceito por trás da questão, não apenas a resposta.
-    4. Idioma: Português (Brasil).
-    5. Seja encorajador e técnico ao mesmo tempo.
+    4. INCLUA OBRIGATORIAMENTE uma seção chamada "Mnemônico de Ouro" formatada como uma TABELA Markdown (com bordas e colunas claras). A tabela deve ter colunas como "Conceito", "Gatilho de Memória" e "Aplicação Prática".
+    5. Idioma: Português (Brasil).
+    6. Seja encorajador e técnico ao mesmo tempo.
   `;
 
   let contentParts: any[] = [{ text: prompt }];
@@ -158,6 +159,36 @@ export async function generateDeepDive(
   });
 
   return response.text || "Não foi possível gerar o aprofundamento no momento.";
+}
+
+export async function chatWithProfessor(
+  question: QuizQuestion,
+  history: { role: 'user' | 'model', text: string }[],
+  userMessage: string
+): Promise<string> {
+  const ai = getAI();
+  const chat = ai.chats.create({
+    model: "gemini-3-flash-preview",
+    config: {
+      systemInstruction: `
+        Você é o "Professor AI Expert". Seu objetivo é ajudar o aluno a entender profundamente o conteúdo.
+        Você está discutindo esta questão específica:
+        QUESTÃO: ${question.question}
+        RESPOSTA CORRETA: ${question.correctAnswer}
+        EXPLICAÇÃO: ${question.explanation}
+        
+        Responda de forma clara, pedagógica e direta. Use Markdown para formatar suas respostas.
+        Se o aluno perguntar algo fora do contexto da questão ou do material de estudo, tente gentilmente trazê-lo de volta ao foco.
+      `,
+    },
+    history: history.map(h => ({
+      role: h.role === 'user' ? 'user' : 'model',
+      parts: [{ text: h.text }]
+    }))
+  });
+
+  const response = await chat.sendMessage({ message: userMessage });
+  return response.text || "Desculpe, não consegui processar sua pergunta agora.";
 }
 
 export interface AudioResponse {

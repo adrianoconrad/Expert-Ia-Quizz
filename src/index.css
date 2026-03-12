@@ -32,6 +32,23 @@
   @apply list-disc list-inside mb-4 space-y-2 text-white/80 dark:text-slate-300;
 }
 
+/* Excel-like Table Styles */
+.prose table {
+  @apply w-full border-collapse border border-white/20 dark:border-slate-700 my-6 text-sm;
+}
+
+.prose th {
+  @apply bg-emerald-600/20 dark:bg-emerald-900/40 border border-white/20 dark:border-slate-700 p-3 text-left font-bold text-emerald-400 dark:text-emerald-300;
+}
+
+.prose td {
+  @apply border border-white/20 dark:border-slate-700 p-3 text-white/90 dark:text-slate-200;
+}
+
+.prose tr:nth-child(even) {
+  @apply bg-white/5 dark:bg-slate-800/30;
+}
+
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
     width: 4px;
