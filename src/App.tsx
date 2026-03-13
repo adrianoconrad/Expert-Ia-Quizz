@@ -32,7 +32,8 @@ import {
   Sun,
   Moon,
   Send,
-  User
+  User,
+  Palette
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -52,6 +53,274 @@ declare global {
 }
 
 type QuizState = 'idle' | 'loading' | 'active' | 'finished';
+type ThemeColor = 'emerald' | 'blue' | 'indigo' | 'violet' | 'rose' | 'amber';
+
+const THEME_CONFIG = {
+  emerald: {
+    primary: 'bg-emerald-600',
+    primaryHover: 'hover:bg-emerald-700',
+    secondary: 'bg-emerald-500',
+    secondaryHover: 'hover:bg-emerald-500',
+    text: 'text-emerald-600',
+    textDark: 'dark:text-emerald-500',
+    textLight: 'text-emerald-700',
+    textLightDark: 'dark:text-emerald-400',
+    border: 'border-emerald-600',
+    borderDark: 'dark:border-emerald-500',
+    bg: 'bg-emerald-50',
+    bgDark: 'dark:bg-emerald-900/20',
+    accent: 'accent-emerald-600',
+    accentDark: 'dark:accent-emerald-500',
+    ring: 'focus:ring-emerald-500/10',
+    focusBorder: 'focus:border-emerald-500',
+    gradientFrom: 'from-emerald-500',
+    gradientTo: 'to-emerald-700',
+    shadow: 'shadow-emerald-500/20',
+    shadowLg: 'shadow-emerald-500/30',
+    shadowXl: 'shadow-emerald-200',
+    shadowXlDark: 'dark:shadow-emerald-900/20',
+    prose: 'prose-emerald',
+    selection: 'selection:bg-emerald-100 dark:selection:bg-emerald-900/30',
+    icon: 'text-emerald-600 dark:text-emerald-500',
+    difficultyEasy: 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400',
+    deepDiveBg: 'bg-emerald-600/10',
+    deepDiveIcon: 'bg-emerald-600',
+    deepDiveAudio: 'bg-emerald-500',
+    deepDiveLoader: 'text-emerald-400',
+    deepDiveTip: 'bg-emerald-400/5 border-emerald-400/10 text-emerald-100/80',
+    deepDiveTipIcon: 'text-emerald-400',
+    chatUser: 'bg-emerald-600',
+    chatUserBubble: 'bg-emerald-600/20 text-emerald-50',
+    resultCircle: 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400',
+    bgLight: 'bg-emerald-50',
+    bgLightDark: 'dark:bg-emerald-900/20',
+    borderLight: 'border-emerald-600',
+    borderLightDark: 'dark:border-emerald-500',
+    shadowLight: 'shadow-emerald-500/20',
+    shadowDark: 'dark:shadow-emerald-900/20',
+    darkPrimary: 'bg-emerald-600'
+  },
+  blue: {
+    primary: 'bg-blue-600',
+    primaryHover: 'hover:bg-blue-700',
+    secondary: 'bg-blue-500',
+    secondaryHover: 'hover:bg-blue-500',
+    text: 'text-blue-600',
+    textDark: 'dark:text-blue-500',
+    textLight: 'text-blue-700',
+    textLightDark: 'dark:text-blue-400',
+    border: 'border-blue-600',
+    borderDark: 'dark:border-blue-500',
+    bg: 'bg-blue-50',
+    bgDark: 'dark:bg-blue-900/20',
+    accent: 'accent-blue-600',
+    accentDark: 'dark:accent-blue-500',
+    ring: 'focus:ring-blue-500/10',
+    focusBorder: 'focus:border-blue-500',
+    gradientFrom: 'from-blue-500',
+    gradientTo: 'to-blue-700',
+    shadow: 'shadow-blue-500/20',
+    shadowLg: 'shadow-blue-500/30',
+    shadowXl: 'shadow-blue-200',
+    shadowXlDark: 'dark:shadow-blue-900/20',
+    prose: 'prose-blue',
+    selection: 'selection:bg-blue-100 dark:selection:bg-blue-900/30',
+    icon: 'text-blue-600 dark:text-blue-500',
+    difficultyEasy: 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400',
+    deepDiveBg: 'bg-blue-600/10',
+    deepDiveIcon: 'bg-blue-600',
+    deepDiveAudio: 'bg-blue-500',
+    deepDiveLoader: 'text-blue-400',
+    deepDiveTip: 'bg-blue-400/5 border-blue-400/10 text-blue-100/80',
+    deepDiveTipIcon: 'text-blue-400',
+    chatUser: 'bg-blue-600',
+    chatUserBubble: 'bg-blue-600/20 text-blue-50',
+    resultCircle: 'bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400',
+    bgLight: 'bg-blue-50',
+    bgLightDark: 'dark:bg-blue-900/20',
+    borderLight: 'border-blue-600',
+    borderLightDark: 'dark:border-blue-500',
+    shadowLight: 'shadow-blue-500/20',
+    shadowDark: 'dark:shadow-blue-900/20',
+    darkPrimary: 'bg-blue-600'
+  },
+  indigo: {
+    primary: 'bg-indigo-600',
+    primaryHover: 'hover:bg-indigo-700',
+    secondary: 'bg-indigo-500',
+    secondaryHover: 'hover:bg-indigo-500',
+    text: 'text-indigo-600',
+    textDark: 'dark:text-indigo-500',
+    textLight: 'text-indigo-700',
+    textLightDark: 'dark:text-indigo-400',
+    border: 'border-indigo-600',
+    borderDark: 'dark:border-indigo-500',
+    bg: 'bg-indigo-50',
+    bgDark: 'dark:bg-indigo-900/20',
+    accent: 'accent-indigo-600',
+    accentDark: 'dark:accent-indigo-500',
+    ring: 'focus:ring-indigo-500/10',
+    focusBorder: 'focus:border-indigo-500',
+    gradientFrom: 'from-indigo-500',
+    gradientTo: 'to-indigo-700',
+    shadow: 'shadow-indigo-500/20',
+    shadowLg: 'shadow-indigo-500/30',
+    shadowXl: 'shadow-indigo-200',
+    shadowXlDark: 'dark:shadow-indigo-900/20',
+    prose: 'prose-indigo',
+    selection: 'selection:bg-indigo-100 dark:selection:bg-indigo-900/30',
+    icon: 'text-indigo-600 dark:text-indigo-500',
+    difficultyEasy: 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400',
+    deepDiveBg: 'bg-indigo-600/10',
+    deepDiveIcon: 'bg-indigo-600',
+    deepDiveAudio: 'bg-indigo-500',
+    deepDiveLoader: 'text-indigo-400',
+    deepDiveTip: 'bg-indigo-400/5 border-indigo-400/10 text-indigo-100/80',
+    deepDiveTipIcon: 'text-indigo-400',
+    chatUser: 'bg-indigo-600',
+    chatUserBubble: 'bg-indigo-600/20 text-indigo-50',
+    resultCircle: 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400',
+    bgLight: 'bg-indigo-50',
+    bgLightDark: 'dark:bg-indigo-900/20',
+    borderLight: 'border-indigo-600',
+    borderLightDark: 'dark:border-indigo-500',
+    shadowLight: 'shadow-indigo-500/20',
+    shadowDark: 'dark:shadow-indigo-900/20',
+    darkPrimary: 'bg-indigo-600'
+  },
+  violet: {
+    primary: 'bg-violet-600',
+    primaryHover: 'hover:bg-violet-700',
+    secondary: 'bg-violet-500',
+    secondaryHover: 'hover:bg-violet-500',
+    text: 'text-violet-600',
+    textDark: 'dark:text-violet-500',
+    textLight: 'text-violet-700',
+    textLightDark: 'dark:text-violet-400',
+    border: 'border-violet-600',
+    borderDark: 'dark:border-violet-500',
+    bg: 'bg-violet-50',
+    bgDark: 'dark:bg-violet-900/20',
+    accent: 'accent-violet-600',
+    accentDark: 'dark:accent-violet-500',
+    ring: 'focus:ring-violet-500/10',
+    focusBorder: 'focus:border-violet-500',
+    gradientFrom: 'from-violet-500',
+    gradientTo: 'to-violet-700',
+    shadow: 'shadow-violet-500/20',
+    shadowLg: 'shadow-violet-500/30',
+    shadowXl: 'shadow-violet-200',
+    shadowXlDark: 'dark:shadow-violet-900/20',
+    prose: 'prose-violet',
+    selection: 'selection:bg-violet-100 dark:selection:bg-violet-900/30',
+    icon: 'text-violet-600 dark:text-violet-500',
+    difficultyEasy: 'bg-violet-100 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400',
+    deepDiveBg: 'bg-violet-600/10',
+    deepDiveIcon: 'bg-violet-600',
+    deepDiveAudio: 'bg-violet-500',
+    deepDiveLoader: 'text-violet-400',
+    deepDiveTip: 'bg-violet-400/5 border-violet-400/10 text-violet-100/80',
+    deepDiveTipIcon: 'text-violet-400',
+    chatUser: 'bg-violet-600',
+    chatUserBubble: 'bg-violet-600/20 text-violet-50',
+    resultCircle: 'bg-violet-100 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400',
+    bgLight: 'bg-violet-50',
+    bgLightDark: 'dark:bg-violet-900/20',
+    borderLight: 'border-violet-600',
+    borderLightDark: 'dark:border-violet-500',
+    shadowLight: 'shadow-violet-500/20',
+    shadowDark: 'dark:shadow-violet-900/20',
+    darkPrimary: 'bg-violet-600'
+  },
+  rose: {
+    primary: 'bg-rose-600',
+    primaryHover: 'hover:bg-rose-700',
+    secondary: 'bg-rose-500',
+    secondaryHover: 'hover:bg-rose-500',
+    text: 'text-rose-600',
+    textDark: 'dark:text-rose-500',
+    textLight: 'text-rose-700',
+    textLightDark: 'dark:text-rose-400',
+    border: 'border-rose-600',
+    borderDark: 'dark:border-rose-500',
+    bg: 'bg-rose-50',
+    bgDark: 'dark:bg-rose-900/20',
+    accent: 'accent-rose-600',
+    accentDark: 'dark:accent-rose-500',
+    ring: 'focus:ring-rose-500/10',
+    focusBorder: 'focus:border-rose-500',
+    gradientFrom: 'from-rose-500',
+    gradientTo: 'to-rose-700',
+    shadow: 'shadow-rose-500/20',
+    shadowLg: 'shadow-rose-500/30',
+    shadowXl: 'shadow-rose-200',
+    shadowXlDark: 'dark:shadow-rose-900/20',
+    prose: 'prose-rose',
+    selection: 'selection:bg-rose-100 dark:selection:bg-rose-900/30',
+    icon: 'text-rose-600 dark:text-rose-500',
+    difficultyEasy: 'bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400',
+    deepDiveBg: 'bg-rose-600/10',
+    deepDiveIcon: 'bg-rose-600',
+    deepDiveAudio: 'bg-rose-500',
+    deepDiveLoader: 'text-rose-400',
+    deepDiveTip: 'bg-rose-400/5 border-rose-400/10 text-rose-100/80',
+    deepDiveTipIcon: 'text-rose-400',
+    chatUser: 'bg-rose-600',
+    chatUserBubble: 'bg-rose-600/20 text-rose-50',
+    resultCircle: 'bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400',
+    bgLight: 'bg-rose-50',
+    bgLightDark: 'dark:bg-rose-900/20',
+    borderLight: 'border-rose-600',
+    borderLightDark: 'dark:border-rose-500',
+    shadowLight: 'shadow-rose-500/20',
+    shadowDark: 'dark:shadow-rose-900/20',
+    darkPrimary: 'bg-rose-600'
+  },
+  amber: {
+    primary: 'bg-amber-600',
+    primaryHover: 'hover:bg-amber-700',
+    secondary: 'bg-amber-500',
+    secondaryHover: 'hover:bg-amber-500',
+    text: 'text-amber-600',
+    textDark: 'dark:text-amber-500',
+    textLight: 'text-amber-700',
+    textLightDark: 'dark:text-amber-400',
+    border: 'border-amber-600',
+    borderDark: 'dark:border-amber-500',
+    bg: 'bg-amber-50',
+    bgDark: 'dark:bg-amber-900/20',
+    accent: 'accent-amber-600',
+    accentDark: 'dark:accent-amber-500',
+    ring: 'focus:ring-amber-500/10',
+    focusBorder: 'focus:border-amber-500',
+    gradientFrom: 'from-amber-500',
+    gradientTo: 'to-amber-700',
+    shadow: 'shadow-amber-500/20',
+    shadowLg: 'shadow-amber-500/30',
+    shadowXl: 'shadow-amber-200',
+    shadowXlDark: 'dark:shadow-amber-900/20',
+    prose: 'prose-amber',
+    selection: 'selection:bg-amber-100 dark:selection:bg-amber-900/30',
+    icon: 'text-amber-600 dark:text-amber-500',
+    difficultyEasy: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400',
+    deepDiveBg: 'bg-amber-600/10',
+    deepDiveIcon: 'bg-amber-600',
+    deepDiveAudio: 'bg-amber-500',
+    deepDiveLoader: 'text-amber-400',
+    deepDiveTip: 'bg-amber-400/5 border-amber-400/10 text-amber-100/80',
+    deepDiveTipIcon: 'text-amber-400',
+    chatUser: 'bg-amber-600',
+    chatUserBubble: 'bg-amber-600/20 text-amber-50',
+    resultCircle: 'bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400',
+    bgLight: 'bg-amber-50',
+    bgLightDark: 'dark:bg-amber-900/20',
+    borderLight: 'border-amber-600',
+    borderLightDark: 'dark:border-amber-500',
+    shadowLight: 'shadow-amber-500/20',
+    shadowDark: 'dark:shadow-amber-900/20',
+    darkPrimary: 'bg-amber-600'
+  }
+};
 
 interface QuizResult {
   id: string;
@@ -80,6 +349,7 @@ export default function App() {
   const [isReviewMode, setIsReviewMode] = useState(false);
   const [isQuestionStarted, setIsQuestionStarted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [lastContent, setLastContent] = useState<ContentItem | ContentItem[] | null>(null);
   const [lastFileName, setLastFileName] = useState('');
   const [urlInput, setUrlInput] = useState('');
@@ -98,6 +368,15 @@ export default function App() {
   const [quizFormat, setQuizFormat] = useState<QuizFormat>('both');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [history, setHistory] = useState<QuizResult[]>([]);
+  const [themeColor, setThemeColor] = useState<ThemeColor>(() => {
+    return (localStorage.getItem('themeColor') as ThemeColor) || 'emerald';
+  });
+
+  const theme = THEME_CONFIG[themeColor];
+
+  useEffect(() => {
+    localStorage.setItem('themeColor', themeColor);
+  }, [themeColor]);
   const [timeAlertThreshold, setTimeAlertThreshold] = useState(100); // Default 1:40
   
   const [darkMode, setDarkMode] = useState(() => {
@@ -630,7 +909,7 @@ export default function App() {
   const isCorrect = currentAnswer === currentQuestion?.correctAnswer;
 
   return (
-    <div className="min-h-screen bg-[#F5F5F0] dark:bg-slate-950 text-[#1A1A1A] dark:text-slate-100 font-sans selection:bg-emerald-100 dark:selection:bg-emerald-900/30 flex overflow-hidden">
+    <div className={cn("min-h-screen bg-[#F5F5F0] dark:bg-slate-950 text-[#1A1A1A] dark:text-slate-100 font-sans flex overflow-hidden", theme.selection)}>
       
       {/* Sidebar */}
       <motion.aside 
@@ -641,12 +920,93 @@ export default function App() {
         <div className="w-[320px] h-full flex flex-col p-6 space-y-8">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-lg flex items-center gap-2 dark:text-slate-100">
-              <Settings size={20} className="text-emerald-600 dark:text-emerald-500" />
+              <Settings size={20} className={theme.icon} />
               Configurações
             </h3>
             <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:text-slate-400">
               <ChevronLeft size={20} />
             </button>
+          </div>
+
+          <div className="space-y-4 relative">
+            <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Cor do Tema</label>
+            <div className="relative">
+              <button
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                className={cn(
+                  "w-full flex items-center justify-between px-4 py-3 rounded-2xl border-2 transition-all bg-white dark:bg-slate-800",
+                  showColorPicker ? theme.border : "border-black/5 dark:border-slate-800"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-5 h-5 rounded-full border border-black/10 dark:border-white/10" 
+                    style={{ backgroundColor: THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '') === 'emerald' ? '#059669' : 
+                                            THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '') === 'blue' ? '#2563eb' :
+                                            THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '') === 'indigo' ? '#4f46e5' :
+                                            THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '') === 'violet' ? '#7c3aed' :
+                                            THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '') === 'rose' ? '#e11d48' : '#d97706' }} 
+                  />
+                  <span className="text-sm font-medium dark:text-slate-200">
+                    {themeColor === 'emerald' ? 'Esmeralda' :
+                     themeColor === 'blue' ? 'Azul' :
+                     themeColor === 'indigo' ? 'Índigo' :
+                     themeColor === 'violet' ? 'Violeta' :
+                     themeColor === 'rose' ? 'Rosa' : 'Âmbar'}
+                  </span>
+                </div>
+                <Palette size={18} className={cn("transition-transform duration-300", showColorPicker ? "rotate-12" : "", theme.icon)} />
+              </button>
+
+              <AnimatePresence>
+                {showColorPicker && (
+                  <>
+                    <motion.div
+                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                      className="absolute left-0 right-0 top-full mt-2 p-3 bg-white dark:bg-slate-800 rounded-2xl border-2 border-black/5 dark:border-slate-700 shadow-xl z-50 grid grid-cols-3 gap-2"
+                    >
+                      {[
+                        { id: 'emerald', label: 'Esmeralda', color: '#059669' },
+                        { id: 'blue', label: 'Azul', color: '#2563eb' },
+                        { id: 'indigo', label: 'Índigo', color: '#4f46e5' },
+                        { id: 'violet', label: 'Violeta', color: '#7c3aed' },
+                        { id: 'rose', label: 'Rosa', color: '#e11d48' },
+                        { id: 'amber', label: 'Âmbar', color: '#d97706' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => {
+                            setThemeColor(opt.id as ThemeColor);
+                            setShowColorPicker(false);
+                          }}
+                          className={cn(
+                            "flex flex-col items-center gap-2 p-2 rounded-xl transition-all hover:bg-black/5 dark:hover:bg-white/5",
+                            themeColor === opt.id ? "bg-black/5 dark:bg-white/5" : ""
+                          )}
+                        >
+                          <div 
+                            className={cn(
+                              "w-8 h-8 rounded-full border-2 flex items-center justify-center transition-transform",
+                              themeColor === opt.id ? "border-black dark:border-white scale-110" : "border-transparent"
+                            )}
+                            style={{ backgroundColor: opt.color }}
+                          >
+                            {themeColor === opt.id && <CheckCircle2 size={14} className="text-white" />}
+                          </div>
+                          <span className="text-[10px] font-medium dark:text-slate-300">{opt.label}</span>
+                        </button>
+                      ))}
+                    </motion.div>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowColorPicker(false)} 
+                    />
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -659,9 +1019,9 @@ export default function App() {
                 step="5"
                 value={questionCount}
                 onChange={(e) => setQuestionCount(parseInt(e.target.value))}
-                className="flex-1 accent-emerald-600 dark:accent-emerald-500"
+                className={cn("flex-1", theme.accent, theme.accentDark)}
               />
-              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-500 w-8">{questionCount}</span>
+              <span className={cn("font-mono font-bold w-8", theme.text, theme.textDark)}>{questionCount}</span>
             </div>
           </div>
 
@@ -679,7 +1039,7 @@ export default function App() {
                   className={cn(
                     "px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all text-left",
                     quizFormat === f.id 
-                      ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400" 
+                      ? cn(theme.border, theme.bg, theme.textLight, theme.textLightDark) 
                       : "border-black/5 dark:border-slate-800 hover:border-black/10 dark:hover:border-slate-700 text-black/60 dark:text-slate-400"
                   )}
                 >
@@ -689,7 +1049,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 p-4 rounded-2xl" style={{ backgroundColor: '#f8f8f8' }}>
             <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Alerta de Tempo (segundos)</label>
             <div className="flex items-center gap-4">
               <input 
@@ -699,9 +1059,9 @@ export default function App() {
                 step="10"
                 value={timeAlertThreshold}
                 onChange={(e) => setTimeAlertThreshold(parseInt(e.target.value))}
-                className="flex-1 accent-rose-600"
+                className={cn("flex-1", theme.accent, theme.accentDark)}
               />
-              <span className="font-mono font-bold text-rose-600 w-12 text-right">{timeAlertThreshold}s</span>
+              <span className={cn("font-mono font-bold w-12 text-right", theme.text, theme.textDark)}>{timeAlertThreshold}s</span>
             </div>
             <p className="text-[10px] text-black/40 dark:text-slate-500 italic">O cronômetro piscará em vermelho após este tempo.</p>
           </div>
@@ -711,7 +1071,7 @@ export default function App() {
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={handleBackup}
-                className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-black dark:bg-emerald-600 text-white hover:bg-black/80 dark:hover:bg-emerald-700 transition-all"
+                className={cn("flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-black text-white hover:bg-black/80 transition-all", theme.darkPrimary, theme.primaryHover)}
               >
                 Fazer Backup
               </button>
@@ -726,7 +1086,7 @@ export default function App() {
 
           <div className="flex-1 flex flex-col min-h-0">
             <h3 className="font-bold text-lg flex items-center gap-2 mb-4 dark:text-slate-100">
-              <History size={20} className="text-emerald-600 dark:text-emerald-500" />
+              <History size={20} className={theme.icon} />
               Histórico
             </h3>
             <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
@@ -739,7 +1099,7 @@ export default function App() {
                   <div 
                     key={res.id} 
                     onClick={() => handleHistoryClick(res)}
-                    className="bg-[#F5F5F0] dark:bg-slate-800 p-4 rounded-2xl group relative hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors cursor-pointer"
+                    className={cn("bg-[#F5F5F0] dark:bg-slate-800 p-4 rounded-2xl group relative transition-colors cursor-pointer", `hover:${theme.bg}`, `dark:hover:${theme.bgDark}`)}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <span className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">
@@ -784,7 +1144,7 @@ export default function App() {
                 <span className="text-sm font-bold uppercase tracking-wider text-black/60 dark:text-slate-500">Ajuste</span>
               </button>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                <div className={cn("w-8 h-8 bg-gradient-to-br rounded-lg flex items-center justify-center shadow-lg", theme.gradientFrom, theme.gradientTo, theme.shadow)}>
                   <BrainCircuit size={20} className="text-white" />
                 </div>
                 <span className="font-semibold text-lg tracking-tight hidden sm:inline dark:text-slate-100">Quiz AI Expert</span>
@@ -846,13 +1206,13 @@ export default function App() {
                   className="max-w-2xl mx-auto text-center space-y-8"
                 >
                   <div className="flex justify-center">
-                    <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-3xl flex items-center justify-center shadow-2xl shadow-emerald-500/30 rotate-3">
+                    <div className={cn("w-20 h-20 bg-gradient-to-br rounded-3xl flex items-center justify-center shadow-2xl rotate-3", theme.gradientFrom, theme.gradientTo, theme.shadowLg)}>
                       <BrainCircuit size={48} className="text-white" />
                     </div>
                   </div>
                   <div className="space-y-4">
                     <h1 className="text-5xl font-medium tracking-tight leading-tight dark:text-slate-100">
-                      Transforme seus documentos em <span className="italic font-serif text-emerald-700 dark:text-emerald-400">conhecimento vivo</span>.
+                      Transforme seus documentos em <span className={cn("italic font-serif", theme.textLight, theme.textLightDark)}>conhecimento vivo</span>.
                     </h1>
                     <p className="text-lg text-black/60 dark:text-slate-400">
                       Envie qualquer arquivo (PDF, Word, Imagem, Texto) e nossa IA criará um quiz personalizado com o número de questões que você desejar.
@@ -874,7 +1234,7 @@ export default function App() {
                         handleFileUpload(event);
                       }
                     }}
-                    className="group relative border-2 border-dashed border-black/10 dark:border-slate-800 rounded-3xl p-12 cursor-pointer hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all duration-300"
+                    className={cn("group relative border-2 border-dashed border-black/10 dark:border-slate-800 rounded-3xl p-12 cursor-pointer transition-all duration-300", `hover:${theme.border}/50`, `hover:${theme.bg}/30`, `dark:hover:${theme.bgDark}`)}
                   >
                     <input 
                       type="file" 
@@ -886,7 +1246,7 @@ export default function App() {
                     />
                     <div className="flex flex-col items-center gap-4">
                       <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                        <Upload className="text-emerald-600 dark:text-emerald-500" size={32} />
+                        <Upload className={theme.icon} size={32} />
                       </div>
                       <div>
                         <p className="font-medium text-lg dark:text-slate-100">Clique para enviar seus arquivos</p>
@@ -903,20 +1263,20 @@ export default function App() {
 
                   <form onSubmit={handleUrlSubmit} className="space-y-4">
                     <div className="relative group">
-                      <div className="absolute left-4 top-4 text-black/20 dark:text-slate-600 group-focus-within:text-emerald-500 transition-colors">
+                      <div className={cn("absolute left-4 top-4 text-black/20 dark:text-slate-600 transition-colors", `group-focus-within:${theme.text}`)}>
                         <LinkIcon size={20} />
                       </div>
                       <textarea
                         value={urlInput}
                         onChange={(e) => setUrlInput(e.target.value)}
                         placeholder="Cole links da web ou YouTube (um por linha)..."
-                        className="w-full bg-white dark:bg-slate-900 border-2 border-black/5 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 min-h-[100px] focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none resize-none text-sm dark:text-slate-100 dark:placeholder:text-slate-600"
+                        className={cn("w-full bg-white dark:bg-slate-900 border-2 border-black/5 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 min-h-[100px] transition-all outline-none resize-none text-sm dark:text-slate-100 dark:placeholder:text-slate-600", `focus:${theme.border}`, theme.ring)}
                       />
                     </div>
                     <button
                       type="submit"
                       disabled={!urlInput.trim()}
-                      className="w-full bg-black dark:bg-emerald-600 text-white py-4 rounded-2xl font-bold hover:bg-emerald-700 disabled:opacity-50 disabled:hover:bg-black transition-all shadow-lg shadow-black/5 dark:shadow-emerald-900/20"
+                      className={cn("w-full bg-black text-white py-4 rounded-2xl font-bold disabled:opacity-50 disabled:hover:bg-black transition-all shadow-lg shadow-black/5", theme.darkPrimary, theme.primaryHover, theme.shadowXlDark)}
                     >
                       Gerar Quiz a partir de Links
                     </button>
@@ -993,9 +1353,9 @@ export default function App() {
                   className="flex flex-col items-center justify-center py-24 space-y-6"
                 >
                   <div className="relative">
-                    <Loader2 className="w-16 h-16 text-emerald-600 dark:text-emerald-500 animate-spin" />
+                    <Loader2 className={cn("w-16 h-16 animate-spin", theme.text, theme.textDark)} />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <BrainCircuit className="text-emerald-600/50 dark:text-emerald-400/30" size={24} />
+                      <BrainCircuit className={cn("opacity-50 dark:opacity-30", theme.text, theme.textDark)} size={24} />
                     </div>
                   </div>
                   <div className="text-center space-y-2">
@@ -1023,10 +1383,10 @@ export default function App() {
                           <motion.div 
                             initial={{ width: 0 }}
                             animate={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
-                            className="h-full bg-emerald-600 dark:bg-emerald-500 relative"
+                            className={cn("h-full relative", theme.bg, theme.bgDark)}
                           >
                             {/* Bubble */}
-                            <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 bg-emerald-500/30 dark:bg-emerald-400/20 backdrop-blur-sm px-2 py-1 rounded-full border border-emerald-500/20 dark:border-emerald-400/10 shadow-sm z-30">
+                            <div className={cn("absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 backdrop-blur-sm px-2 py-1 rounded-full border shadow-sm z-30", theme.bgLight, theme.bgLightDark, theme.borderLight, theme.borderLightDark)}>
                               <span className="text-[10px] font-bold text-[#333] dark:text-slate-100 whitespace-nowrap">
                                 Questão {currentIndex + 1}
                               </span>
@@ -1046,7 +1406,7 @@ export default function App() {
                               </div>
                               <button
                                 onClick={() => setIsPaused(false)}
-                                className="flex items-center gap-3 px-10 py-4 rounded-2xl font-bold bg-emerald-600 dark:bg-emerald-600 text-white hover:bg-emerald-700 dark:hover:bg-emerald-700 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/20 transition-all transform hover:scale-105"
+                                className={cn("flex items-center gap-3 px-10 py-4 rounded-2xl font-bold text-white transition-all transform hover:scale-105", theme.primary, theme.primaryHover, theme.shadow)}
                               >
                                 <Play size={24} />
                                 Retomar Quiz
@@ -1059,7 +1419,7 @@ export default function App() {
                               <motion.div 
                                 initial={{ scale: 0.8, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
-                                className="w-24 h-24 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-emerald-500/30 rotate-12"
+                                className={cn("w-24 h-24 bg-gradient-to-br rounded-[2rem] flex items-center justify-center shadow-2xl rotate-12", theme.gradientFrom, theme.gradientTo, theme.shadowLg)}
                               >
                                 <BrainCircuit size={48} className="text-white" />
                               </motion.div>
@@ -1071,7 +1431,7 @@ export default function App() {
                               </div>
                               <button
                                 onClick={() => setIsQuestionStarted(true)}
-                                className="group relative flex items-center gap-4 px-12 py-5 rounded-[2rem] font-bold bg-emerald-600 dark:bg-emerald-600 text-white hover:bg-emerald-700 dark:hover:bg-emerald-700 transition-all transform hover:scale-105 active:scale-95 shadow-xl shadow-emerald-200 dark:shadow-emerald-900/20"
+                                className={cn("group relative flex items-center gap-4 px-12 py-5 rounded-[2rem] font-bold text-white transition-all transform hover:scale-105 active:scale-95 shadow-xl", theme.primary, theme.primaryHover, theme.shadow)}
                               >
                                 <ArrowRight size={24} className="group-hover:translate-x-1 transition-transform" />
                                 <span className="text-lg">Iniciar Questão</span>
@@ -1085,7 +1445,7 @@ export default function App() {
                                 <span className="text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em] mb-1">Dificuldade</span>
                                 <span className={cn(
                                   "px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider w-fit",
-                                  currentQuestion.difficulty === 'easy' ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400" :
+                                  currentQuestion.difficulty === 'easy' ? theme.difficultyEasy :
                                   currentQuestion.difficulty === 'medium' ? "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" :
                                   "bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400"
                                 )}>
@@ -1100,7 +1460,7 @@ export default function App() {
                                   "flex items-center gap-1.5 font-mono font-bold transition-all duration-300",
                                   questionTime >= timeAlertThreshold 
                                     ? "text-rose-600 text-xl animate-pulse" 
-                                    : "text-emerald-600 dark:text-emerald-500 text-lg"
+                                    : cn(theme.text, theme.textDark, "text-lg")
                                 )}>
                                   <Clock size={questionTime >= timeAlertThreshold ? 20 : 16} />
                                   {formatTime(questionTime)}
@@ -1116,7 +1476,7 @@ export default function App() {
                           </div>
 
                           <div className="space-y-3">
-                            <span className="text-xs font-serif italic text-emerald-700/60 dark:text-emerald-400/60">
+                            <span className={cn("text-xs font-serif italic", theme.textLight, theme.textLightDark)}>
                               {currentQuestion.type === 'cebraspe' ? 'Julgue o item abaixo:' : 'Selecione a alternativa correta:'}
                             </span>
                             <h2 className="text-xl md:text-2xl font-medium leading-tight tracking-tight text-balance dark:text-slate-100">
@@ -1136,16 +1496,16 @@ export default function App() {
                                   onClick={() => handleAnswer(option)}
                                   className={cn(
                                     "group flex items-center justify-between p-4 rounded-2xl border-2 transition-all duration-300 text-left relative overflow-hidden",
-                                    currentAnswer === null ? "border-black/5 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 hover:shadow-lg hover:shadow-emerald-100/50 dark:hover:shadow-emerald-900/20" :
-                                    option === currentQuestion.correctAnswer ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10 shadow-inner" :
+                                    currentAnswer === null ? cn("border-black/5 dark:border-slate-800", `hover:${theme.border}`, `dark:hover:${theme.border}`, `hover:${theme.bg}/50`, `dark:hover:${theme.bgDark}`, `hover:${theme.shadowLight}`, `dark:hover:${theme.shadowDark}`) :
+                                    option === currentQuestion.correctAnswer ? cn(theme.border, theme.bg, "shadow-inner") :
                                     currentAnswer === option ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10" : "border-black/5 dark:border-slate-800 opacity-50"
                                   )}
                                 >
                                   <div className="flex items-center gap-4">
                                     <div className={cn(
                                       "w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-colors",
-                                      currentAnswer === null ? "bg-black/5 dark:bg-slate-800 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 dark:text-slate-400" :
-                                      option === currentQuestion.correctAnswer ? "bg-emerald-600 text-white" :
+                                      currentAnswer === null ? cn("bg-black/5 dark:bg-slate-800 transition-colors", `group-hover:${theme.bgLight}`, `dark:group-hover:${theme.bgLightDark}`, `group-hover:${theme.textLight}`, `dark:group-hover:${theme.textLightDark}`, "dark:text-slate-400") :
+                                      option === currentQuestion.correctAnswer ? cn(theme.primary, "text-white") :
                                       currentAnswer === option ? "bg-rose-600 text-white" : "bg-black/5 dark:bg-slate-800 dark:text-slate-600"
                                     )}>
                                       {option === 'Certo' ? 'C' : 'E'}
@@ -1154,7 +1514,7 @@ export default function App() {
                                   </div>
                                   {currentAnswer !== null && option === currentQuestion.correctAnswer && (
                                     <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                                      <CheckCircle2 className="text-emerald-600" size={28} />
+                                      <CheckCircle2 className={theme.text} size={28} />
                                     </motion.div>
                                   )}
                                   {currentAnswer === option && option !== currentQuestion.correctAnswer && (
@@ -1175,16 +1535,16 @@ export default function App() {
                                   onClick={() => handleAnswer(option)}
                                   className={cn(
                                     "group flex items-center justify-between p-4 rounded-2xl border-2 transition-all duration-300 text-left relative overflow-hidden",
-                                    currentAnswer === null ? "border-black/5 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 hover:shadow-lg hover:shadow-emerald-100/50 dark:hover:shadow-emerald-900/20" :
-                                    option === currentQuestion.correctAnswer ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10 shadow-inner" :
+                                    currentAnswer === null ? cn("border-black/5 dark:border-slate-800", `hover:${theme.border}`, `dark:hover:${theme.border}`, `hover:${theme.bg}/50`, `dark:hover:${theme.bgDark}`, `hover:${theme.shadowLight}`, `dark:hover:${theme.shadowDark}`) :
+                                    option === currentQuestion.correctAnswer ? cn(theme.border, theme.bg, "shadow-inner") :
                                     currentAnswer === option ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10" : "border-black/5 dark:border-slate-800 opacity-50"
                                   )}
                                 >
                                   <div className="flex items-center gap-4">
                                     <div className={cn(
                                       "w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-colors",
-                                      currentAnswer === null ? "bg-black/5 dark:bg-slate-800 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 dark:text-slate-400" :
-                                      option === currentQuestion.correctAnswer ? "bg-emerald-600 text-white" :
+                                      currentAnswer === null ? cn("bg-black/5 dark:bg-slate-800 transition-colors", `group-hover:${theme.bgLight}`, `dark:group-hover:${theme.bgLightDark}`, `group-hover:${theme.textLight}`, `dark:group-hover:${theme.textLightDark}`, "dark:text-slate-400") :
+                                      option === currentQuestion.correctAnswer ? cn(theme.primary, "text-white") :
                                       currentAnswer === option ? "bg-rose-600 text-white" : "bg-black/5 dark:bg-slate-800 dark:text-slate-600"
                                     )}>
                                       {String.fromCharCode(65 + idx)}
@@ -1193,7 +1553,7 @@ export default function App() {
                                   </div>
                                   {currentAnswer !== null && option === currentQuestion.correctAnswer && (
                                     <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                                      <CheckCircle2 className="text-emerald-600" size={28} />
+                                      <CheckCircle2 className={theme.text} size={28} />
                                     </motion.div>
                                   )}
                                   {currentAnswer === option && option !== currentQuestion.correctAnswer && (
@@ -1214,11 +1574,11 @@ export default function App() {
                             >
                               <div className={cn(
                                 "p-6 rounded-3xl flex items-start gap-5",
-                                isCorrect ? "bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/20" : "bg-rose-50/50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/20"
+                                isCorrect ? cn(theme.bgLight, theme.bgLightDark, theme.borderLight, theme.borderLightDark, "p-6 rounded-3xl flex items-start gap-5") : "bg-rose-50/50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/20"
                               )}>
                                 <div className={cn(
                                   "w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-sm",
-                                  isCorrect ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"
+                                  isCorrect ? cn(theme.primary, "text-white") : "bg-rose-600 text-white"
                                 )}>
                                   {isCorrect ? <Trophy size={28} /> : <AlertCircle size={28} />}
                                 </div>
@@ -1226,7 +1586,7 @@ export default function App() {
                                   <div className="flex items-center justify-between">
                                     <h4 className={cn(
                                       "text-xl font-bold",
-                                      isCorrect ? "text-emerald-800 dark:text-emerald-400" : "text-rose-800 dark:text-rose-400"
+                                      isCorrect ? theme.textLight : "text-rose-800 dark:text-rose-400"
                                     )}>
                                       {isCorrect ? 'Resposta Correta!' : 'Quase lá...'}
                                     </h4>
@@ -1235,7 +1595,7 @@ export default function App() {
                                       disabled={isAudioLoading}
                                       className={cn(
                                         "p-2 rounded-lg transition-all",
-                                        isAudioPlaying ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 animate-pulse" : "hover:bg-black/5 dark:hover:bg-slate-800 text-black/40 dark:text-slate-500",
+                                        isAudioPlaying ? cn(theme.bgLight, theme.bgLightDark, theme.text, theme.textDark, "animate-pulse") : "hover:bg-black/5 dark:hover:bg-slate-800 text-black/40 dark:text-slate-500",
                                         isAudioLoading && "opacity-50 cursor-wait"
                                       )}
                                       title="Ouvir Explicação"
@@ -1281,7 +1641,13 @@ export default function App() {
                                 </div>
                                 <button
                                   onClick={nextQuestion}
-                                  className="w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-4 rounded-2xl font-bold bg-emerald-600 dark:bg-emerald-600 text-white hover:bg-emerald-700 dark:hover:bg-emerald-700 transition-all active:scale-95 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/20"
+                                  className={cn(
+                                    "w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-4 rounded-2xl font-bold text-white transition-all active:scale-95",
+                                    theme.primary,
+                                    theme.primaryHover,
+                                    theme.shadowXl,
+                                    theme.shadowXlDark
+                                  )}
                                 >
                                   <span>{currentIndex === questions.length - 1 ? (isReviewMode ? 'Voltar ao Início' : 'Finalizar') : 'Próxima Questão'}</span>
                                   <ArrowRight size={20} />
@@ -1303,10 +1669,10 @@ export default function App() {
                         className="lg:col-span-7"
                       >
                         <div className="dark bg-slate-900 text-white rounded-[32px] shadow-2xl border border-white/10 sticky top-24 overflow-hidden flex flex-col min-h-[70vh]">
-                          <div className="bg-emerald-600/10 p-6 border-b border-white/5">
+                          <div className={cn("p-6 border-b border-white/5", theme.deepDiveBg)}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
+                                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", theme.deepDiveIcon)}>
                                   <BookOpen className="text-white" size={20} />
                                 </div>
                                 <h3 className="font-bold text-xl tracking-tight">Aprofundamento</h3>
@@ -1318,7 +1684,7 @@ export default function App() {
                                      disabled={isAudioLoading}
                                      className={cn(
                                        "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
-                                       isAudioPlaying ? "bg-emerald-500 text-white animate-pulse" : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white",
+                                       isAudioPlaying ? cn(theme.deepDiveAudio, "text-white animate-pulse") : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white",
                                        isAudioLoading && "opacity-50 cursor-wait"
                                      )}
                                      title="Ouvir Explicação"
@@ -1340,12 +1706,12 @@ export default function App() {
                           <div className="p-6 space-y-6 overflow-y-auto max-h-[60vh] custom-scrollbar flex-1 flex flex-col">
                             {isDeepDiveLoading ? (
                               <div className="flex-1 flex flex-col items-center justify-center space-y-4 py-12">
-                                <Loader2 className="w-10 h-10 text-emerald-400 animate-spin" />
+                                <Loader2 className={cn("w-10 h-10 animate-spin", theme.text, theme.textDark)} />
                                 <p className="text-white/40 text-sm font-medium animate-pulse">Gerando explicação detalhada...</p>
                               </div>
                             ) : currentQuestion.deepDive ? (
                               <>
-                                <div className="prose prose-invert prose-emerald max-w-none">
+                                <div className={cn("prose prose-invert max-w-none", theme.prose)}>
                                   <div className="text-white/90 leading-relaxed text-lg font-normal">
                                     <Markdown remarkPlugins={[remarkGfm]}>{currentQuestion.deepDive}</Markdown>
                                   </div>
@@ -1361,13 +1727,13 @@ export default function App() {
                                       )}>
                                         <div className={cn(
                                           "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
-                                          msg.role === 'user' ? "bg-emerald-600" : "bg-white/10"
+                                          msg.role === 'user' ? theme.chatUser : "bg-white/10"
                                         )}>
                                           {msg.role === 'user' ? <User size={16} /> : <BrainCircuit size={16} />}
                                         </div>
                                         <div className={cn(
-                                          "max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed prose prose-invert prose-emerald prose-sm",
-                                          msg.role === 'user' ? "bg-emerald-600/20 text-emerald-50 rounded-tr-none" : "bg-white/5 text-white/80 rounded-tl-none"
+                                          "max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed prose prose-invert prose-sm",
+                                          msg.role === 'user' ? cn(theme.chatUserBubble, theme.prose, "rounded-tr-none") : "bg-white/5 text-white/80 rounded-tl-none"
                                         )}>
                                           <Markdown remarkPlugins={[remarkGfm]}>{msg.text}</Markdown>
                                         </div>
@@ -1379,10 +1745,10 @@ export default function App() {
 
                                 <div className="pt-8 border-t border-white/5">
                                   <div className="flex items-center gap-2 mb-4">
-                                    <BrainCircuit size={16} className="text-emerald-400" />
+                                    <BrainCircuit size={16} className={theme.deepDiveTipIcon} />
                                     <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold">Dica de Estudo</p>
                                   </div>
-                                  <div className="bg-emerald-400/5 border border-emerald-400/10 rounded-2xl p-6 text-sm text-emerald-100/80 italic leading-relaxed">
+                                  <div className={cn("border rounded-2xl p-6 text-sm italic leading-relaxed", theme.deepDiveTip)}>
                                     "O erro é a melhor oportunidade para o cérebro consolidar novas conexões. Revise este trecho com atenção para fixar o conceito."
                                   </div>
                                 </div>
@@ -1404,12 +1770,12 @@ export default function App() {
                                   onChange={(e) => setChatInput(e.target.value)}
                                   placeholder="Ficou com dúvida? Pergunte ao Professor..."
                                   disabled={isChatLoading}
-                                  className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-6 pr-14 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-emerald-500/50 transition-all"
+                                  className={cn("w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-6 pr-14 text-sm text-white placeholder:text-white/20 focus:outline-none transition-all", `focus:${theme.border}/50`)}
                                 />
                                 <button
                                   type="submit"
                                   disabled={!chatInput.trim() || isChatLoading}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                  className={cn("absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all", theme.primary, theme.primaryHover)}
                                 >
                                   {isChatLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                                 </button>
@@ -1432,7 +1798,7 @@ export default function App() {
                 >
                   <div className="bg-white dark:bg-slate-900 rounded-[40px] p-12 shadow-sm border border-black/5 dark:border-slate-800 text-center space-y-12">
                     <div className="space-y-4">
-                      <div className="w-24 h-24 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <div className={cn("w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6", theme.bgLight, theme.bgLightDark, theme.text, theme.textDark)}>
                         <Trophy size={48} />
                       </div>
                       <h2 className="text-4xl font-medium tracking-tight dark:text-slate-100">Quiz Concluído!</h2>
@@ -1442,7 +1808,7 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                       <div className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8">
                         <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">Acertos</p>
-                        <p className="text-5xl font-medium text-emerald-600 dark:text-emerald-400">{correctCount}</p>
+                        <p className={cn("text-5xl font-medium", theme.text, theme.textDark)}>{correctCount}</p>
                       </div>
                       <div className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8">
                         <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">Erros</p>
@@ -1463,7 +1829,7 @@ export default function App() {
                     <div className="flex flex-wrap items-center justify-center gap-4">
                       <button
                         onClick={redoQuiz}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold bg-emerald-600 dark:bg-emerald-600 text-white hover:bg-emerald-700 dark:hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 dark:shadow-emerald-900/20"
+                        className={cn("flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold text-white transition-all shadow-lg", theme.primary, theme.primaryHover, theme.shadow)}
                       >
                         <RotateCcw size={20} />
                         Refazer
@@ -1477,7 +1843,7 @@ export default function App() {
                       </button>
                       <button
                         onClick={generateAnother}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold border-2 border-emerald-600 dark:border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all"
+                        className={cn("flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold border-2 transition-all", theme.border, theme.text, theme.textDark, `hover:${theme.bg}`, `dark:hover:${theme.bgDark}`)}
                       >
                         <BrainCircuit size={20} />
                         Novo do Mesmo Material

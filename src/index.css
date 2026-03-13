@@ -25,7 +25,7 @@
 }
 
 .prose strong {
-  @apply text-emerald-600 dark:text-emerald-400 font-semibold;
+  @apply font-semibold;
 }
 
 .prose ul {
@@ -38,7 +38,7 @@
 }
 
 .prose th {
-  @apply bg-emerald-600/20 dark:bg-emerald-900/40 border border-white/20 dark:border-slate-700 p-3 text-left font-bold text-emerald-400 dark:text-emerald-300;
+  @apply border border-white/20 dark:border-slate-700 p-3 text-left font-bold;
 }
 
 .prose td {
