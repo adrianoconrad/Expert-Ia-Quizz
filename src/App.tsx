@@ -87,10 +87,10 @@ const THEME_CONFIG = {
     deepDiveIcon: 'bg-emerald-600',
     deepDiveAudio: 'bg-emerald-500',
     deepDiveLoader: 'text-emerald-400',
-    deepDiveTip: 'bg-emerald-400/5 border-emerald-400/10 text-emerald-100/80',
-    deepDiveTipIcon: 'text-emerald-400',
+    deepDiveTip: 'bg-emerald-50 border-emerald-100 text-emerald-900/80 dark:bg-emerald-400/5 dark:border-emerald-400/10 dark:text-emerald-100/80',
+    deepDiveTipIcon: 'text-emerald-600 dark:text-emerald-400',
     chatUser: 'bg-emerald-600',
-    chatUserBubble: 'bg-emerald-600/20 text-emerald-50',
+    chatUserBubble: 'bg-emerald-600/10 text-emerald-900 dark:bg-emerald-600/20 dark:text-emerald-50',
     resultCircle: 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400',
     bgLight: 'bg-emerald-50',
     bgLightDark: 'dark:bg-emerald-900/20',
@@ -131,10 +131,10 @@ const THEME_CONFIG = {
     deepDiveIcon: 'bg-blue-600',
     deepDiveAudio: 'bg-blue-500',
     deepDiveLoader: 'text-blue-400',
-    deepDiveTip: 'bg-blue-400/5 border-blue-400/10 text-blue-100/80',
-    deepDiveTipIcon: 'text-blue-400',
+    deepDiveTip: 'bg-blue-50 border-blue-100 text-blue-900/80 dark:bg-blue-400/5 dark:border-blue-400/10 dark:text-blue-100/80',
+    deepDiveTipIcon: 'text-blue-600 dark:text-blue-400',
     chatUser: 'bg-blue-600',
-    chatUserBubble: 'bg-blue-600/20 text-blue-50',
+    chatUserBubble: 'bg-blue-600/10 text-blue-900 dark:bg-blue-600/20 dark:text-blue-50',
     resultCircle: 'bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400',
     bgLight: 'bg-blue-50',
     bgLightDark: 'dark:bg-blue-900/20',
@@ -175,10 +175,10 @@ const THEME_CONFIG = {
     deepDiveIcon: 'bg-indigo-600',
     deepDiveAudio: 'bg-indigo-500',
     deepDiveLoader: 'text-indigo-400',
-    deepDiveTip: 'bg-indigo-400/5 border-indigo-400/10 text-indigo-100/80',
-    deepDiveTipIcon: 'text-indigo-400',
+    deepDiveTip: 'bg-indigo-50 border-indigo-100 text-indigo-900/80 dark:bg-indigo-400/5 dark:border-indigo-400/10 dark:text-indigo-100/80',
+    deepDiveTipIcon: 'text-indigo-600 dark:text-indigo-400',
     chatUser: 'bg-indigo-600',
-    chatUserBubble: 'bg-indigo-600/20 text-indigo-50',
+    chatUserBubble: 'bg-indigo-600/10 text-indigo-900 dark:bg-indigo-600/20 dark:text-indigo-50',
     resultCircle: 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400',
     bgLight: 'bg-indigo-50',
     bgLightDark: 'dark:bg-indigo-900/20',
@@ -219,10 +219,10 @@ const THEME_CONFIG = {
     deepDiveIcon: 'bg-violet-600',
     deepDiveAudio: 'bg-violet-500',
     deepDiveLoader: 'text-violet-400',
-    deepDiveTip: 'bg-violet-400/5 border-violet-400/10 text-violet-100/80',
-    deepDiveTipIcon: 'text-violet-400',
+    deepDiveTip: 'bg-violet-50 border-violet-100 text-violet-900/80 dark:bg-violet-400/5 dark:border-violet-400/10 dark:text-violet-100/80',
+    deepDiveTipIcon: 'text-violet-600 dark:text-violet-400',
     chatUser: 'bg-violet-600',
-    chatUserBubble: 'bg-violet-600/20 text-violet-50',
+    chatUserBubble: 'bg-violet-600/10 text-violet-900 dark:bg-violet-600/20 dark:text-violet-50',
     resultCircle: 'bg-violet-100 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400',
     bgLight: 'bg-violet-50',
     bgLightDark: 'dark:bg-violet-900/20',
@@ -263,10 +263,10 @@ const THEME_CONFIG = {
     deepDiveIcon: 'bg-rose-600',
     deepDiveAudio: 'bg-rose-500',
     deepDiveLoader: 'text-rose-400',
-    deepDiveTip: 'bg-rose-400/5 border-rose-400/10 text-rose-100/80',
-    deepDiveTipIcon: 'text-rose-400',
+    deepDiveTip: 'bg-rose-50 border-rose-100 text-rose-900/80 dark:bg-rose-400/5 dark:border-rose-400/10 dark:text-rose-100/80',
+    deepDiveTipIcon: 'text-rose-600 dark:text-rose-400',
     chatUser: 'bg-rose-600',
-    chatUserBubble: 'bg-rose-600/20 text-rose-50',
+    chatUserBubble: 'bg-rose-600/10 text-rose-900 dark:bg-rose-600/20 dark:text-rose-50',
     resultCircle: 'bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400',
     bgLight: 'bg-rose-50',
     bgLightDark: 'dark:bg-rose-900/20',
@@ -307,10 +307,10 @@ const THEME_CONFIG = {
     deepDiveIcon: 'bg-amber-600',
     deepDiveAudio: 'bg-amber-500',
     deepDiveLoader: 'text-amber-400',
-    deepDiveTip: 'bg-amber-400/5 border-amber-400/10 text-amber-100/80',
-    deepDiveTipIcon: 'text-amber-400',
+    deepDiveTip: 'bg-amber-50 border-amber-100 text-amber-900/80 dark:bg-amber-400/5 dark:border-amber-400/10 dark:text-amber-100/80',
+    deepDiveTipIcon: 'text-amber-600 dark:text-amber-400',
     chatUser: 'bg-amber-600',
-    chatUserBubble: 'bg-amber-600/20 text-amber-50',
+    chatUserBubble: 'bg-amber-600/10 text-amber-900 dark:bg-amber-600/20 dark:text-amber-50',
     resultCircle: 'bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400',
     bgLight: 'bg-amber-50',
     bgLightDark: 'dark:bg-amber-900/20',
@@ -371,6 +371,15 @@ export default function App() {
   const [themeColor, setThemeColor] = useState<ThemeColor>(() => {
     return (localStorage.getItem('themeColor') as ThemeColor) || 'emerald';
   });
+
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const theme = THEME_CONFIG[themeColor];
 
@@ -918,12 +927,15 @@ export default function App() {
         className="bg-white dark:bg-slate-900 border-r border-black/5 dark:border-slate-800 flex-shrink-0 relative overflow-hidden flex flex-col"
       >
         <div className="w-[320px] h-full flex flex-col p-6 space-y-8">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-lg flex items-center gap-2 dark:text-slate-100">
-              <Settings size={20} className={theme.icon} />
+          <div 
+            onClick={() => setSidebarOpen(false)}
+            className="flex items-center justify-between cursor-pointer group/header"
+          >
+            <h3 className="font-bold text-lg flex items-center gap-2 dark:text-slate-100 group-hover/header:opacity-70 transition-opacity">
+              <Settings size={20} className={cn(theme.icon, "group-hover/header:rotate-45 transition-transform")} />
               Configurações
             </h3>
-            <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:text-slate-400">
+            <button className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:text-slate-400 transition-colors">
               <ChevronLeft size={20} />
             </button>
           </div>
@@ -1049,7 +1061,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="space-y-4 p-4 rounded-2xl" style={{ backgroundColor: '#f8f8f8' }}>
+          <div className="space-y-4 p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
             <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Alerta de Tempo (segundos)</label>
             <div className="flex items-center gap-4">
               <input 
@@ -1133,8 +1145,8 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-h-0 relative">
         {/* Header */}
-        <header className="border-b border-black/5 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
-          <div className="max-w-[1800px] mx-auto px-6 h-14 flex items-center justify-between">
+        <header className="border-b border-black/5 dark:border-slate-800 bg-white/80 dark:bg-transparent backdrop-blur-md sticky top-0 z-50">
+          <div className="max-w-full mx-auto px-4 h-14 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button 
                 onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -1159,43 +1171,57 @@ export default function App() {
               >
                 {darkMode ? <Sun size={20} /> : <Moon size={20} />}
               </button>
+              
               {state === 'active' && (
-              <div className="flex items-center gap-4 md:gap-8">
-                <div className="flex items-center gap-6">
-                  <div className="text-sm font-medium text-black/50 hidden md:block">
-                    Questão {currentIndex + 1} de {questions.length}
+                <div className="hidden lg:flex items-center justify-center flex-1 mx-4">
+                  <div className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 px-6 py-2 rounded-full flex items-center gap-3 shadow-sm">
+                    <div className={cn("w-2 h-2 rounded-full animate-pulse", theme.primary)} />
+                    <span className="text-sm font-bold text-black/60 dark:text-slate-300 uppercase tracking-wider truncate max-w-[300px]">
+                      {lastFileName}
+                    </span>
                   </div>
                 </div>
-                
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setIsPaused(!isPaused)}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all border",
-                      isPaused 
-                        ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800" 
-                        : "bg-black/5 text-black/60 border-black/5 hover:bg-black/10 dark:bg-white/10 dark:text-slate-300 dark:border-white/10 dark:hover:bg-white/20"
-                    )}
-                  >
-                    {isPaused ? <Play size={18} /> : <Pause size={18} />}
-                    <span>{isPaused ? 'Retomar' : 'Pausar'}</span>
-                  </button>
-                  <button
-                    onClick={resetQuiz}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-bold text-sm transition-colors border border-rose-100 dark:border-rose-900/30 dark:text-rose-400"
-                  >
-                    <PlusCircle size={18} />
-                    <span className="hidden sm:inline">Novo Quiz</span>
-                  </button>
-                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                {state === 'active' && (
+                  <div className="hidden md:flex items-center gap-2 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 px-4 py-2 rounded-full mr-2">
+                    <Clock size={16} className="text-black/40 dark:text-slate-500" />
+                    <span className="text-sm font-mono font-bold text-black/60 dark:text-slate-300">
+                      {format(currentTime, "HH:mm")}
+                    </span>
+                  </div>
+                )}
+                {state === 'active' && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsPaused(!isPaused)}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all border",
+                        isPaused 
+                          ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800" 
+                          : "bg-black/5 text-black/60 border-black/5 hover:bg-black/10 dark:bg-white/10 dark:text-slate-300 dark:border-white/10 dark:hover:bg-white/20"
+                      )}
+                    >
+                      {isPaused ? <Play size={18} /> : <Pause size={18} />}
+                      <span className="hidden sm:inline">{isPaused ? 'Retomar' : 'Pausar'}</span>
+                    </button>
+                    <button
+                      onClick={resetQuiz}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-bold text-sm transition-colors border border-rose-100 dark:border-rose-900/30 dark:text-rose-400"
+                    >
+                      <PlusCircle size={18} />
+                      <span className="hidden sm:inline">Novo Quiz</span>
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
         </div>
       </header>
 
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-[1800px] mx-auto px-6 py-12">
+          <div className="max-w-full mx-auto px-2 py-2">
             <AnimatePresence mode="wait">
               {state === 'idle' && (
                 <motion.div
@@ -1203,7 +1229,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="max-w-2xl mx-auto text-center space-y-8"
+                  className="max-w-5xl mx-auto text-center space-y-8"
                 >
                   <div className="flex justify-center">
                     <div className={cn("w-20 h-20 bg-gradient-to-br rounded-3xl flex items-center justify-center shadow-2xl rotate-3", theme.gradientFrom, theme.gradientTo, theme.shadowLg)}>
@@ -1212,9 +1238,11 @@ export default function App() {
                   </div>
                   <div className="space-y-4">
                     <h1 className="text-5xl font-medium tracking-tight leading-tight dark:text-slate-100">
-                      Transforme seus documentos em <span className={cn("italic font-serif", theme.textLight, theme.textLightDark)}>conhecimento vivo</span>.
+                      Transforme seus documentos em <span className={cn("italic font-serif", theme.textLight, theme.textLightDark)}>conhecimento</span>
+                      <br />
+                      <span className={cn("italic font-serif", theme.textLight, theme.textLightDark)}>vivo</span>.
                     </h1>
-                    <p className="text-lg text-black/60 dark:text-slate-400">
+                    <p className="text-lg text-black/60 dark:text-slate-400 max-w-3xl mx-auto">
                       Envie qualquer arquivo (PDF, Word, Imagem, Texto) e nossa IA criará um quiz personalizado com o número de questões que você desejar.
                     </p>
                   </div>
@@ -1377,24 +1405,36 @@ export default function App() {
                     "lg:col-span-12 transition-all duration-500",
                     showDeepDive && "lg:col-span-5"
                   )}>
-                      <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-xl shadow-black/5 border border-black/5 dark:border-slate-800 relative overflow-hidden flex flex-col">
-                        {/* Progress Bar */}
-                        <div className="h-1.5 w-full bg-black/5 dark:bg-slate-800 relative">
-                          <motion.div 
-                            initial={{ width: 0 }}
-                            animate={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
-                            className={cn("h-full relative", theme.bg, theme.bgDark)}
-                          >
-                            {/* Bubble */}
-                            <div className={cn("absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 backdrop-blur-sm px-2 py-1 rounded-full border shadow-sm z-30", theme.bgLight, theme.bgLightDark, theme.borderLight, theme.borderLightDark)}>
-                              <span className="text-[10px] font-bold text-[#333] dark:text-slate-100 whitespace-nowrap">
-                                Questão {currentIndex + 1}
-                              </span>
-                            </div>
-                          </motion.div>
+                      <div className="bg-white dark:bg-slate-900 rounded-t-2xl rounded-b-[32px] shadow-xl shadow-black/5 border border-black/5 dark:border-slate-800 relative overflow-hidden flex flex-col h-[calc(100vh-80px)] min-h-[750px]">
+                        {/* Timeline Progress */}
+                        <div className="px-4 py-3 bg-black/[0.02] dark:bg-white/[0.02] border-b border-black/5 dark:border-slate-800">
+                          <div className="flex items-center gap-1.5 h-14">
+                            {questions.map((_, idx) => (
+                              <button 
+                                key={idx} 
+                                onClick={() => {
+                                  setCurrentIndex(idx);
+                                  setIsQuestionStarted(true);
+                                }}
+                                className={cn(
+                                  "transition-all duration-500 flex items-center justify-center font-mono font-bold rounded-md shadow-sm h-full flex-1 min-w-0 border border-black/5 dark:border-white/5",
+                                  idx === currentIndex ? cn(theme.primary, "z-10 shadow-lg scale-y-105") : 
+                                  answers[idx] !== null ? theme.primary : "bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10",
+                                  idx === currentIndex || answers[idx] !== null ? "text-white" : "text-black/40 dark:text-white/20"
+                                )}
+                              >
+                                <span className={cn(
+                                  "truncate px-0.5 transition-all duration-300",
+                                  idx === currentIndex ? "text-xl font-black" : "text-sm font-bold"
+                                )}>
+                                  {idx + 1}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
                         </div>
 
-                        <div className="p-6 md:p-10 space-y-6 relative">
+                        <div className="flex-1 p-6 md:p-8 flex flex-col space-y-6 relative overflow-y-auto custom-scrollbar">
                           {isPaused && (
                             <div className="absolute inset-0 z-30 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center space-y-6">
                               <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center">
@@ -1439,10 +1479,10 @@ export default function App() {
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div className="flex flex-col">
-                                <span className="text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em] mb-1">Dificuldade</span>
+                          <div className="flex items-center justify-between flex-shrink-0">
+                            <div className="flex items-center gap-8">
+                              <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Dificuldade</span>
                                 <span className={cn(
                                   "px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider w-fit",
                                   currentQuestion.difficulty === 'easy' ? theme.difficultyEasy :
@@ -1453,9 +1493,8 @@ export default function App() {
                                    currentQuestion.difficulty === 'medium' ? 'Médio' : 'Difícil'}
                                 </span>
                               </div>
-                              <div className="h-8 w-px bg-black/5 dark:bg-slate-800" />
-                              <div className="flex flex-col">
-                                <span className="text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em] mb-1">Tempo</span>
+                              <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Tempo</span>
                                 <div className={cn(
                                   "flex items-center gap-1.5 font-mono font-bold transition-all duration-300",
                                   questionTime >= timeAlertThreshold 
@@ -1466,25 +1505,33 @@ export default function App() {
                                   {formatTime(questionTime)}
                                 </div>
                               </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Questão</span>
+                                <div className={cn("flex items-center gap-1 font-mono font-bold text-lg", theme.text, theme.textDark)}>
+                                  <span>{String(currentIndex + 1).padStart(2, '0')}</span>
+                                  <span className="text-black/10 dark:text-white/10 mx-0.5">|</span>
+                                  <span className="text-black/30 dark:text-white/30 text-base">{String(questions.length).padStart(2, '0')}</span>
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <span className="text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em] block mb-1">Questão</span>
-                              <span className="text-sm font-mono font-bold text-black/60 dark:text-slate-400">
-                                {String(currentIndex + 1).padStart(2, '0')} / {String(questions.length).padStart(2, '0')}
+                          </div>
+
+                          <div className="flex flex-col gap-6">
+                            <div className="space-y-4">
+                              <span className={cn("text-sm font-serif italic", theme.textLight, theme.textLightDark)}>
+                                {currentQuestion.type === 'cebraspe' ? 'Julgue o item abaixo:' : 'Selecione a alternativa correta:'}
                               </span>
+                              <div className="p-6 md:p-10 rounded-[2.5rem] bg-black/10 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-inner">
+                                <h2 className="text-xl md:text-2xl font-medium leading-relaxed tracking-tight text-balance text-black dark:text-white">
+                                  {currentQuestion.question}
+                                </h2>
+                              </div>
                             </div>
-                          </div>
 
-                          <div className="space-y-3">
-                            <span className={cn("text-xs font-serif italic", theme.textLight, theme.textLightDark)}>
-                              {currentQuestion.type === 'cebraspe' ? 'Julgue o item abaixo:' : 'Selecione a alternativa correta:'}
-                            </span>
-                            <h2 className="text-xl md:text-2xl font-medium leading-tight tracking-tight text-balance dark:text-slate-100">
-                              {currentQuestion.question}
-                            </h2>
-                          </div>
-
-                          <div className="grid grid-cols-1 gap-3">
+                            <div className={cn(
+                              "grid gap-4",
+                              currentQuestion.type === 'cebraspe' ? "grid-cols-1" : "grid-cols-1"
+                            )}>
                             {currentQuestion.type === 'cebraspe' ? (
                               ['Certo', 'Errado'].map((option, idx) => (
                                 <motion.button
@@ -1495,31 +1542,88 @@ export default function App() {
                                   disabled={currentAnswer !== null || isReviewMode}
                                   onClick={() => handleAnswer(option)}
                                   className={cn(
-                                    "group flex items-center justify-between p-4 rounded-2xl border-2 transition-all duration-300 text-left relative overflow-hidden",
+                                    "group flex flex-col px-6 py-5 rounded-3xl border-2 transition-all duration-300 text-left relative overflow-hidden",
                                     currentAnswer === null ? cn("border-black/5 dark:border-slate-800", `hover:${theme.border}`, `dark:hover:${theme.border}`, `hover:${theme.bg}/50`, `dark:hover:${theme.bgDark}`, `hover:${theme.shadowLight}`, `dark:hover:${theme.shadowDark}`) :
-                                    option === currentQuestion.correctAnswer ? cn(theme.border, theme.bg, "shadow-inner") :
+                                    option === currentQuestion.correctAnswer ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-inner" :
                                     currentAnswer === option ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10" : "border-black/5 dark:border-slate-800 opacity-50"
                                   )}
                                 >
-                                  <div className="flex items-center gap-4">
-                                    <div className={cn(
-                                      "w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-colors",
-                                      currentAnswer === null ? cn("bg-black/5 dark:bg-slate-800 transition-colors", `group-hover:${theme.bgLight}`, `dark:group-hover:${theme.bgLightDark}`, `group-hover:${theme.textLight}`, `dark:group-hover:${theme.textLightDark}`, "dark:text-slate-400") :
-                                      option === currentQuestion.correctAnswer ? cn(theme.primary, "text-white") :
-                                      currentAnswer === option ? "bg-rose-600 text-white" : "bg-black/5 dark:bg-slate-800 dark:text-slate-600"
-                                    )}>
-                                      {option === 'Certo' ? 'C' : 'E'}
+                                  <div className="flex items-center justify-between w-full">
+                                    <div className="flex items-center gap-4">
+                                      <div className={cn(
+                                        "w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-colors shrink-0",
+                                        currentAnswer === null ? cn(theme.bgLight, theme.bgLightDark, "text-black dark:text-white") :
+                                        option === currentQuestion.correctAnswer ? "bg-emerald-600 text-white" :
+                                        currentAnswer === option ? "bg-rose-600 text-white" : "bg-black/5 dark:bg-slate-800 dark:text-slate-600"
+                                      )}>
+                                        {option === 'Certo' ? 'C' : 'E'}
+                                      </div>
+                                      <span className={cn(
+                                        "font-medium text-lg transition-colors text-black dark:text-white line-clamp-2"
+                                      )}>{option}</span>
                                     </div>
-                                    <span className="font-medium text-lg dark:text-slate-200">{option}</span>
+                                    {currentAnswer !== null && option === currentQuestion.correctAnswer && (
+                                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
+                                        <CheckCircle2 className="text-emerald-600" size={28} />
+                                      </motion.div>
+                                    )}
+                                    {currentAnswer === option && option !== currentQuestion.correctAnswer && (
+                                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
+                                        <XCircle className="text-rose-600" size={28} />
+                                      </motion.div>
+                                    )}
                                   </div>
-                                  {currentAnswer !== null && option === currentQuestion.correctAnswer && (
-                                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                                      <CheckCircle2 className={theme.text} size={28} />
-                                    </motion.div>
-                                  )}
-                                  {currentAnswer === option && option !== currentQuestion.correctAnswer && (
-                                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                                      <XCircle className="text-rose-600" size={28} />
+
+                                  {(currentAnswer === option || (isReviewMode && option === currentQuestion.correctAnswer)) && (
+                                    <motion.div
+                                      initial={{ opacity: 0, height: 0 }}
+                                      animate={{ opacity: 1, height: 'auto' }}
+                                      className="mt-4 pt-4 border-t border-black/5 dark:border-white/5"
+                                    >
+                                      <div className="flex items-start gap-3">
+                                        <div className={cn(
+                                          "w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center",
+                                          option === currentQuestion.correctAnswer ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"
+                                        )}>
+                                          {option === currentQuestion.correctAnswer ? <Trophy size={16} /> : <AlertCircle size={16} />}
+                                        </div>
+                                        <div className="flex-1 space-y-2">
+                                          <div className="flex items-center justify-between">
+                                            <h4 className={cn(
+                                              "text-sm font-bold",
+                                              option === currentQuestion.correctAnswer ? "text-emerald-900 dark:text-emerald-300" : "text-rose-900 dark:text-rose-300"
+                                            )}>
+                                              {option === currentQuestion.correctAnswer ? 'Resposta Correta!' : 'Quase lá...'}
+                                            </h4>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handlePlayAudio(currentQuestion.explanation);
+                                              }}
+                                              disabled={isAudioLoading}
+                                              className={cn(
+                                                "p-1.5 rounded-lg transition-all",
+                                                isAudioPlaying ? cn(theme.bgLight, theme.bgLightDark, theme.text, theme.textDark, "animate-pulse") : "hover:bg-black/5 dark:hover:bg-slate-800 text-black/40 dark:text-slate-500",
+                                                isAudioLoading && "opacity-50 cursor-wait"
+                                              )}
+                                            >
+                                              {isAudioLoading ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />}
+                                            </button>
+                                          </div>
+                                          <div className={cn("prose prose-xs max-w-none prose-slate dark:prose-invert prose-p:text-black/70 dark:prose-p:text-white/70", theme.prose)}>
+                                            <Markdown 
+                                              remarkPlugins={[remarkGfm]}
+                                              components={{
+                                                strong: ({node, ...props}) => (
+                                                  <strong className={cn("font-bold", theme.text, theme.textDark)} {...props} />
+                                                )
+                                              }}
+                                            >
+                                              {currentQuestion.explanation}
+                                            </Markdown>
+                                          </div>
+                                        </div>
+                                      </div>
                                     </motion.div>
                                   )}
                                 </motion.button>
@@ -1534,81 +1638,102 @@ export default function App() {
                                   disabled={currentAnswer !== null || isReviewMode}
                                   onClick={() => handleAnswer(option)}
                                   className={cn(
-                                    "group flex items-center justify-between p-4 rounded-2xl border-2 transition-all duration-300 text-left relative overflow-hidden",
+                                    "group flex flex-col px-6 py-5 rounded-3xl border-2 transition-all duration-300 text-left relative overflow-hidden",
                                     currentAnswer === null ? cn("border-black/5 dark:border-slate-800", `hover:${theme.border}`, `dark:hover:${theme.border}`, `hover:${theme.bg}/50`, `dark:hover:${theme.bgDark}`, `hover:${theme.shadowLight}`, `dark:hover:${theme.shadowDark}`) :
-                                    option === currentQuestion.correctAnswer ? cn(theme.border, theme.bg, "shadow-inner") :
+                                    option === currentQuestion.correctAnswer ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-inner" :
                                     currentAnswer === option ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10" : "border-black/5 dark:border-slate-800 opacity-50"
                                   )}
                                 >
-                                  <div className="flex items-center gap-4">
-                                    <div className={cn(
-                                      "w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-colors",
-                                      currentAnswer === null ? cn("bg-black/5 dark:bg-slate-800 transition-colors", `group-hover:${theme.bgLight}`, `dark:group-hover:${theme.bgLightDark}`, `group-hover:${theme.textLight}`, `dark:group-hover:${theme.textLightDark}`, "dark:text-slate-400") :
-                                      option === currentQuestion.correctAnswer ? cn(theme.primary, "text-white") :
-                                      currentAnswer === option ? "bg-rose-600 text-white" : "bg-black/5 dark:bg-slate-800 dark:text-slate-600"
-                                    )}>
-                                      {String.fromCharCode(65 + idx)}
+                                  <div className="flex items-center justify-between w-full">
+                                    <div className="flex items-center gap-4">
+                                      <div className={cn(
+                                        "w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-colors shrink-0",
+                                        currentAnswer === null ? cn(theme.bgLight, theme.bgLightDark, "text-black dark:text-white") :
+                                        option === currentQuestion.correctAnswer ? "bg-emerald-600 text-white" :
+                                        currentAnswer === option ? "bg-rose-600 text-white" : "bg-black/5 dark:bg-slate-800 dark:text-slate-600"
+                                      )}>
+                                        {String.fromCharCode(65 + idx)}
+                                      </div>
+                                      <span className={cn(
+                                        "font-medium text-base md:text-lg transition-colors text-black dark:text-white line-clamp-2"
+                                      )}>{option}</span>
                                     </div>
-                                    <span className="font-medium text-base leading-snug dark:text-slate-200">{option}</span>
+                                    {currentAnswer !== null && option === currentQuestion.correctAnswer && (
+                                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
+                                        <CheckCircle2 className="text-emerald-600" size={28} />
+                                      </motion.div>
+                                    )}
+                                    {currentAnswer === option && option !== currentQuestion.correctAnswer && (
+                                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
+                                        <XCircle className="text-rose-600" size={28} />
+                                      </motion.div>
+                                    )}
                                   </div>
-                                  {currentAnswer !== null && option === currentQuestion.correctAnswer && (
-                                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                                      <CheckCircle2 className={theme.text} size={28} />
-                                    </motion.div>
-                                  )}
-                                  {currentAnswer === option && option !== currentQuestion.correctAnswer && (
-                                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                                      <XCircle className="text-rose-600" size={28} />
+
+                                  {(currentAnswer === option || (isReviewMode && option === currentQuestion.correctAnswer)) && (
+                                    <motion.div
+                                      initial={{ opacity: 0, height: 0 }}
+                                      animate={{ opacity: 1, height: 'auto' }}
+                                      className="mt-4 pt-4 border-t border-black/5 dark:border-white/5"
+                                    >
+                                      <div className="flex items-start gap-3">
+                                        <div className={cn(
+                                          "w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center",
+                                          option === currentQuestion.correctAnswer ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"
+                                        )}>
+                                          {option === currentQuestion.correctAnswer ? <Trophy size={16} /> : <AlertCircle size={16} />}
+                                        </div>
+                                        <div className="flex-1 space-y-2">
+                                          <div className="flex items-center justify-between">
+                                            <h4 className={cn(
+                                              "text-sm font-bold",
+                                              option === currentQuestion.correctAnswer ? "text-emerald-900 dark:text-emerald-300" : "text-rose-900 dark:text-rose-300"
+                                            )}>
+                                              {option === currentQuestion.correctAnswer ? 'Resposta Correta!' : 'Quase lá...'}
+                                            </h4>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handlePlayAudio(currentQuestion.explanation);
+                                              }}
+                                              disabled={isAudioLoading}
+                                              className={cn(
+                                                "p-1.5 rounded-lg transition-all",
+                                                isAudioPlaying ? cn(theme.bgLight, theme.bgLightDark, theme.text, theme.textDark, "animate-pulse") : "hover:bg-black/5 dark:hover:bg-slate-800 text-black/40 dark:text-slate-500",
+                                                isAudioLoading && "opacity-50 cursor-wait"
+                                              )}
+                                            >
+                                              {isAudioLoading ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />}
+                                            </button>
+                                          </div>
+                                          <div className={cn("prose prose-xs max-w-none prose-slate dark:prose-invert prose-p:text-black/70 dark:prose-p:text-white/70", theme.prose)}>
+                                            <Markdown 
+                                              remarkPlugins={[remarkGfm]}
+                                              components={{
+                                                strong: ({node, ...props}) => (
+                                                  <strong className={cn("font-bold", theme.text, theme.textDark)} {...props} />
+                                                )
+                                              }}
+                                            >
+                                              {currentQuestion.explanation}
+                                            </Markdown>
+                                          </div>
+                                        </div>
+                                      </div>
                                     </motion.div>
                                   )}
                                 </motion.button>
                               ))
                             )}
                           </div>
+                        </div>
 
                           {(currentAnswer !== null || isReviewMode) && (
                             <motion.div
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
-                              className="pt-8 border-t border-black/5 dark:border-slate-800 space-y-8"
+                              className="pt-4 border-t border-black/5 dark:border-slate-800"
                             >
-                              <div className={cn(
-                                "p-6 rounded-3xl flex items-start gap-5",
-                                isCorrect ? cn(theme.bgLight, theme.bgLightDark, theme.borderLight, theme.borderLightDark, "p-6 rounded-3xl flex items-start gap-5") : "bg-rose-50/50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/20"
-                              )}>
-                                <div className={cn(
-                                  "w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-sm",
-                                  isCorrect ? cn(theme.primary, "text-white") : "bg-rose-600 text-white"
-                                )}>
-                                  {isCorrect ? <Trophy size={28} /> : <AlertCircle size={28} />}
-                                </div>
-                                <div className="space-y-2 flex-1">
-                                  <div className="flex items-center justify-between">
-                                    <h4 className={cn(
-                                      "text-xl font-bold",
-                                      isCorrect ? theme.textLight : "text-rose-800 dark:text-rose-400"
-                                    )}>
-                                      {isCorrect ? 'Resposta Correta!' : 'Quase lá...'}
-                                    </h4>
-                                    <button
-                                      onClick={() => handlePlayAudio(currentQuestion.explanation)}
-                                      disabled={isAudioLoading}
-                                      className={cn(
-                                        "p-2 rounded-lg transition-all",
-                                        isAudioPlaying ? cn(theme.bgLight, theme.bgLightDark, theme.text, theme.textDark, "animate-pulse") : "hover:bg-black/5 dark:hover:bg-slate-800 text-black/40 dark:text-slate-500",
-                                        isAudioLoading && "opacity-50 cursor-wait"
-                                      )}
-                                      title="Ouvir Explicação"
-                                    >
-                                      {isAudioLoading ? <Loader2 size={20} className="animate-spin" /> : <Volume2 size={20} />}
-                                    </button>
-                                  </div>
-                                  <p className="text-black/70 dark:text-slate-400 leading-relaxed">
-                                    {currentQuestion.explanation}
-                                  </p>
-                                </div>
-                              </div>
-
                               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                                 <div className="flex items-center gap-2">
                                   {isReviewMode && currentIndex > 0 && (
@@ -1629,24 +1754,23 @@ export default function App() {
                                       Refazer
                                     </button>
                                   )}
-                                  {!showDeepDive && (
-                                    <button
-                                      onClick={handleToggleDeepDive}
-                                      className="flex items-center gap-2 px-6 py-4 rounded-2xl font-bold bg-black dark:bg-slate-800 text-white hover:bg-black/80 dark:hover:bg-slate-700 transition-all active:scale-95 shadow-lg shadow-black/10 dark:shadow-black/20"
-                                    >
-                                      <BrainCircuit size={20} />
-                                      Explicar Matéria
-                                    </button>
-                                  )}
+                                  <button
+                                    onClick={handleToggleDeepDive}
+                                    className={cn(
+                                      "flex items-center gap-2 px-6 py-4 rounded-xl font-bold transition-all active:scale-95 shadow-lg",
+                                      showDeepDive ? "bg-rose-600 text-white" : "bg-black dark:bg-slate-800 text-white hover:bg-black/80 dark:hover:bg-slate-700"
+                                    )}
+                                  >
+                                    <BrainCircuit size={20} />
+                                    {showDeepDive ? 'Fechar Explicação' : 'Explicar Matéria'}
+                                  </button>
                                 </div>
                                 <button
                                   onClick={nextQuestion}
                                   className={cn(
-                                    "w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-4 rounded-2xl font-bold text-white transition-all active:scale-95",
+                                   "w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-4 rounded-xl font-bold text-white transition-all active:scale-95 shadow-lg",
                                     theme.primary,
-                                    theme.primaryHover,
-                                    theme.shadowXl,
-                                    theme.shadowXlDark
+                                    theme.primaryHover
                                   )}
                                 >
                                   <span>{currentIndex === questions.length - 1 ? (isReviewMode ? 'Voltar ao Início' : 'Finalizar') : 'Próxima Questão'}</span>
@@ -1668,14 +1792,14 @@ export default function App() {
                         exit={{ opacity: 0, x: 20 }}
                         className="lg:col-span-7"
                       >
-                        <div className="dark bg-slate-900 text-white rounded-[32px] shadow-2xl border border-white/10 sticky top-24 overflow-hidden flex flex-col min-h-[70vh]">
-                          <div className={cn("p-6 border-b border-white/5", theme.deepDiveBg)}>
+                        <div className={cn("backdrop-blur-3xl text-black dark:text-white rounded-[32px] shadow-2xl border border-black/5 dark:border-white/10 sticky top-24 overflow-hidden flex flex-col min-h-[70vh]", theme.bg, "bg-opacity-40 dark:bg-opacity-10")}>
+                          <div className={cn("p-6 border-b border-black/5 dark:border-white/5", theme.deepDiveBg)}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-3">
                                 <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", theme.deepDiveIcon)}>
                                   <BookOpen className="text-white" size={20} />
                                 </div>
-                                <h3 className="font-bold text-xl tracking-tight">Aprofundamento</h3>
+                                <h3 className="font-bold text-xl tracking-tight text-black dark:text-white">Aprofundamento</h3>
                               </div>
                               <div className="flex items-center gap-2">
                                  {currentQuestion.deepDive && (
@@ -1684,7 +1808,7 @@ export default function App() {
                                      disabled={isAudioLoading}
                                      className={cn(
                                        "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
-                                       isAudioPlaying ? cn(theme.deepDiveAudio, "text-white animate-pulse") : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white",
+                                       isAudioPlaying ? cn(theme.deepDiveAudio, "text-white animate-pulse") : "bg-black/5 dark:bg-white/5 text-black/60 dark:text-white/60 hover:bg-black/10 dark:hover:bg-white/10 hover:text-black dark:hover:text-white",
                                        isAudioLoading && "opacity-50 cursor-wait"
                                      )}
                                      title="Ouvir Explicação"
@@ -1694,32 +1818,47 @@ export default function App() {
                                  )}
                                 <button 
                                   onClick={() => setShowDeepDive(false)}
-                                  className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all"
+                                  className="w-8 h-8 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center text-black/40 dark:text-white/40 hover:text-black dark:hover:text-white hover:bg-black/10 dark:hover:bg-white/10 transition-all"
                                 >
                                   <XCircle size={20} />
                                 </button>
                               </div>
                             </div>
-                            <p className="text-white/40 text-xs font-medium uppercase tracking-widest">Contexto e Detalhes Técnicos</p>
+                            <p className="text-black/40 dark:text-white/40 text-xs font-medium uppercase tracking-widest">Contexto e Detalhes Técnicos</p>
                           </div>
                           
                           <div className="p-6 space-y-6 overflow-y-auto max-h-[60vh] custom-scrollbar flex-1 flex flex-col">
                             {isDeepDiveLoading ? (
-                              <div className="flex-1 flex flex-col items-center justify-center space-y-4 py-12">
-                                <Loader2 className={cn("w-10 h-10 animate-spin", theme.text, theme.textDark)} />
-                                <p className="text-white/40 text-sm font-medium animate-pulse">Gerando explicação detalhada...</p>
+                              <div className="flex-1 flex flex-col items-center justify-center space-y-8 py-20">
+                                <div className="relative">
+                                  <div className={cn("w-20 h-20 rounded-full border-4 border-t-transparent animate-spin", theme.border, "opacity-20")} />
+                                  <Loader2 className={cn("w-10 h-10 animate-spin absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2", theme.text, theme.textDark)} />
+                                </div>
+                                <div className="text-center space-y-2">
+                                  <p className="text-black/60 dark:text-white/60 text-lg font-medium animate-pulse">Gerando explicação detalhada...</p>
+                                  <p className="text-black/30 dark:text-white/30 text-xs">Isso pode levar alguns segundos enquanto o Professor analisa o conteúdo.</p>
+                                </div>
                               </div>
                             ) : currentQuestion.deepDive ? (
                               <>
-                                <div className={cn("prose prose-invert max-w-none", theme.prose)}>
-                                  <div className="text-white/90 leading-relaxed text-lg font-normal">
-                                    <Markdown remarkPlugins={[remarkGfm]}>{currentQuestion.deepDive}</Markdown>
+                                  <div className={cn("prose prose-slate dark:prose-invert max-w-none prose-p:text-black dark:prose-p:text-white prose-headings:text-black dark:prose-headings:text-white prose-li:text-black dark:prose-li:text-white", theme.prose)}>
+                                    <div className="text-black/90 dark:text-white/90 leading-relaxed text-lg font-normal">
+                                      <Markdown 
+                                        remarkPlugins={[remarkGfm]}
+                                        components={{
+                                          strong: ({node, ...props}) => (
+                                            <strong className={cn("font-bold drop-shadow-[0_0_1.5px_currentColor]", theme.text, theme.textDark)} {...props} />
+                                          )
+                                        }}
+                                      >
+                                        {currentQuestion.deepDive}
+                                      </Markdown>
+                                    </div>
                                   </div>
-                                </div>
 
                                 {chatHistory.length > 0 && (
-                                  <div className="space-y-6 pt-8 border-t border-white/5">
-                                    <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold mb-4">Conversa com o Professor</p>
+                                  <div className="space-y-6 pt-8 border-t border-black/5 dark:border-white/5">
+                                    <p className="text-[10px] uppercase tracking-[0.2em] text-black/40 dark:text-white/40 font-bold mb-4">Conversa com o Professor</p>
                                     {chatHistory.map((msg, idx) => (
                                       <div key={idx} className={cn(
                                         "flex gap-4",
@@ -1727,15 +1866,24 @@ export default function App() {
                                       )}>
                                         <div className={cn(
                                           "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
-                                          msg.role === 'user' ? theme.chatUser : "bg-white/10"
+                                          msg.role === 'user' ? theme.chatUser : "bg-black/10 dark:bg-white/10"
                                         )}>
                                           {msg.role === 'user' ? <User size={16} /> : <BrainCircuit size={16} />}
                                         </div>
                                         <div className={cn(
-                                          "max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed prose prose-invert prose-sm",
-                                          msg.role === 'user' ? cn(theme.chatUserBubble, theme.prose, "rounded-tr-none") : "bg-white/5 text-white/80 rounded-tl-none"
+                                          "max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed prose prose-slate dark:prose-invert prose-sm prose-p:text-black dark:prose-p:text-white prose-li:text-black dark:prose-li:text-white",
+                                          msg.role === 'user' ? cn(theme.chatUserBubble, theme.prose, "rounded-tr-none") : "bg-black/5 dark:bg-white/5 text-black/80 dark:text-white/80 rounded-tl-none"
                                         )}>
-                                          <Markdown remarkPlugins={[remarkGfm]}>{msg.text}</Markdown>
+                                          <Markdown 
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                              strong: ({node, ...props}) => (
+                                                <strong className={cn("font-bold drop-shadow-[0_0_1.5px_currentColor]", theme.text, theme.textDark)} {...props} />
+                                              )
+                                            }}
+                                          >
+                                            {msg.text}
+                                          </Markdown>
                                         </div>
                                       </div>
                                     ))}
@@ -1743,10 +1891,10 @@ export default function App() {
                                   </div>
                                 )}
 
-                                <div className="pt-8 border-t border-white/5">
+                                <div className="pt-8 border-t border-black/5 dark:border-white/5">
                                   <div className="flex items-center gap-2 mb-4">
                                     <BrainCircuit size={16} className={theme.deepDiveTipIcon} />
-                                    <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold">Dica de Estudo</p>
+                                    <p className="text-[10px] uppercase tracking-[0.2em] text-black/40 dark:text-white/40 font-bold">Dica de Estudo</p>
                                   </div>
                                   <div className={cn("border rounded-2xl p-6 text-sm italic leading-relaxed", theme.deepDiveTip)}>
                                     "O erro é a melhor oportunidade para o cérebro consolidar novas conexões. Revise este trecho com atenção para fixar o conceito."
@@ -1755,14 +1903,14 @@ export default function App() {
                               </>
                             ) : (
                               <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 py-12">
-                                <AlertCircle className="text-white/20" size={48} />
-                                <p className="text-white/40 text-sm">Clique em "Ver Explicação" para carregar os detalhes.</p>
+                                <AlertCircle className="text-black/20 dark:text-white/20" size={48} />
+                                <p className="text-black/40 dark:text-white/40 text-sm">Clique em "Ver Explicação" para carregar os detalhes.</p>
                               </div>
                             )}
                           </div>
 
                           {currentQuestion.deepDive && (
-                            <div className="p-4 bg-white/5 border-t border-white/5">
+                            <div className="p-4 bg-black/5 dark:bg-white/5 border-t border-black/5 dark:border-white/5">
                               <form onSubmit={handleSendMessage} className="relative">
                                 <input
                                   type="text"
@@ -1770,7 +1918,7 @@ export default function App() {
                                   onChange={(e) => setChatInput(e.target.value)}
                                   placeholder="Ficou com dúvida? Pergunte ao Professor..."
                                   disabled={isChatLoading}
-                                  className={cn("w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-6 pr-14 text-sm text-white placeholder:text-white/20 focus:outline-none transition-all", `focus:${theme.border}/50`)}
+                                  className={cn("w-full bg-white dark:bg-black/40 border border-black/10 dark:border-white/10 rounded-2xl py-4 pl-6 pr-14 text-sm text-black dark:text-white placeholder:text-black/20 dark:placeholder:text-white/20 focus:outline-none transition-all", `focus:${theme.border}/50`)}
                                 />
                                 <button
                                   type="submit"
@@ -1794,7 +1942,7 @@ export default function App() {
                   key="finished"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="max-w-4xl mx-auto"
+                  className="max-w-full mx-auto"
                 >
                   <div className="bg-white dark:bg-slate-900 rounded-[40px] p-12 shadow-sm border border-black/5 dark:border-slate-800 text-center space-y-12">
                     <div className="space-y-4">
