@@ -20,6 +20,7 @@ import {
   Settings,
   History,
   Clock,
+  Timer,
   ChevronLeft,
   ChevronRight,
   Trash2,
@@ -40,6 +41,8 @@ import remarkGfm from 'remark-gfm';
 import mammoth from 'mammoth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { generateQuiz, QuizQuestion, QuizFormat, generateDeepDive, generateSpeech, ContentItem, chatWithProfessor } from './services/geminiService';
 import { cn } from './lib/utils';
 
@@ -53,7 +56,7 @@ declare global {
 }
 
 type QuizState = 'idle' | 'loading' | 'active' | 'finished';
-type ThemeColor = 'emerald' | 'blue' | 'indigo' | 'violet' | 'rose' | 'amber';
+type ThemeColor = 'emerald' | 'blue' | 'indigo' | 'slate' | 'yellow' | 'amber';
 
 const THEME_CONFIG = {
   emerald: {
@@ -188,93 +191,93 @@ const THEME_CONFIG = {
     shadowDark: 'dark:shadow-indigo-900/20',
     darkPrimary: 'bg-indigo-600'
   },
-  violet: {
-    primary: 'bg-violet-600',
-    primaryHover: 'hover:bg-violet-700',
-    secondary: 'bg-violet-500',
-    secondaryHover: 'hover:bg-violet-500',
-    text: 'text-violet-600',
-    textDark: 'dark:text-violet-500',
-    textLight: 'text-violet-700',
-    textLightDark: 'dark:text-violet-400',
-    border: 'border-violet-600',
-    borderDark: 'dark:border-violet-500',
-    bg: 'bg-violet-50',
-    bgDark: 'dark:bg-violet-900/20',
-    accent: 'accent-violet-600',
-    accentDark: 'dark:accent-violet-500',
-    ring: 'focus:ring-violet-500/10',
-    focusBorder: 'focus:border-violet-500',
-    gradientFrom: 'from-violet-500',
-    gradientTo: 'to-violet-700',
-    shadow: 'shadow-violet-500/20',
-    shadowLg: 'shadow-violet-500/30',
-    shadowXl: 'shadow-violet-200',
-    shadowXlDark: 'dark:shadow-violet-900/20',
-    prose: 'prose-violet',
-    selection: 'selection:bg-violet-100 dark:selection:bg-violet-900/30',
-    icon: 'text-violet-600 dark:text-violet-500',
-    difficultyEasy: 'bg-violet-100 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400',
-    deepDiveBg: 'bg-violet-600/10',
-    deepDiveIcon: 'bg-violet-600',
-    deepDiveAudio: 'bg-violet-500',
-    deepDiveLoader: 'text-violet-400',
-    deepDiveTip: 'bg-violet-50 border-violet-100 text-violet-900/80 dark:bg-violet-400/5 dark:border-violet-400/10 dark:text-violet-100/80',
-    deepDiveTipIcon: 'text-violet-600 dark:text-violet-400',
-    chatUser: 'bg-violet-600',
-    chatUserBubble: 'bg-violet-600/10 text-violet-900 dark:bg-violet-600/20 dark:text-violet-50',
-    resultCircle: 'bg-violet-100 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400',
-    bgLight: 'bg-violet-50',
-    bgLightDark: 'dark:bg-violet-900/20',
-    borderLight: 'border-violet-600',
-    borderLightDark: 'dark:border-violet-500',
-    shadowLight: 'shadow-violet-500/20',
-    shadowDark: 'dark:shadow-violet-900/20',
-    darkPrimary: 'bg-violet-600'
+  slate: {
+    primary: 'bg-slate-600',
+    primaryHover: 'hover:bg-slate-700',
+    secondary: 'bg-slate-500',
+    secondaryHover: 'hover:bg-slate-500',
+    text: 'text-slate-600',
+    textDark: 'dark:text-slate-500',
+    textLight: 'text-slate-700',
+    textLightDark: 'dark:text-slate-400',
+    border: 'border-slate-600',
+    borderDark: 'dark:border-slate-500',
+    bg: 'bg-slate-50',
+    bgDark: 'dark:bg-slate-900/20',
+    accent: 'accent-slate-600',
+    accentDark: 'dark:accent-slate-500',
+    ring: 'focus:ring-slate-500/10',
+    focusBorder: 'focus:border-slate-500',
+    gradientFrom: 'from-slate-500',
+    gradientTo: 'to-slate-700',
+    shadow: 'shadow-slate-500/20',
+    shadowLg: 'shadow-slate-500/30',
+    shadowXl: 'shadow-slate-200',
+    shadowXlDark: 'dark:shadow-slate-900/20',
+    prose: 'prose-slate',
+    selection: 'selection:bg-slate-100 dark:selection:bg-slate-900/30',
+    icon: 'text-slate-600 dark:text-slate-500',
+    difficultyEasy: 'bg-slate-100 dark:bg-slate-900/20 text-slate-700 dark:text-slate-400',
+    deepDiveBg: 'bg-slate-600/10',
+    deepDiveIcon: 'bg-slate-600',
+    deepDiveAudio: 'bg-slate-500',
+    deepDiveLoader: 'text-slate-400',
+    deepDiveTip: 'bg-slate-50 border-slate-100 text-slate-900/80 dark:bg-slate-400/5 dark:border-slate-400/10 dark:text-slate-100/80',
+    deepDiveTipIcon: 'text-slate-600 dark:text-slate-400',
+    chatUser: 'bg-slate-600',
+    chatUserBubble: 'bg-slate-600/10 text-slate-900 dark:bg-slate-600/20 dark:text-slate-50',
+    resultCircle: 'bg-slate-100 dark:bg-slate-900/20 text-slate-600 dark:text-slate-400',
+    bgLight: 'bg-slate-50',
+    bgLightDark: 'dark:bg-slate-900/20',
+    borderLight: 'border-slate-600',
+    borderLightDark: 'dark:border-slate-500',
+    shadowLight: 'shadow-slate-500/20',
+    shadowDark: 'dark:shadow-slate-900/20',
+    darkPrimary: 'bg-slate-600'
   },
-  rose: {
-    primary: 'bg-rose-600',
-    primaryHover: 'hover:bg-rose-700',
-    secondary: 'bg-rose-500',
-    secondaryHover: 'hover:bg-rose-500',
-    text: 'text-rose-600',
-    textDark: 'dark:text-rose-500',
-    textLight: 'text-rose-700',
-    textLightDark: 'dark:text-rose-400',
-    border: 'border-rose-600',
-    borderDark: 'dark:border-rose-500',
-    bg: 'bg-rose-50',
-    bgDark: 'dark:bg-rose-900/20',
-    accent: 'accent-rose-600',
-    accentDark: 'dark:accent-rose-500',
-    ring: 'focus:ring-rose-500/10',
-    focusBorder: 'focus:border-rose-500',
-    gradientFrom: 'from-rose-500',
-    gradientTo: 'to-rose-700',
-    shadow: 'shadow-rose-500/20',
-    shadowLg: 'shadow-rose-500/30',
-    shadowXl: 'shadow-rose-200',
-    shadowXlDark: 'dark:shadow-rose-900/20',
-    prose: 'prose-rose',
-    selection: 'selection:bg-rose-100 dark:selection:bg-rose-900/30',
-    icon: 'text-rose-600 dark:text-rose-500',
-    difficultyEasy: 'bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400',
-    deepDiveBg: 'bg-rose-600/10',
-    deepDiveIcon: 'bg-rose-600',
-    deepDiveAudio: 'bg-rose-500',
-    deepDiveLoader: 'text-rose-400',
-    deepDiveTip: 'bg-rose-50 border-rose-100 text-rose-900/80 dark:bg-rose-400/5 dark:border-rose-400/10 dark:text-rose-100/80',
-    deepDiveTipIcon: 'text-rose-600 dark:text-rose-400',
-    chatUser: 'bg-rose-600',
-    chatUserBubble: 'bg-rose-600/10 text-rose-900 dark:bg-rose-600/20 dark:text-rose-50',
-    resultCircle: 'bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400',
-    bgLight: 'bg-rose-50',
-    bgLightDark: 'dark:bg-rose-900/20',
-    borderLight: 'border-rose-600',
-    borderLightDark: 'dark:border-rose-500',
-    shadowLight: 'shadow-rose-500/20',
-    shadowDark: 'dark:shadow-rose-900/20',
-    darkPrimary: 'bg-rose-600'
+  yellow: {
+    primary: 'bg-yellow-500',
+    primaryHover: 'hover:bg-yellow-600',
+    secondary: 'bg-yellow-400',
+    secondaryHover: 'hover:bg-yellow-400',
+    text: 'text-yellow-600',
+    textDark: 'dark:text-yellow-500',
+    textLight: 'text-yellow-700',
+    textLightDark: 'dark:text-yellow-400',
+    border: 'border-yellow-500',
+    borderDark: 'dark:border-yellow-400',
+    bg: 'bg-yellow-50',
+    bgDark: 'dark:bg-yellow-900/20',
+    accent: 'accent-yellow-500',
+    accentDark: 'dark:accent-yellow-400',
+    ring: 'focus:ring-yellow-400/10',
+    focusBorder: 'focus:border-yellow-400',
+    gradientFrom: 'from-yellow-400',
+    gradientTo: 'to-yellow-600',
+    shadow: 'shadow-yellow-500/20',
+    shadowLg: 'shadow-yellow-500/30',
+    shadowXl: 'shadow-yellow-200',
+    shadowXlDark: 'dark:shadow-yellow-900/20',
+    prose: 'prose-yellow',
+    selection: 'selection:bg-yellow-100 dark:selection:bg-yellow-900/30',
+    icon: 'text-yellow-600 dark:text-yellow-500',
+    difficultyEasy: 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400',
+    deepDiveBg: 'bg-yellow-500/10',
+    deepDiveIcon: 'bg-yellow-500',
+    deepDiveAudio: 'bg-yellow-400',
+    deepDiveLoader: 'text-yellow-400',
+    deepDiveTip: 'bg-yellow-50 border-yellow-100 text-yellow-900/80 dark:bg-yellow-400/5 dark:border-yellow-400/10 dark:text-yellow-100/80',
+    deepDiveTipIcon: 'text-yellow-600 dark:text-yellow-400',
+    chatUser: 'bg-yellow-500',
+    chatUserBubble: 'bg-yellow-500/10 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-50',
+    resultCircle: 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400',
+    bgLight: 'bg-yellow-50',
+    bgLightDark: 'dark:bg-yellow-900/20',
+    borderLight: 'border-yellow-500',
+    borderLightDark: 'dark:border-yellow-400',
+    shadowLight: 'shadow-yellow-500/20',
+    shadowDark: 'dark:shadow-yellow-900/20',
+    darkPrimary: 'bg-yellow-500'
   },
   amber: {
     primary: 'bg-amber-600',
@@ -369,7 +372,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [history, setHistory] = useState<QuizResult[]>([]);
   const [themeColor, setThemeColor] = useState<ThemeColor>(() => {
-    return (localStorage.getItem('themeColor') as ThemeColor) || 'emerald';
+    const saved = localStorage.getItem('themeColor') as ThemeColor;
+    return (saved && THEME_CONFIG[saved]) ? saved : 'emerald';
   });
 
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -457,6 +461,20 @@ export default function App() {
     };
     fetchHistory();
   }, []);
+
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [jumpToQuestion, setJumpToQuestion] = useState('');
+  const pdfContentRef = useRef<HTMLDivElement>(null);
+  const deepDivePdfRef = useRef<HTMLDivElement>(null);
+
+  const handleJumpToQuestion = (e: React.FormEvent) => {
+    e.preventDefault();
+    const num = parseInt(jumpToQuestion);
+    if (!isNaN(num) && num >= 1 && num <= questions.length) {
+      setCurrentIndex(num - 1);
+      setJumpToQuestion('');
+    }
+  };
 
   // Timer Logic
   useEffect(() => {
@@ -811,6 +829,153 @@ export default function App() {
     setIsReviewMode(false);
   };
 
+  const downloadResults = async () => {
+    if (!pdfContentRef.current) {
+      console.error("PDF content ref is null");
+      return;
+    }
+    
+    setIsGeneratingPDF(true);
+    try {
+      // Small delay to ensure any dynamic content is ready
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      const container = pdfContentRef.current;
+      
+      // Temporarily make it visible for capture if needed, 
+      // but html2canvas onclone should handle it.
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: 800,
+        onclone: (clonedDoc) => {
+          const element = clonedDoc.getElementById('pdf-content-container');
+          if (element) {
+            element.style.position = 'relative';
+            element.style.left = '0';
+            element.style.display = 'block';
+            element.style.visibility = 'visible';
+            element.style.opacity = '1';
+            element.style.zIndex = '1000';
+          }
+        }
+      });
+      
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      pdf.save(`resultado_quiz_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`);
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      // Fallback to text only if PDF fails completely
+      const correct = answers.filter((ans, idx) => ans === questions[idx]?.correctAnswer).length;
+      const precision = Math.round((correct / questions.length) * 100);
+      let text = `RESULTADOS DO QUIZ - ${lastFileName || 'Documento'}\n`;
+      text += `Data: ${format(new Date(), "dd/MM/yyyy HH:mm")}\n`;
+      text += `Acertos: ${correct}\nErros: ${questions.length - correct}\nPrecisão: ${precision}%\nTempo Total: ${formatTime(totalTime)}\n\n`;
+      text += `--- DETALHES DAS QUESTÕES ---\n\n`;
+      questions.forEach((q, i) => {
+        text += `Questão ${i + 1}: ${q.question}\n`;
+        text += `Sua Resposta: ${answers[i] || 'Não respondida'}\n`;
+        text += `Resposta Correta: ${q.correctAnswer}\n`;
+        text += `Resultado: ${answers[i] === q.correctAnswer ? 'CORRETO' : 'INCORRETO'}\n`;
+        text += `Explicação: ${q.explanation}\n\n`;
+      });
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `resultado_quiz_${format(new Date(), "yyyyMMdd_HHmm")}.txt`;
+      a.click();
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const downloadDeepDivePDF = async () => {
+    if (!deepDivePdfRef.current || !currentQuestion.deepDive) return;
+    
+    setIsGeneratingPDF(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      const container = deepDivePdfRef.current;
+      
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: 800,
+        onclone: (clonedDoc) => {
+          const element = clonedDoc.getElementById('deep-dive-pdf-container');
+          if (element) {
+            element.style.position = 'relative';
+            element.style.left = '0';
+            element.style.display = 'block';
+            element.style.visibility = 'visible';
+            element.style.opacity = '1';
+            element.style.zIndex = '1000';
+          }
+        }
+      });
+      
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      pdf.save(`explicacao_questao_${currentIndex + 1}_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`);
+    } catch (error) {
+      console.error("Erro ao gerar PDF do aprofundamento:", error);
+      const text = `APROFUNDAMENTO - QUESTÃO ${currentIndex + 1}\n\n${currentQuestion.question}\n\nEXPLICAÇÃO:\n${currentQuestion.deepDive}`;
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `explicacao_questao_${currentIndex + 1}.txt`;
+      a.click();
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   const redoQuiz = () => {
     setAnswers(new Array(questions.length).fill(null));
     setQuestionTimes(new Array(questions.length).fill(0));
@@ -953,18 +1118,18 @@ export default function App() {
                 <div className="flex items-center gap-3">
                   <div 
                     className="w-5 h-5 rounded-full border border-black/10 dark:border-white/10" 
-                    style={{ backgroundColor: THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '') === 'emerald' ? '#059669' : 
-                                            THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '') === 'blue' ? '#2563eb' :
-                                            THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '') === 'indigo' ? '#4f46e5' :
-                                            THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '') === 'violet' ? '#7c3aed' :
-                                            THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '') === 'rose' ? '#e11d48' : '#d97706' }} 
+                    style={{ backgroundColor: THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '').replace('-500', '') === 'emerald' ? '#059669' : 
+                                            THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '').replace('-500', '') === 'blue' ? '#2563eb' :
+                                            THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '').replace('-500', '') === 'indigo' ? '#4f46e5' :
+                                            THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '').replace('-500', '') === 'slate' ? '#475569' :
+                                            THEME_CONFIG[themeColor].primary.replace('bg-', '').replace('-600', '').replace('-500', '') === 'yellow' ? '#eab308' : '#d97706' }} 
                   />
                   <span className="text-sm font-medium dark:text-slate-200">
                     {themeColor === 'emerald' ? 'Esmeralda' :
                      themeColor === 'blue' ? 'Azul' :
                      themeColor === 'indigo' ? 'Índigo' :
-                     themeColor === 'violet' ? 'Violeta' :
-                     themeColor === 'rose' ? 'Rosa' : 'Âmbar'}
+                     themeColor === 'slate' ? 'Cinza' :
+                     themeColor === 'yellow' ? 'Amarelo' : 'Âmbar'}
                   </span>
                 </div>
                 <Palette size={18} className={cn("transition-transform duration-300", showColorPicker ? "rotate-12" : "", theme.icon)} />
@@ -983,8 +1148,8 @@ export default function App() {
                         { id: 'emerald', label: 'Esmeralda', color: '#059669' },
                         { id: 'blue', label: 'Azul', color: '#2563eb' },
                         { id: 'indigo', label: 'Índigo', color: '#4f46e5' },
-                        { id: 'violet', label: 'Violeta', color: '#7c3aed' },
-                        { id: 'rose', label: 'Rosa', color: '#e11d48' },
+                        { id: 'slate', label: 'Cinza', color: '#475569' },
+                        { id: 'yellow', label: 'Amarelo', color: '#eab308' },
                         { id: 'amber', label: 'Âmbar', color: '#d97706' },
                       ].map((opt) => (
                         <button
@@ -1414,18 +1579,29 @@ export default function App() {
                                 key={idx} 
                                 onClick={() => {
                                   setCurrentIndex(idx);
+                                  setQuestionTime(0);
                                   setIsQuestionStarted(true);
                                 }}
                                 className={cn(
                                   "transition-all duration-500 flex items-center justify-center font-mono font-bold rounded-md shadow-sm h-full flex-1 min-w-0 border border-black/5 dark:border-white/5",
-                                  idx === currentIndex ? cn(theme.primary, "z-10 shadow-lg scale-y-105") : 
-                                  answers[idx] !== null ? theme.primary : "bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10",
-                                  idx === currentIndex || answers[idx] !== null ? "text-white" : "text-black/40 dark:text-white/20"
+                                  (idx === currentIndex || answers[idx] !== null) ? cn(theme.primary, idx === currentIndex && "z-10 shadow-lg scale-y-105") : 
+                                  "bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10"
                                 )}
                               >
                                 <span className={cn(
-                                  "truncate px-0.5 transition-all duration-300",
-                                  idx === currentIndex ? "text-xl font-black" : "text-sm font-bold"
+                                  "transition-all duration-300 flex items-center justify-center shrink-0",
+                                  idx === currentIndex ? "text-2xl font-black" : "text-base font-bold",
+                                  (answers[idx] !== null && answers[idx] !== questions[idx]?.correctAnswer) 
+                                    ? cn(
+                                        "text-white rounded-md w-8 h-8 shadow-lg backdrop-blur-[4px] border border-white/30 flex items-center justify-center transition-all duration-300",
+                                        themeColor === 'emerald' ? "bg-emerald-400/90 shadow-emerald-500/40" :
+                                        themeColor === 'blue' ? "bg-blue-400/90 shadow-blue-500/40" :
+                                        themeColor === 'indigo' ? "bg-indigo-400/90 shadow-indigo-500/40" :
+                                        themeColor === 'slate' ? "bg-slate-400/90 shadow-slate-500/40" :
+                                        themeColor === 'yellow' ? "bg-yellow-400/90 shadow-yellow-500/40" : 
+                                        "bg-amber-400/90 shadow-amber-500/40"
+                                      )
+                                    : (idx === currentIndex || answers[idx] !== null) ? "text-black" : "text-black/40 dark:text-white/20"
                                 )}>
                                   {idx + 1}
                                 </span>
@@ -1506,6 +1682,13 @@ export default function App() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Total</span>
+                                <div className={cn("flex items-center gap-1.5 font-mono font-bold text-lg", theme.text, theme.textDark)}>
+                                  <Timer size={16} />
+                                  {formatTime(totalTime)}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
                                 <span className="text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Questão</span>
                                 <div className={cn("flex items-center gap-1 font-mono font-bold text-lg", theme.text, theme.textDark)}>
                                   <span>{String(currentIndex + 1).padStart(2, '0')}</span>
@@ -1513,15 +1696,40 @@ export default function App() {
                                   <span className="text-black/30 dark:text-white/30 text-base">{String(questions.length).padStart(2, '0')}</span>
                                 </div>
                               </div>
+                              {isReviewMode && (
+                                <form onSubmit={handleJumpToQuestion} className="flex items-center gap-2 ml-4">
+                                  <input
+                                    type="text"
+                                    value={jumpToQuestion}
+                                    onChange={(e) => setJumpToQuestion(e.target.value)}
+                                    placeholder="Ir para..."
+                                    className="w-20 px-3 py-1 text-sm rounded-lg border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                  />
+                                  <button
+                                    type="submit"
+                                    className="p-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+                                  >
+                                    <ArrowRight size={16} />
+                                  </button>
+                                </form>
+                              )}
                             </div>
                           </div>
 
-                          <div className="flex flex-col gap-6">
-                            <div className="space-y-4">
+                          <AnimatePresence mode="wait">
+                            <motion.div
+                              key={currentIndex}
+                              initial={{ opacity: 0, x: 20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: -20 }}
+                              transition={{ duration: 0.3, ease: "easeInOut" }}
+                              className="flex flex-col gap-6"
+                            >
+                              <div className="space-y-4">
                               <span className={cn("text-sm font-serif italic", theme.textLight, theme.textLightDark)}>
                                 {currentQuestion.type === 'cebraspe' ? 'Julgue o item abaixo:' : 'Selecione a alternativa correta:'}
                               </span>
-                              <div className="p-6 md:p-10 rounded-[2.5rem] bg-black/10 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-inner">
+                              <div className="p-6 md:p-10 rounded-3xl bg-black/10 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-inner">
                                 <h2 className="text-xl md:text-2xl font-medium leading-relaxed tracking-tight text-balance text-black dark:text-white">
                                   {currentQuestion.question}
                                 </h2>
@@ -1534,15 +1742,27 @@ export default function App() {
                             )}>
                             {currentQuestion.type === 'cebraspe' ? (
                               ['Certo', 'Errado'].map((option, idx) => (
-                                <motion.button
+                                <motion.div
                                   key={option}
                                   initial={{ opacity: 0, x: -20 }}
                                   animate={{ opacity: 1, x: 0 }}
                                   transition={{ delay: idx * 0.1 }}
-                                  disabled={currentAnswer !== null || isReviewMode}
-                                  onClick={() => handleAnswer(option)}
+                                  role="button"
+                                  tabIndex={currentAnswer !== null || isReviewMode ? -1 : 0}
+                                  onClick={() => {
+                                    if (!(currentAnswer !== null || isReviewMode)) {
+                                      handleAnswer(option);
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if ((e.key === 'Enter' || e.key === ' ') && !(currentAnswer !== null || isReviewMode)) {
+                                      e.preventDefault();
+                                      handleAnswer(option);
+                                    }
+                                  }}
                                   className={cn(
                                     "group flex flex-col px-6 py-5 rounded-3xl border-2 transition-all duration-300 text-left relative overflow-hidden",
+                                    !(currentAnswer !== null || isReviewMode) && "cursor-pointer",
                                     currentAnswer === null ? cn("border-black/5 dark:border-slate-800", `hover:${theme.border}`, `dark:hover:${theme.border}`, `hover:${theme.bg}/50`, `dark:hover:${theme.bgDark}`, `hover:${theme.shadowLight}`, `dark:hover:${theme.shadowDark}`) :
                                     option === currentQuestion.correctAnswer ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-inner" :
                                     currentAnswer === option ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10" : "border-black/5 dark:border-slate-800 opacity-50"
@@ -1574,7 +1794,7 @@ export default function App() {
                                     )}
                                   </div>
 
-                                  {(currentAnswer === option || (isReviewMode && option === currentQuestion.correctAnswer)) && (
+                                  {(currentAnswer !== null ? currentAnswer === option : (isReviewMode && option === currentQuestion.correctAnswer)) && (
                                     <motion.div
                                       initial={{ opacity: 0, height: 0 }}
                                       animate={{ opacity: 1, height: 'auto' }}
@@ -1626,19 +1846,31 @@ export default function App() {
                                       </div>
                                     </motion.div>
                                   )}
-                                </motion.button>
+                                </motion.div>
                               ))
                             ) : (
                               currentQuestion.options?.map((option, idx) => (
-                                <motion.button
+                                <motion.div
                                   key={option}
                                   initial={{ opacity: 0, x: -20 }}
                                   animate={{ opacity: 1, x: 0 }}
                                   transition={{ delay: idx * 0.1 }}
-                                  disabled={currentAnswer !== null || isReviewMode}
-                                  onClick={() => handleAnswer(option)}
+                                  role="button"
+                                  tabIndex={currentAnswer !== null || isReviewMode ? -1 : 0}
+                                  onClick={() => {
+                                    if (!(currentAnswer !== null || isReviewMode)) {
+                                      handleAnswer(option);
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if ((e.key === 'Enter' || e.key === ' ') && !(currentAnswer !== null || isReviewMode)) {
+                                      e.preventDefault();
+                                      handleAnswer(option);
+                                    }
+                                  }}
                                   className={cn(
                                     "group flex flex-col px-6 py-5 rounded-3xl border-2 transition-all duration-300 text-left relative overflow-hidden",
+                                    !(currentAnswer !== null || isReviewMode) && "cursor-pointer",
                                     currentAnswer === null ? cn("border-black/5 dark:border-slate-800", `hover:${theme.border}`, `dark:hover:${theme.border}`, `hover:${theme.bg}/50`, `dark:hover:${theme.bgDark}`, `hover:${theme.shadowLight}`, `dark:hover:${theme.shadowDark}`) :
                                     option === currentQuestion.correctAnswer ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-inner" :
                                     currentAnswer === option ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10" : "border-black/5 dark:border-slate-800 opacity-50"
@@ -1670,7 +1902,7 @@ export default function App() {
                                     )}
                                   </div>
 
-                                  {(currentAnswer === option || (isReviewMode && option === currentQuestion.correctAnswer)) && (
+                                  {(currentAnswer !== null ? currentAnswer === option : (isReviewMode && option === currentQuestion.correctAnswer)) && (
                                     <motion.div
                                       initial={{ opacity: 0, height: 0 }}
                                       animate={{ opacity: 1, height: 'auto' }}
@@ -1722,11 +1954,12 @@ export default function App() {
                                       </div>
                                     </motion.div>
                                   )}
-                                </motion.button>
+                                </motion.div>
                               ))
                             )}
-                          </div>
-                        </div>
+                            </div>
+                            </motion.div>
+                          </AnimatePresence>
 
                           {(currentAnswer !== null || isReviewMode) && (
                             <motion.div
@@ -1803,18 +2036,28 @@ export default function App() {
                               </div>
                               <div className="flex items-center gap-2">
                                  {currentQuestion.deepDive && (
-                                   <button
-                                     onClick={() => handlePlayAudio(currentQuestion.deepDive!)}
-                                     disabled={isAudioLoading}
-                                     className={cn(
-                                       "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
-                                       isAudioPlaying ? cn(theme.deepDiveAudio, "text-white animate-pulse") : "bg-black/5 dark:bg-white/5 text-black/60 dark:text-white/60 hover:bg-black/10 dark:hover:bg-white/10 hover:text-black dark:hover:text-white",
-                                       isAudioLoading && "opacity-50 cursor-wait"
-                                     )}
-                                     title="Ouvir Explicação"
-                                   >
-                                     {isAudioLoading ? <Loader2 size={20} className="animate-spin" /> : <Volume2 size={20} />}
-                                   </button>
+                                   <>
+                                     <button
+                                       onClick={downloadDeepDivePDF}
+                                       disabled={isGeneratingPDF}
+                                       className="w-10 h-10 rounded-xl bg-black/5 dark:bg-white/5 text-black/60 dark:text-white/60 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 hover:text-black dark:hover:text-white transition-all"
+                                       title="Baixar PDF da Explicação"
+                                     >
+                                       {isGeneratingPDF ? <Loader2 size={20} className="animate-spin" /> : <FileText size={20} />}
+                                     </button>
+                                     <button
+                                       onClick={() => handlePlayAudio(currentQuestion.deepDive!)}
+                                       disabled={isAudioLoading}
+                                       className={cn(
+                                         "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
+                                         isAudioPlaying ? cn(theme.deepDiveAudio, "text-white animate-pulse") : "bg-black/5 dark:bg-white/5 text-black/60 dark:text-white/60 hover:bg-black/10 dark:hover:bg-white/10 hover:text-black dark:hover:text-white",
+                                         isAudioLoading && "opacity-50 cursor-wait"
+                                       )}
+                                       title="Ouvir Explicação"
+                                     >
+                                       {isAudioLoading ? <Loader2 size={20} className="animate-spin" /> : <Volume2 size={20} />}
+                                     </button>
+                                   </>
                                  )}
                                 <button 
                                   onClick={() => setShowDeepDive(false)}
@@ -1847,7 +2090,7 @@ export default function App() {
                                         remarkPlugins={[remarkGfm]}
                                         components={{
                                           strong: ({node, ...props}) => (
-                                            <strong className={cn("font-bold drop-shadow-[0_0_1.5px_currentColor]", theme.text, theme.textDark)} {...props} />
+                                            <strong className={cn("font-bold drop-shadow-[0_0_0.3px_currentColor]", theme.text, theme.textDark)} {...props} />
                                           )
                                         }}
                                       >
@@ -1878,7 +2121,7 @@ export default function App() {
                                             remarkPlugins={[remarkGfm]}
                                             components={{
                                               strong: ({node, ...props}) => (
-                                                <strong className={cn("font-bold drop-shadow-[0_0_1.5px_currentColor]", theme.text, theme.textDark)} {...props} />
+                                                <strong className={cn("font-bold drop-shadow-[0_0_0.3px_currentColor]", theme.text, theme.textDark)} {...props} />
                                               )
                                             }}
                                           >
@@ -1954,24 +2197,44 @@ export default function App() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                      <div className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8">
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 }}
+                        className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8"
+                      >
                         <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">Acertos</p>
                         <p className={cn("text-5xl font-medium", theme.text, theme.textDark)}>{correctCount}</p>
-                      </div>
-                      <div className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8">
+                      </motion.div>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8"
+                      >
                         <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">Erros</p>
                         <p className="text-5xl font-medium text-rose-600 dark:text-rose-400">{questions.length - correctCount}</p>
-                      </div>
-                      <div className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8">
+                      </motion.div>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8"
+                      >
                         <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">Precisão</p>
                         <p className="text-5xl font-medium text-black dark:text-slate-100">
                           {Math.round((correctCount / questions.length) * 100)}%
                         </p>
-                      </div>
-                      <div className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8">
+                      </motion.div>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8"
+                      >
                         <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">Tempo Total</p>
                         <p className="text-5xl font-medium text-black dark:text-slate-100">{formatTime(totalTime)}</p>
-                      </div>
+                      </motion.div>
                     </div>
 
                     <div className="flex flex-wrap items-center justify-center gap-4">
@@ -1997,11 +2260,12 @@ export default function App() {
                         Novo do Mesmo Material
                       </button>
                       <button
-                        onClick={() => window.print()}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold border-2 border-black/5 dark:border-slate-800 text-black dark:text-slate-100 hover:bg-black/5 dark:hover:bg-slate-800 transition-all"
+                        onClick={downloadResults}
+                        disabled={isGeneratingPDF}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold border-2 border-black/5 dark:border-slate-800 text-black dark:text-slate-100 hover:bg-black/5 dark:hover:bg-slate-800 transition-all disabled:opacity-50"
                       >
-                        <FileText size={20} />
-                        Salvar Resultados
+                        {isGeneratingPDF ? <Loader2 size={20} className="animate-spin" /> : <FileText size={20} />}
+                        {isGeneratingPDF ? 'Gerando PDF...' : 'Salvar Resultados'}
                       </button>
                       <button
                         onClick={resetQuiz}
@@ -2016,6 +2280,192 @@ export default function App() {
             </AnimatePresence>
           </div>
         </main>
+        {/* Hidden PDF Content */}
+        <div 
+          id="pdf-content-container"
+          className="absolute opacity-0 pointer-events-none z-[-100] top-0 w-[800px] bg-white p-12 space-y-12 text-slate-900 font-sans" 
+          ref={pdfContentRef}
+        >
+          <div className="flex items-center justify-between border-b-2 border-slate-100 pb-8">
+            <div className="flex items-center gap-5">
+              <div className={cn("w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg", theme.primary)}>
+                <BrainCircuit size={40} className="text-white" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-bold tracking-tight text-slate-900">Quiz AI Expert</h1>
+                <p className="text-slate-500 font-medium text-lg">{lastFileName || 'Documento Analisado'}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Relatório Gerado em</p>
+              <p className="text-xl font-bold text-slate-700">{format(new Date(), "dd/MM/yyyy HH:mm")}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 gap-8">
+            <div className="bg-slate-50 rounded-[32px] p-8 border border-slate-100 shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Acertos</p>
+              <p className={cn("text-4xl font-bold", theme.text)}>{correctCount}</p>
+            </div>
+            <div className="bg-slate-50 rounded-[32px] p-8 border border-slate-100 shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Erros</p>
+              <p className="text-4xl font-bold text-rose-600">{questions.length - correctCount}</p>
+            </div>
+            <div className="bg-slate-50 rounded-[32px] p-8 border border-slate-100 shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Precisão</p>
+              <p className="text-4xl font-bold text-slate-900">{Math.round((correctCount / questions.length) * 100)}%</p>
+            </div>
+            <div className="bg-slate-50 rounded-[32px] p-8 border border-slate-100 shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Tempo Total</p>
+              <p className="text-4xl font-bold text-slate-900">{formatTime(totalTime)}</p>
+            </div>
+          </div>
+
+          <div className="space-y-10">
+            <div className="flex items-center gap-4 border-b-2 border-slate-100 pb-4">
+              <FileText className="text-slate-400" size={24} />
+              <h2 className="text-2xl font-bold text-slate-800">Revisão Detalhada</h2>
+            </div>
+            
+            {questions.map((q, i) => (
+              <div key={i} className="space-y-6 p-10 rounded-[40px] border border-slate-100 bg-white shadow-sm relative overflow-hidden">
+                <div className={cn("absolute top-0 left-0 w-2 h-full", answers[i] === q.correctAnswer ? "bg-emerald-500" : "bg-rose-500")} />
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500">
+                      {i + 1}
+                    </span>
+                    <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Questão</span>
+                  </div>
+                  <div className={cn(
+                    "px-5 py-2 rounded-2xl text-xs font-bold uppercase tracking-widest shadow-sm",
+                    answers[i] === q.correctAnswer ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"
+                  )}>
+                    {answers[i] === q.correctAnswer ? 'Correto' : 'Incorreto'}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-sm font-serif italic text-slate-400">
+                    {q.type === 'cebraspe' ? 'Julgue o item abaixo:' : 'Alternativa selecionada:'}
+                  </p>
+                  <div className="p-8 rounded-3xl bg-slate-50 border border-slate-100">
+                    <p className="text-xl font-medium leading-relaxed text-slate-800">{q.question}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <p className="font-bold text-slate-400 uppercase text-[10px] tracking-[0.2em]">Sua Resposta</p>
+                    <div className={cn(
+                      "p-4 rounded-2xl font-bold text-lg border",
+                      answers[i] === q.correctAnswer ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-rose-50 border-rose-100 text-rose-700"
+                    )}>
+                      {answers[i] || 'Não respondida'}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="font-bold text-slate-400 uppercase text-[10px] tracking-[0.2em]">Resposta Correta</p>
+                    <div className="p-4 rounded-2xl font-bold text-lg border bg-emerald-50 border-emerald-100 text-emerald-700">
+                      {q.correctAnswer}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-slate-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <BrainCircuit size={16} className="text-slate-400" />
+                    <p className="font-bold text-slate-400 uppercase text-[10px] tracking-[0.2em]">Explicação do Especialista</p>
+                  </div>
+                  <p className="text-slate-600 leading-relaxed text-base italic bg-slate-50/50 p-6 rounded-2xl border border-slate-50">
+                    {q.explanation}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="pt-12 border-t-2 border-slate-100 text-center text-slate-400 text-xs">
+            <p className="font-medium">Relatório gerado automaticamente pelo Quiz AI Expert</p>
+            <p className="mt-1">© 2026 Todos os direitos reservados</p>
+          </div>
+        </div>
+        {/* Hidden Deep Dive PDF Content */}
+        {currentQuestion && (
+          <div 
+            id="deep-dive-pdf-container"
+            className="absolute opacity-0 pointer-events-none z-[-100] top-0 w-[800px] bg-white p-12 space-y-12 text-slate-900 font-sans" 
+            ref={deepDivePdfRef}
+          >
+            <div className="flex items-center justify-between border-b-2 border-slate-100 pb-8">
+              <div className="flex items-center gap-5">
+                <div className={cn("w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg", theme.primary)}>
+                  <BookOpen size={40} className="text-white" />
+                </div>
+                <div>
+                  <h1 className="text-4xl font-bold tracking-tight text-slate-900">Aprofundamento Técnico</h1>
+                  <p className="text-slate-500 font-medium text-lg">Questão {currentIndex + 1} - {lastFileName || 'Documento'}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Relatório Gerado em</p>
+                <p className="text-xl font-bold text-slate-700">{format(new Date(), "dd/MM/yyyy HH:mm")}</p>
+              </div>
+            </div>
+
+            <div className="space-y-10">
+              <div className="p-10 rounded-[40px] border border-slate-100 bg-slate-50 shadow-sm relative overflow-hidden">
+                <div className={cn("absolute top-0 left-0 w-2 h-full", theme.primary)} />
+                <p className="text-sm font-serif italic text-slate-400 mb-4">A questão analisada:</p>
+                <p className="text-2xl font-medium leading-relaxed text-slate-800">{currentQuestion.question}</p>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center gap-4 border-b-2 border-slate-100 pb-4">
+                  <BrainCircuit className="text-slate-400" size={24} />
+                  <h2 className="text-2xl font-bold text-slate-800">Explicação Detalhada</h2>
+                </div>
+                <div className="prose prose-slate max-w-none prose-p:text-slate-700 prose-headings:text-slate-900 prose-strong:text-slate-900 leading-relaxed text-lg">
+                  <Markdown remarkPlugins={[remarkGfm]}>
+                    {currentQuestion.deepDive || ''}
+                  </Markdown>
+                </div>
+              </div>
+
+              {chatHistory.length > 0 && (
+                <div className="space-y-8 pt-10 border-t-2 border-slate-100">
+                  <div className="flex items-center gap-4 border-b-2 border-slate-100 pb-4">
+                    <History className="text-slate-400" size={24} />
+                    <h2 className="text-2xl font-bold text-slate-800">Histórico de Dúvidas</h2>
+                  </div>
+                  <div className="space-y-6">
+                    {chatHistory.map((msg, idx) => (
+                      <div key={idx} className={cn(
+                        "p-8 rounded-[32px] border",
+                        msg.role === 'user' ? "bg-slate-50 border-slate-100 ml-12" : "bg-white border-slate-100 mr-12 shadow-sm"
+                      )}>
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-bold mb-3">
+                          {msg.role === 'user' ? 'Sua Pergunta' : 'Resposta do Professor'}
+                        </p>
+                        <div className="prose prose-slate prose-sm max-w-none">
+                          <Markdown remarkPlugins={[remarkGfm]}>
+                            {msg.text}
+                          </Markdown>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="pt-12 border-t-2 border-slate-100 text-center text-slate-400 text-xs">
+              <p className="font-medium">Conteúdo gerado por Quiz AI Expert</p>
+              <p className="mt-1">© 2026 Todos os direitos reservados</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
