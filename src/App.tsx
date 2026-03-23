@@ -339,6 +339,8 @@ interface QuizResult {
 
 export default function App() {
   const [state, setState] = useState<QuizState>('idle');
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [deepDiveProgress, setDeepDiveProgress] = useState(0);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<(string | null)[]>([]);
@@ -377,6 +379,41 @@ export default function App() {
   });
 
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (state === 'loading') {
+      setLoadingProgress(0);
+      interval = setInterval(() => {
+        setLoadingProgress(prev => {
+          if (prev >= 98) return prev;
+          // Slower as it gets higher to simulate complex processing
+          const increment = Math.max(0.05, (100 - prev) / 40);
+          return Math.min(98, prev + increment);
+        });
+      }, 100);
+    } else {
+      setLoadingProgress(0);
+    }
+    return () => clearInterval(interval);
+  }, [state]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isDeepDiveLoading) {
+      setDeepDiveProgress(0);
+      interval = setInterval(() => {
+        setDeepDiveProgress(prev => {
+          if (prev >= 98) return prev;
+          const increment = Math.max(0.1, (100 - prev) / 30);
+          return Math.min(98, prev + increment);
+        });
+      }, 100);
+    } else {
+      setDeepDiveProgress(0);
+    }
+    return () => clearInterval(interval);
+  }, [isDeepDiveLoading]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -1543,17 +1580,46 @@ export default function App() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="flex flex-col items-center justify-center py-24 space-y-6"
+                  className="flex flex-col items-center justify-center py-24 space-y-10 max-w-2xl mx-auto w-full px-6"
                 >
-                  <div className="relative">
-                    <Loader2 className={cn("w-16 h-16 animate-spin", theme.text, theme.textDark)} />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <BrainCircuit className={cn("opacity-50 dark:opacity-30", theme.text, theme.textDark)} size={24} />
+                  <div className="w-full space-y-6">
+                    <div className="flex items-center justify-between text-sm font-medium">
+                      <div className="flex items-center gap-2">
+                        <BrainCircuit className={cn("animate-pulse", theme.text, theme.textDark)} size={18} />
+                        <span className="dark:text-slate-300">Formulando Questionário...</span>
+                      </div>
+                      <span className={cn("font-mono", theme.text, theme.textDark)}>{Math.round(loadingProgress)}%</span>
+                    </div>
+                    
+                    <div className="h-3 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden border border-black/5 dark:border-white/5">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${loadingProgress}%` }}
+                        transition={{ type: "spring", bounce: 0, duration: 0.5 }}
+                        className={cn("h-full rounded-full shadow-lg", theme.primary)}
+                      />
+                    </div>
+
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1 space-y-1">
+                        <p className="text-xs font-medium uppercase tracking-wider text-black/40 dark:text-slate-500">Status</p>
+                        <p className="text-sm dark:text-slate-300">
+                          {loadingProgress < 30 && "Iniciando análise de conteúdo..."}
+                          {loadingProgress >= 30 && loadingProgress < 60 && "Estruturando questões estratégicas..."}
+                          {loadingProgress >= 60 && loadingProgress < 85 && "Refinando alternativas e explicações..."}
+                          {loadingProgress >= 85 && "Finalizando questionário..."}
+                        </p>
+                      </div>
+                      <div className="flex-1 space-y-1 text-right">
+                        <p className="text-xs font-medium uppercase tracking-wider text-black/40 dark:text-slate-500">Objetivo</p>
+                        <p className="text-sm dark:text-slate-300">{questionCount} Questões</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-center space-y-2">
-                    <h2 className="text-2xl font-medium dark:text-slate-100">Gerando seu Quiz...</h2>
-                    <p className="text-black/40 dark:text-slate-500">Analisando o conteúdo para criar {questionCount} questões estratégicas.</p>
+
+                  <div className="text-center space-y-2 pt-4">
+                    <h2 className="text-xl font-medium dark:text-slate-100">Quase pronto!</h2>
+                    <p className="text-sm text-black/40 dark:text-slate-500">A inteligência artificial está processando seu material para garantir o melhor aprendizado.</p>
                   </div>
                 </motion.div>
               )}
@@ -1574,39 +1640,40 @@ export default function App() {
                         {/* Timeline Progress */}
                         <div className="px-4 py-3 bg-black/[0.02] dark:bg-white/[0.02] border-b border-black/5 dark:border-slate-800">
                           <div className="flex items-center gap-1.5 h-14">
-                            {questions.map((_, idx) => (
-                              <button 
-                                key={idx} 
-                                onClick={() => {
-                                  setCurrentIndex(idx);
-                                  setQuestionTime(0);
-                                  setIsQuestionStarted(true);
-                                }}
-                                className={cn(
-                                  "transition-all duration-500 flex items-center justify-center font-mono font-bold rounded-md shadow-sm h-full flex-1 min-w-0 border border-black/5 dark:border-white/5",
-                                  (idx === currentIndex || answers[idx] !== null) ? cn(theme.primary, idx === currentIndex && "z-10 shadow-lg scale-y-105") : 
-                                  "bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10"
-                                )}
-                              >
-                                <span className={cn(
-                                  "transition-all duration-300 flex items-center justify-center shrink-0",
-                                  idx === currentIndex ? "text-2xl font-black" : "text-base font-bold",
-                                  (answers[idx] !== null && answers[idx] !== questions[idx]?.correctAnswer) 
-                                    ? cn(
-                                        "text-white rounded-md w-8 h-8 shadow-lg backdrop-blur-[4px] border border-white/30 flex items-center justify-center transition-all duration-300",
-                                        themeColor === 'emerald' ? "bg-emerald-400/90 shadow-emerald-500/40" :
-                                        themeColor === 'blue' ? "bg-blue-400/90 shadow-blue-500/40" :
-                                        themeColor === 'indigo' ? "bg-indigo-400/90 shadow-indigo-500/40" :
-                                        themeColor === 'slate' ? "bg-slate-400/90 shadow-slate-500/40" :
-                                        themeColor === 'yellow' ? "bg-yellow-400/90 shadow-yellow-500/40" : 
-                                        "bg-amber-400/90 shadow-amber-500/40"
-                                      )
-                                    : (idx === currentIndex || answers[idx] !== null) ? "text-black" : "text-black/40 dark:text-white/20"
-                                )}>
-                                  {idx + 1}
-                                </span>
-                              </button>
-                            ))}
+                            {questions.map((_, idx) => {
+                              const isAnswered = answers[idx] !== null;
+                              const isCorrect = isAnswered && answers[idx] === questions[idx]?.correctAnswer;
+                              const isWrong = isAnswered && answers[idx] !== questions[idx]?.correctAnswer;
+                              const isCurrent = idx === currentIndex;
+
+                              return (
+                                <button 
+                                  key={idx} 
+                                  onClick={() => {
+                                    setCurrentIndex(idx);
+                                    setQuestionTime(0);
+                                    setIsQuestionStarted(true);
+                                  }}
+                                  className={cn(
+                                    "transition-all duration-500 flex items-center justify-center font-mono font-bold rounded-md shadow-sm h-full flex-1 min-w-0 border border-black/5 dark:border-white/5 relative",
+                                    (isCurrent || isAnswered) 
+                                      ? cn(theme.primary, isCurrent && "z-10 shadow-lg scale-y-105") 
+                                      : "bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10"
+                                  )}
+                                >
+                                  <span className={cn(
+                                    "transition-all duration-300 flex items-center justify-center shrink-0",
+                                    isCurrent ? "text-2xl font-black" : "text-base font-bold",
+                                    (isCurrent || isAnswered) ? "text-black" : "text-black/40 dark:text-white/20"
+                                  )}>
+                                    {idx + 1}
+                                  </span>
+                                  {isWrong && (
+                                    <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-1 bg-[#B91C1C] shadow-[0_0_8px_rgba(185,28,28,0.8)] rounded-full" />
+                                  )}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
 
@@ -2072,14 +2139,39 @@ export default function App() {
                           
                           <div className="p-6 space-y-6 overflow-y-auto max-h-[60vh] custom-scrollbar flex-1 flex flex-col">
                             {isDeepDiveLoading ? (
-                              <div className="flex-1 flex flex-col items-center justify-center space-y-8 py-20">
-                                <div className="relative">
-                                  <div className={cn("w-20 h-20 rounded-full border-4 border-t-transparent animate-spin", theme.border, "opacity-20")} />
-                                  <Loader2 className={cn("w-10 h-10 animate-spin absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2", theme.text, theme.textDark)} />
+                              <div className="flex-1 flex flex-col items-center justify-center space-y-10 py-20 px-4">
+                                <div className="w-full max-w-md space-y-6">
+                                  <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
+                                    <div className="flex items-center gap-2">
+                                      <BrainCircuit className={cn("animate-pulse", theme.text, theme.textDark)} size={16} />
+                                      <span className="dark:text-slate-300">Aprofundando Conhecimento...</span>
+                                    </div>
+                                    <span className={cn("font-mono", theme.text, theme.textDark)}>{Math.round(deepDiveProgress)}%</span>
+                                  </div>
+                                  
+                                  <div className="h-2 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden border border-black/5 dark:border-white/5">
+                                    <motion.div 
+                                      initial={{ width: 0 }}
+                                      animate={{ width: `${deepDiveProgress}%` }}
+                                      transition={{ type: "spring", bounce: 0, duration: 0.5 }}
+                                      className={cn("h-full rounded-full shadow-lg", theme.primary)}
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-black/40 dark:text-slate-500">Status do Professor</p>
+                                    <p className="text-xs dark:text-slate-300 italic">
+                                      {deepDiveProgress < 30 && "Revisando o contexto da questão..."}
+                                      {deepDiveProgress >= 30 && deepDiveProgress < 60 && "Consultando referências técnicas..."}
+                                      {deepDiveProgress >= 60 && deepDiveProgress < 85 && "Sintetizando explicação pedagógica..."}
+                                      {deepDiveProgress >= 85 && "Finalizando detalhes do aprofundamento..."}
+                                    </p>
+                                  </div>
                                 </div>
+
                                 <div className="text-center space-y-2">
-                                  <p className="text-black/60 dark:text-white/60 text-lg font-medium animate-pulse">Gerando explicação detalhada...</p>
-                                  <p className="text-black/30 dark:text-white/30 text-xs">Isso pode levar alguns segundos enquanto o Professor analisa o conteúdo.</p>
+                                  <p className="text-black/60 dark:text-white/60 text-base font-medium">Preparando aula personalizada</p>
+                                  <p className="text-black/30 dark:text-white/30 text-[10px] uppercase tracking-widest">Aguarde um instante</p>
                                 </div>
                               </div>
                             ) : currentQuestion.deepDive ? (
