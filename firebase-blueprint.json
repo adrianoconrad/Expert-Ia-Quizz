@@ -1,0 +1,45 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user-specific information and preferences.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique identifier for the user." },
+        "displayName": { "type": "string", "description": "The user's display name." },
+        "email": { "type": "string", "format": "email", "description": "The user's email address." },
+        "photoURL": { "type": "string", "description": "The user's profile photo URL." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "The time the user profile was created." },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "The user's role in the application." }
+      },
+      "required": ["uid", "email", "createdAt", "role"]
+    },
+    "QuizResult": {
+      "title": "Quiz Result",
+      "description": "Stores the outcome of a completed quiz.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The UID of the user who took the quiz." },
+        "date": { "type": "string", "format": "date-time", "description": "The date and time the quiz was completed." },
+        "correct": { "type": "integer", "description": "The number of correct answers." },
+        "total": { "type": "integer", "description": "The total number of questions in the quiz." },
+        "timeSpent": { "type": "integer", "description": "The total time spent on the quiz in seconds." },
+        "fileName": { "type": "string", "description": "The name of the file or source used for the quiz." },
+        "questions": { "type": "array", "items": { "type": "object" }, "description": "The list of questions generated for the quiz." },
+        "answers": { "type": "array", "items": { "type": "string" }, "description": "The user's answers for each question." },
+        "content": { "type": "object", "description": "The source content used to generate the quiz." }
+      },
+      "required": ["uid", "date", "correct", "total", "timeSpent", "fileName", "questions", "answers"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "Collection of user profiles."
+    },
+    "/results/{resultId}": {
+      "schema": "QuizResult",
+      "description": "Collection of quiz results."
+    }
+  }
+}

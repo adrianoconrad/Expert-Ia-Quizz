@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required) - The user's unique identifier.
+    //   - displayName: string (optional) - The user's display name.
+    //   - email: string (required, email format) - The user's email address.
+    //   - photoURL: string (optional) - The user's profile photo URL.
+    //   - createdAt: timestamp (required) - The time the profile was created.
+    //   - role: string (required, enum: ['user', 'admin']) - The user's role.
+    //
+    // Collection: results
+    // Document ID: {resultId}
+    // Fields:
+    //   - uid: string (required) - The UID of the user who took the quiz.
+    //   - date: timestamp (required) - The date and time the quiz was completed.
+    //   - correct: int (required) - The number of correct answers.
+    //   - total: int (required) - The total number of questions.
+    //   - timeSpent: int (required) - The total time spent in seconds.
+    //   - fileName: string (required) - The name of the source file.
+    //   - questions: list (required) - The list of questions.
+    //   - answers: list (required) - The user's answers.
+    //   - content: map (optional) - The source content.
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
+         (request.auth.token.email == "adrianoconrad@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'createdAt', 'role']) &&
+             hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'createdAt', 'role']) &&
+             data.uid == request.auth.uid &&
+             data.email == request.auth.token.email &&
+             isValidEmail(data.email) &&
+             data.role in ['user', 'admin'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidResult(data) {
+      return hasRequiredFields(['uid', 'date', 'correct', 'total', 'timeSpent', 'fileName', 'questions', 'answers']) &&
+             data.uid == request.auth.uid &&
+             data.date is timestamp &&
+             data.correct is int && data.correct >= 0 &&
+             data.total is int && data.total > 0 &&
+             data.timeSpent is int && data.timeSpent >= 0 &&
+             data.fileName is string && data.fileName.size() < 500 &&
+             data.questions is list && data.questions.size() <= 100 &&
+             data.answers is list && data.answers.size() <= 100;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    // Results collection
+    match /results/{resultId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidResult(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+  }
+}
