@@ -15,6 +15,11 @@ service cloud.firestore {
     //   - photoURL: string (optional) - The user's profile photo URL.
     //   - createdAt: timestamp (required) - The time the profile was created.
     //   - role: string (required, enum: ['user', 'admin']) - The user's role.
+    //   - streak: int (optional) - The current consecutive days of study.
+    //   - lastActivity: timestamp (optional) - The last time the user completed a quiz.
+    //   - achievements: list (optional) - List of unlocked achievement IDs.
+    //   - totalCorrectAnswers: int (optional) - Total correct answers.
+    //   - totalQuizzesTaken: int (optional) - Total quizzes completed.
     //
     // Collection: results
     // Document ID: {resultId}
@@ -28,6 +33,45 @@ service cloud.firestore {
     //   - questions: list (required) - The list of questions.
     //   - answers: list (required) - The user's answers.
     //   - content: map (optional) - The source content.
+    //
+    // Collection: srs
+    // Document ID: {itemId}
+    // Fields:
+    //   - uid: string (required) - The UID of the user who owns this item.
+    //   - questionId: string (required) - The original question ID.
+    //   - question: string (required) - The question text.
+    //   - options: list (optional) - The options for the question.
+    //   - correctAnswer: string (required) - The correct answer.
+    //   - explanation: string (optional) - The explanation.
+    //   - subject: string (optional) - The subject.
+    //   - interval: int (required) - The interval in days until next review.
+    //   - easeFactor: number (required) - The SM-2 ease factor.
+    //   - nextReviewDate: timestamp (required) - The date for next review.
+    //   - consecutiveCorrect: int (optional) - Number of consecutive correct answers.
+    //
+    // Collection: flashcards
+    // Document ID: {cardId}
+    // Fields:
+    //   - uid: string (required) - The user ID who owns this flashcard.
+    //   - front: string (required) - The question or concept on the front.
+    //   - back: string (required) - The answer or explanation on the back.
+    //   - subject: string (required) - The subject of the flashcard.
+    //   - createdAt: timestamp (required) - The time the flashcard was created.
+    //
+    // Collection: mindmaps
+    // Document ID: {mapId}
+    // Fields:
+    //   - uid: string (required) - The user ID who owns this mind map.
+    //   - mermaidCode: string (required) - The Mermaid.js code for the diagram.
+    //   - subject: string (required) - The subject of the mind map.
+    //   - createdAt: timestamp (required) - The time the mind map was created.
+    //
+    // Collection: srs_registries
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required) - The user ID who owns this registry.
+    //   - items: map (required) - Map of SRS items.
+    //   - lastUpdated: timestamp (optional) - The last time the registry was updated.
     //
     // ===============================================================
 
@@ -67,16 +111,43 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return hasRequiredFields(['uid', 'email', 'createdAt', 'role']) &&
-             hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'createdAt', 'role']) &&
+             hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'createdAt', 'role', 'streak', 'lastActivity', 'achievements', 'totalCorrectAnswers', 'totalQuizzesTaken', 'backgroundUrl', 'backgroundBlur', 'backgroundOpacity', 'customBackgrounds', 'themeColor', 'customThemeColor', 'subjects']) &&
              data.uid == request.auth.uid &&
              data.email == request.auth.token.email &&
              isValidEmail(data.email) &&
              data.role in ['user', 'admin'] &&
-             data.createdAt is timestamp;
+             data.createdAt is timestamp &&
+             (!('streak' in data) || data.streak is int) &&
+             (!('lastActivity' in data) || data.lastActivity is timestamp) &&
+             (!('achievements' in data) || data.achievements is list) &&
+             (!('totalCorrectAnswers' in data) || data.totalCorrectAnswers is int) &&
+             (!('totalQuizzesTaken' in data) || data.totalQuizzesTaken is int) &&
+             (!('backgroundUrl' in data) || data.backgroundUrl is string) &&
+             (!('backgroundBlur' in data) || data.backgroundBlur is int) &&
+             (!('backgroundOpacity' in data) || data.backgroundOpacity is int) &&
+             (!('customBackgrounds' in data) || data.customBackgrounds is list) &&
+             (!('themeColor' in data) || data.themeColor is string) &&
+             (!('customThemeColor' in data) || data.customThemeColor is string);
+    }
+
+    function isValidSRSItem(data) {
+      return hasRequiredFields(['uid', 'questionId', 'question', 'correctAnswer', 'interval', 'easeFactor', 'nextReviewDate']) &&
+             data.uid == request.auth.uid &&
+             data.questionId is string &&
+             data.question is string &&
+             data.correctAnswer is string &&
+             data.interval is int &&
+             data.easeFactor is number &&
+             data.nextReviewDate is timestamp &&
+             (!('options' in data) || data.options is list) &&
+             (!('explanation' in data) || data.explanation is string) &&
+             (!('subject' in data) || data.subject is string) &&
+             (!('consecutiveCorrect' in data) || data.consecutiveCorrect is int);
     }
 
     function isValidResult(data) {
       return hasRequiredFields(['uid', 'date', 'correct', 'total', 'timeSpent', 'fileName', 'questions', 'answers']) &&
+             hasOnlyAllowedFields(['id', 'uid', 'date', 'correct', 'total', 'timeSpent', 'fileName', 'questions', 'answers', 'content', 'deleted', 'deletedAt']) &&
              data.uid == request.auth.uid &&
              data.date is timestamp &&
              data.correct is int && data.correct >= 0 &&
@@ -84,7 +155,35 @@ service cloud.firestore {
              data.timeSpent is int && data.timeSpent >= 0 &&
              data.fileName is string && data.fileName.size() < 500 &&
              data.questions is list && data.questions.size() <= 100 &&
-             data.answers is list && data.answers.size() <= 100;
+             data.answers is list && data.answers.size() <= 100 &&
+             (!('id' in data) || data.id is string) &&
+             (!('deleted' in data) || data.deleted is bool) &&
+             (!('deletedAt' in data) || data.deletedAt is timestamp || data.deletedAt == null);
+    }
+
+    function isValidFlashcard(data) {
+      return hasRequiredFields(['uid', 'front', 'back', 'subject', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.front is string && data.front.size() > 0 && data.front.size() < 2000 &&
+             data.back is string && data.back.size() > 0 && data.back.size() < 5000 &&
+             data.subject is string &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidMindMap(data) {
+      return hasRequiredFields(['uid', 'mermaidCode', 'subject', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.mermaidCode is string && data.mermaidCode.size() > 0 && data.mermaidCode.size() < 10000 &&
+             data.subject is string &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidSRSRegistry(data) {
+      return hasRequiredFields(['uid', 'items']) &&
+             hasOnlyAllowedFields(['uid', 'items', 'lastUpdated']) &&
+             data.uid == request.auth.uid &&
+             data.items is map &&
+             (!('lastUpdated' in data) || data.lastUpdated is timestamp);
     }
 
     // Default deny
@@ -103,7 +202,39 @@ service cloud.firestore {
     match /results/{resultId} {
       allow read: if isDocOwner() || isAdmin();
       allow create: if isAuthenticated() && isValidResult(request.resource.data);
-      allow update, delete: if isAdmin();
+      allow update: if isDocOwner() && isValidResult(request.resource.data);
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    // SRS collection
+    match /srs/{itemId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidSRSItem(request.resource.data);
+      allow update: if isDocOwner() && isValidSRSItem(request.resource.data);
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    // Flashcards collection
+    match /flashcards/{cardId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidFlashcard(request.resource.data);
+      allow update: if isDocOwner() && isValidFlashcard(request.resource.data);
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    // MindMaps collection
+    match /mindmaps/{mapId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidMindMap(request.resource.data);
+      allow update: if isDocOwner() && isValidMindMap(request.resource.data);
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    // SRS Registries collection
+    match /srs_registries/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid) && isValidSRSRegistry(request.resource.data);
+      allow delete: if isOwner(uid) || isAdmin();
     }
   }
 }

@@ -12,6 +12,7 @@ export interface QuizQuestion {
   options?: string[]; // Only for multiple-choice
   correctAnswer: string; // For cebraspe: 'Certo' or 'Errado'. For multiple-choice: the option text.
   explanation: string;
+  hint: string; // A small hint to help the student think
   deepDive?: string; // Fetched on demand
   studyLinks?: { title: string; url: string }[];
 }
@@ -27,6 +28,81 @@ const getAI = () => {
 export type QuizFormat = 'multiple-choice' | 'cebraspe' | 'both';
 
 export type ContentItem = string | { data: string; mimeType: string };
+
+export interface Flashcard {
+  id: string;
+  front: string;
+  back: string;
+  subject: string;
+}
+
+export interface MindMapData {
+  mermaidCode: string;
+  subject: string;
+}
+
+export const generateFlashcards = async (content: ContentItem | ContentItem[]): Promise<Flashcard[]> => {
+  const ai = getAI();
+  const contentArray = Array.isArray(content) ? content : [content];
+  const prompt = `Com base no conteúdo fornecido, gere 10 flashcards de estudo. 
+  Cada flashcard deve ter uma pergunta/conceito na frente e uma resposta/explicação detalhada no verso.
+  Retorne em formato JSON: array de objetos com {front, back, subject}.`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: [
+      ...contentArray.map(c => typeof c === 'string' ? { text: c } : { inlineData: c }),
+      { text: prompt }
+    ],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            front: { type: Type.STRING },
+            back: { type: Type.STRING },
+            subject: { type: Type.STRING }
+          },
+          required: ["front", "back", "subject"]
+        }
+      }
+    }
+  });
+
+  const cards = JSON.parse(response.text || "[]");
+  return cards.map((c: any) => ({ ...c, id: Math.random().toString(36).substr(2, 9) }));
+};
+
+export const generateMindMap = async (content: ContentItem | ContentItem[]): Promise<MindMapData> => {
+  const ai = getAI();
+  const contentArray = Array.isArray(content) ? content : [content];
+  const prompt = `Com base no conteúdo fornecido, crie um mapa mental estruturado usando a sintaxe Mermaid.js (graph TD).
+  O mapa deve ser hierárquico e cobrir os pontos principais.
+  Retorne apenas o código Mermaid.js dentro de um objeto JSON com a chave 'mermaidCode' e 'subject'.`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: [
+      ...contentArray.map(c => typeof c === 'string' ? { text: c } : { inlineData: c }),
+      { text: prompt }
+    ],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          mermaidCode: { type: Type.STRING },
+          subject: { type: Type.STRING }
+        },
+        required: ["mermaidCode", "subject"]
+      }
+    }
+  });
+
+  return JSON.parse(response.text || "{}");
+};
 
 export async function generateQuiz(
   content: ContentItem | ContentItem[], 
@@ -95,6 +171,7 @@ async function _generateQuizBatch(
        - A matéria (subject) da questão.
        - O enunciado da questão.
        - A resposta correta.
+       - Uma pequena dica (hint) instigante para fazer o aluno refletir antes de responder (sem dar a resposta diretamente).
        - Uma explicação curta e direta.
        - 2 a 3 links de materiais de estudo relacionados (pode ser links para Wikipedia, YouTube, ou sites educacionais confiáveis).
     4. O formato de saída DEVE ser um JSON válido seguindo o schema fornecido.
@@ -146,6 +223,7 @@ async function _generateQuizBatch(
               description: "Obrigatório para multiple-choice. Para cebraspe, deixe vazio ou omita."
             },
             correctAnswer: { type: Type.STRING, description: "Para cebraspe use 'Certo' or 'Errado'. Para múltipla escolha, use o texto exato da opção correta." },
+            hint: { type: Type.STRING, description: "Uma pequena dica para ajudar o aluno a pensar, sem revelar a resposta." },
             explanation: { type: Type.STRING },
             studyLinks: {
               type: Type.ARRAY,
@@ -159,7 +237,7 @@ async function _generateQuizBatch(
               }
             }
           },
-          required: ["id", "type", "difficulty", "subject", "question", "correctAnswer", "explanation"]
+          required: ["id", "type", "difficulty", "subject", "question", "correctAnswer", "explanation", "hint"]
         }
       }
     }

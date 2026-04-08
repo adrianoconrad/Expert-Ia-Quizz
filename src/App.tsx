@@ -4,14 +4,15 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { auth, db, loginWithGoogle, logout, onAuthStateChanged, collection, query, where, orderBy, onSnapshot, setDoc, doc, Timestamp, handleFirestoreError, OperationType, getDoc, deleteDoc, writeBatch } from './firebase';
+import { motion, AnimatePresence } from 'framer-motion';
+import { auth, db, loginWithGoogle, logout, onAuthStateChanged, collection, query, where, orderBy, onSnapshot, setDoc, doc, Timestamp, handleFirestoreError, OperationType, getDoc, getDocs, deleteDoc, writeBatch, updateDoc } from './firebase';
 import { User } from 'firebase/auth';
 import { 
   Upload, 
   CheckCircle2, 
   XCircle, 
   X,
+  Sparkles,
   ArrowRight, 
   RotateCcw, 
   BookOpen, 
@@ -26,12 +27,16 @@ import {
   Timer,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Trash2,
   FileQuestion,
+  Flame,
   Pause,
   Play,
   Volume2,
   PlusCircle,
+  Plus,
   Link as LinkIcon,
   Sun,
   Moon,
@@ -56,6 +61,7 @@ import {
   FolderOpen,
   Hash,
   Check,
+  CheckSquare,
   TrendingDown,
   Minus,
   AlertTriangle,
@@ -79,8 +85,22 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie
+} from 'recharts';
 import { generateQuiz, QuizQuestion, QuizFormat, generateDeepDive, generateSpeech, ContentItem, chatWithProfessor } from './services/geminiService';
 import { cn } from './lib/utils';
+import Logo from './components/Logo';
 
 const normalizeSubject = (s: string) => {
   if (!s) return 'Geral';
@@ -113,9 +133,9 @@ const THEME_CONFIG = {
     secondary: 'bg-emerald-500',
     secondaryHover: 'hover:bg-emerald-500',
     text: 'text-emerald-600',
-    textDark: 'dark:text-emerald-500',
+    textDark: 'dark:text-white',
     textLight: 'text-emerald-700',
-    textLightDark: 'dark:text-emerald-400',
+    textLightDark: 'dark:text-slate-200',
     border: 'border-emerald-600',
     borderDark: 'dark:border-emerald-500',
     bg: 'bg-emerald-50',
@@ -158,9 +178,9 @@ const THEME_CONFIG = {
     secondary: 'bg-blue-800',
     secondaryHover: 'hover:bg-blue-800',
     text: 'text-blue-900',
-    textDark: 'dark:text-blue-400',
+    textDark: 'dark:text-white',
     textLight: 'text-blue-950',
-    textLightDark: 'dark:text-blue-300',
+    textLightDark: 'dark:text-slate-200',
     border: 'border-blue-900',
     borderDark: 'dark:border-blue-400',
     bg: 'bg-blue-50',
@@ -203,9 +223,9 @@ const THEME_CONFIG = {
     secondary: 'bg-amber-800',
     secondaryHover: 'hover:bg-amber-800',
     text: 'text-amber-900',
-    textDark: 'dark:text-amber-400',
+    textDark: 'dark:text-white',
     textLight: 'text-amber-950',
-    textLightDark: 'dark:text-amber-300',
+    textLightDark: 'dark:text-slate-200',
     border: 'border-amber-900',
     borderDark: 'dark:border-amber-400',
     bg: 'bg-amber-50',
@@ -248,9 +268,9 @@ const THEME_CONFIG = {
     secondary: 'bg-slate-500',
     secondaryHover: 'hover:bg-slate-500',
     text: 'text-slate-600',
-    textDark: 'dark:text-slate-500',
+    textDark: 'dark:text-white',
     textLight: 'text-slate-700',
-    textLightDark: 'dark:text-slate-400',
+    textLightDark: 'dark:text-slate-200',
     border: 'border-slate-600',
     borderDark: 'dark:border-slate-500',
     bg: 'bg-slate-50',
@@ -293,9 +313,9 @@ const THEME_CONFIG = {
     secondary: 'bg-yellow-400',
     secondaryHover: 'hover:bg-yellow-400',
     text: 'text-yellow-600',
-    textDark: 'dark:text-yellow-500',
+    textDark: 'dark:text-white',
     textLight: 'text-yellow-700',
-    textLightDark: 'dark:text-yellow-400',
+    textLightDark: 'dark:text-slate-200',
     border: 'border-yellow-500',
     borderDark: 'dark:border-yellow-400',
     bg: 'bg-yellow-50',
@@ -338,9 +358,9 @@ const THEME_CONFIG = {
     secondary: 'bg-amber-500',
     secondaryHover: 'hover:bg-amber-500',
     text: 'text-amber-600',
-    textDark: 'dark:text-amber-500',
+    textDark: 'dark:text-white',
     textLight: 'text-amber-700',
-    textLightDark: 'dark:text-amber-400',
+    textLightDark: 'dark:text-slate-200',
     border: 'border-amber-600',
     borderDark: 'dark:border-amber-500',
     bg: 'bg-amber-50',
@@ -794,7 +814,106 @@ interface QuizResult {
   questions: QuizQuestion[];
   answers: (string | null)[];
   content?: ContentItem | ContentItem[];
+  deleted?: boolean;
+  deletedAt?: Date;
 }
+
+const MultiDateCalendar = ({ 
+  selectedDates, 
+  onToggleDate, 
+  onApply, 
+  onCancel,
+  theme 
+}: { 
+  selectedDates: string[], 
+  onToggleDate: (date: string) => void, 
+  onApply: () => void,
+  onCancel: () => void,
+  theme: any 
+}) => {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  
+  const monthStart = startOfMonth(currentMonth);
+  const monthEnd = endOfMonth(monthStart);
+  const startDate = startOfWeek(monthStart);
+  const endDate = endOfWeek(monthEnd);
+  
+  const calendarDays = eachDayOfInterval({
+    start: startDate,
+    end: endDate,
+  });
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+      className="absolute top-full right-0 mt-2 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-black/10 dark:border-white/10 p-4 w-72 z-[100]"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors">
+          <ChevronLeft size={18} className="dark:text-white" />
+        </button>
+        <h3 className="font-bold text-sm dark:text-white capitalize">
+          {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+        </h3>
+        <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors">
+          <ChevronRight size={18} className="dark:text-white" />
+        </button>
+      </div>
+      
+      <div className="grid grid-cols-7 gap-1 mb-2">
+        {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, i) => (
+          <div key={`${day}-${i}`} className="text-center text-[10px] font-bold text-black/40 dark:text-slate-500 py-1">
+            {day}
+          </div>
+        ))}
+      </div>
+      
+      <div className="grid grid-cols-7 gap-1">
+        {calendarDays.map(day => {
+          const dateStr = format(day, 'yyyy-MM-dd');
+          const isSelected = selectedDates.includes(dateStr);
+          const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
+          const isTodayDate = isToday(day);
+          
+          return (
+            <button
+              key={dateStr}
+              onClick={() => onToggleDate(dateStr)}
+              className={cn(
+                "h-8 w-8 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center relative",
+                !isCurrentMonth && "opacity-20",
+                isSelected 
+                  ? cn(theme.primary, theme.contrastText, "shadow-md scale-110 z-10") 
+                  : "hover:bg-black/5 dark:hover:bg-white/5 dark:text-white",
+                isTodayDate && !isSelected && "border border-blue-500/50"
+              )}
+            >
+              {format(day, 'd')}
+              {isTodayDate && !isSelected && <div className="absolute bottom-1 w-1 h-1 bg-blue-500 rounded-full" />}
+            </button>
+          );
+        })}
+      </div>
+      
+      <div className="flex items-center gap-2 mt-4 pt-4 border-t border-black/5 dark:border-white/5">
+        <button 
+          onClick={onCancel}
+          className="flex-1 py-2 rounded-xl text-[10px] font-bold hover:bg-black/5 dark:hover:bg-white/5 dark:text-white transition-all"
+        >
+          Cancelar
+        </button>
+        <button 
+          onClick={onApply}
+          className={cn("flex-1 py-2 rounded-xl text-[10px] font-bold transition-all shadow-lg", theme.primary, theme.contrastText)}
+        >
+          Filtrar ({selectedDates.length})
+        </button>
+      </div>
+    </motion.div>
+  );
+};
 
 const Dashboard = ({ 
   history, 
@@ -810,45 +929,113 @@ const Dashboard = ({
   handleAddSubject,
   handleRemoveSubject,
   newSubjectInput,
-  setNewSubjectInput
+  setNewSubjectInput,
+  onDeleteSubjectHistory,
+  onDeleteQuiz,
+  userProfile,
+  itemsDue,
+  onStartSRSReview,
+  selectedSubjects,
+  setSelectedSubjects,
+  onDeleteQuizzes,
+  onDeleteSubjectsHistory
 }: { 
   history: QuizResult[], 
   theme: any, 
   onClose: () => void, 
   themeColor: ThemeColor,
-  onPracticeTopic: (topic: string) => void,
-  dateFilter: string,
-  setDateFilter: (val: string) => void,
+  onPracticeTopic: (topic: string, quizIds?: string[]) => void,
+  dateFilter: string[],
+  setDateFilter: (val: string[]) => void,
   subjectFilter: string,
   setSubjectFilter: (val: string) => void,
   subjects: string[],
   handleAddSubject: (e: React.FormEvent) => void,
   handleRemoveSubject: (subject: string) => void,
   newSubjectInput: string,
-  setNewSubjectInput: (val: string) => void
+  setNewSubjectInput: (val: string) => void,
+  onDeleteSubjectHistory: (subject: string) => void,
+  onDeleteQuiz: (id: string) => void,
+  userProfile: any,
+  itemsDue: any[],
+  onStartSRSReview: () => void,
+  selectedSubjects: string[],
+  setSelectedSubjects: React.Dispatch<React.SetStateAction<string[]>>,
+  onDeleteQuizzes: (ids: string[]) => void,
+  onDeleteSubjectsHistory: (subjects: string[]) => void
 }) => {
+  const [activeFolder, setActiveFolder] = React.useState<string | null>(null);
+  const [selectedQuizzes, setSelectedQuizzes] = React.useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = React.useState(false);
+
+  const toggleQuizSelection = (id: string) => {
+    setSelectedQuizzes(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSubjectSelection = (subject: string) => {
+    setSelectedSubjects(
+      selectedSubjects.includes(subject)
+        ? selectedSubjects.filter(s => s !== subject)
+        : [...selectedSubjects, subject]
+    );
+  };
+
+  const handleDeepenSelected = () => {
+    if (selectedSubjects.length === 0 && selectedQuizzes.length === 0) return;
+    
+    // Combine all quiz IDs from selected subjects and selected quizzes
+    const allQuizIds = new Set<string>(selectedQuizzes);
+    
+    selectedSubjects.forEach(subject => {
+      const quizzes = history.filter(res => {
+        const quizSubjects = new Set(res.questions.map(q => normalizeSubject(q.subject || res.fileName)));
+        return quizSubjects.has(subject);
+      });
+      quizzes.forEach(q => allQuizIds.add(q.id));
+    });
+
+    if (allQuizIds.size > 0) {
+      const labels = [...selectedSubjects];
+      if (selectedQuizzes.length > 0) {
+        labels.push(`${selectedQuizzes.length} Quizzes`);
+      }
+      onPracticeTopic(labels.join(", "), Array.from(allQuizIds));
+    }
+  };
+  const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
+  const [tempSelectedDates, setTempSelectedDates] = React.useState<string[]>([]);
+
+  // Reset selection when changing folder
+  React.useEffect(() => {
+    setSelectedQuizzes([]);
+  }, [activeFolder]);
+
   const filteredHistory = React.useMemo(() => {
     return history.filter(res => {
       const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
       
       // Date filter
       let dateMatch = true;
-      if (dateFilter === 'today') {
+      if (dateFilter.includes('all')) {
+        dateMatch = true;
+      } else if (dateFilter.includes('today')) {
         const today = new Date();
         dateMatch = date.toDateString() === today.toDateString();
-      } else if (dateFilter === 'week') {
+      } else if (dateFilter.includes('week')) {
         const lastWeek = new Date();
         lastWeek.setDate(lastWeek.getDate() - 7);
         dateMatch = date >= lastWeek;
-      } else if (dateFilter === 'month') {
+      } else if (dateFilter.includes('month')) {
         const lastMonth = new Date();
         lastMonth.setMonth(lastMonth.getMonth() - 1);
         dateMatch = date >= lastMonth;
-      } else if (dateFilter !== 'all') {
-        const filterDate = new Date(dateFilter);
-        if (!isNaN(filterDate.getTime())) {
-          dateMatch = date.toDateString() === filterDate.toDateString();
-        }
+      } else if (dateFilter.length > 0) {
+        dateMatch = dateFilter.some(df => {
+          const filterDate = new Date(df);
+          return !isNaN(filterDate.getTime()) && date.toDateString() === filterDate.toDateString();
+        });
       }
 
       // Subject filter (now checks if ANY question in the quiz matches the subject filter)
@@ -862,7 +1049,21 @@ const Dashboard = ({
   }, [history, dateFilter, subjectFilter]);
 
   const stats = React.useMemo(() => {
-    if (filteredHistory.length === 0) return null;
+    if (filteredHistory.length === 0) return {
+      totalQuizzes: 0,
+      totalQuestions: 0,
+      totalCorrect: 0,
+      totalIncorrect: 0,
+      avgAccuracy: 0,
+      recentAccuracy: 0,
+      trend: 'stable' as const,
+      totalTime: 0,
+      avgTimePerQuestion: 0,
+      subjectData: [],
+      strengths: [],
+      weaknesses: [],
+      focusTopics: []
+    };
 
     let totalQuestions = 0;
     let totalCorrect = 0;
@@ -909,7 +1110,26 @@ const Dashboard = ({
       attempts: data.attempts,
       lastDate: data.lastDate,
       status: (data.correct / data.total) >= 0.8 ? 'Mastered' : (data.correct / data.total) >= 0.6 ? 'Improving' : 'Critical'
-    })).sort((a, b) => a.accuracy - b.accuracy);
+    })).sort((a, b) => {
+      if (a.name === 'Outros') return 1;
+      if (b.name === 'Outros') return -1;
+      return a.name.localeCompare(b.name);
+    });
+
+    // Ensure all subjects from settings are present in subjectData
+    subjects.forEach(s => {
+      if (!subjectData.some(sd => sd.name === s)) {
+        subjectData.push({
+          name: s,
+          accuracy: 0,
+          correct: 0,
+          total: 0,
+          attempts: 0,
+          lastDate: new Date(),
+          status: 'Critical'
+        });
+      }
+    });
 
     const recentHistory = history.slice(-5);
     let recentCorrect = 0;
@@ -928,6 +1148,14 @@ const Dashboard = ({
       .sort((a, b) => (b.total * (1 - b.accuracy/100)) - (a.total * (1 - a.accuracy/100)))
       .slice(0, 3);
 
+    // Group quizzes by subject for the folder view
+    const quizzesBySubject: { [key: string]: QuizResult[] } = {};
+    filteredHistory.forEach(res => {
+      const subject = normalizeSubject(res.questions[0]?.subject || res.fileName);
+      if (!quizzesBySubject[subject]) quizzesBySubject[subject] = [];
+      quizzesBySubject[subject].push(res);
+    });
+
     return {
       totalQuizzes: filteredHistory.length,
       totalQuestions,
@@ -941,7 +1169,8 @@ const Dashboard = ({
       subjectData,
       strengths,
       weaknesses,
-      focusTopics
+      focusTopics,
+      quizzesBySubject
     };
   }, [filteredHistory, history]);
 
@@ -976,68 +1205,89 @@ const Dashboard = ({
       className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 max-w-7xl mx-auto"
     >
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] border border-black/5 dark:border-slate-800 shadow-sm">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 sm:p-8 rounded-[2.5rem] border border-white/20 dark:border-slate-800/50 shadow-2xl">
         <div className="flex items-center gap-4 sm:gap-6">
-          <div className={cn("p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-xl transform -rotate-3", theme.primary, theme.contrastText)}>
-            <LayoutDashboard size={24} className="sm:hidden" />
-            <LayoutDashboard size={32} className="hidden sm:block" />
+          <div className={cn("p-4 sm:p-5 rounded-[2rem] shadow-xl transform -rotate-3", theme.primary, theme.contrastText)}>
+            <LayoutDashboard size={32} />
           </div>
           <div>
-            <h2 className="text-2xl sm:text-3xl font-bold dark:text-white tracking-tight">Análise Estratégica</h2>
-            <div className="flex items-center gap-3 mt-1">
-              <span className="text-xs sm:text-sm text-black/40 dark:text-slate-400 font-medium">Status Geral:</span>
+            <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-[0.3em] uppercase mb-1 block">ESTATÍSTICAS</span>
+            <h2 className="text-2xl sm:text-3xl font-black dark:text-white tracking-tight">Análise Estratégica</h2>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs text-black/40 dark:text-slate-400 font-bold">Status de Desempenho:</span>
               <span className={cn(
-                "px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wider",
-                stats ? (stats.avgAccuracy >= 70 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
-                stats.avgAccuracy >= 50 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
-                "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400") : "bg-slate-100 text-slate-400"
+                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-sm",
+                stats.totalQuizzes > 0 ? (stats.avgAccuracy >= 70 ? "bg-emerald-500 text-white" :
+                stats.avgAccuracy >= 50 ? "bg-amber-500 text-white" :
+                "bg-rose-500 text-white") : "bg-slate-200 text-slate-500"
               )}>
-                {stats ? (stats.avgAccuracy >= 70 ? 'Consistente' : stats.avgAccuracy >= 50 ? 'Em Evolução' : 'Atenção Crítica') : 'Sem Dados'}
+                {stats.totalQuizzes > 0 ? (stats.avgAccuracy >= 70 ? 'Consistente' : stats.avgAccuracy >= 50 ? 'Em Evolução' : 'Atenção Crítica') : 'Sem Dados'}
               </span>
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-          {/* Filters */}
-          <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-black/5 dark:border-white/5 flex-1 sm:flex-none">
-            <Calendar size={14} className="text-black/40 dark:text-slate-500 ml-1 sm:ml-2" />
-            <select 
-              value={['all', 'today', 'week', 'month'].includes(dateFilter) ? dateFilter : 'specific'}
-              onChange={(e) => {
-                if (e.target.value === 'specific') {
-                  const today = new Date().toISOString().split('T')[0];
-                  setDateFilter(today);
-                } else {
-                  setDateFilter(e.target.value);
-                }
-              }}
-              className="bg-transparent text-[11px] sm:text-sm font-bold dark:text-white outline-none cursor-pointer pr-1 sm:pr-2 w-full"
-            >
-              <option value="all">Todo Período</option>
-              <option value="today">Hoje</option>
-              <option value="week">Últimos 7 dias</option>
-              <option value="month">Último mês</option>
-              <option value="specific">Data Específica...</option>
-            </select>
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+          <button 
+            onClick={() => {
+              setIsSelectionMode(!isSelectionMode);
+              if (isSelectionMode) {
+                setSelectedSubjects([]);
+                setSelectedQuizzes([]);
+              }
+            }}
+            className={cn(
+              "flex items-center justify-center gap-2 px-6 py-3 rounded-2xl transition-all font-black text-xs active:scale-95 flex-1 sm:flex-none border",
+              isSelectionMode 
+                ? "bg-blue-500 text-white border-blue-600 shadow-lg shadow-blue-500/20" 
+                : "bg-black/5 dark:bg-white/5 dark:text-white border-black/5 dark:border-white/5 hover:bg-black/10 dark:hover:bg-white/10"
+            )}
+          >
+            <CheckCircle2 size={18} />
+            {isSelectionMode ? 'Cancelar Seleção' : 'Selecionar'}
+          </button>
+
+          <div className="flex flex-col gap-1 bg-black/5 dark:bg-white/5 p-2 rounded-2xl border border-black/5 dark:border-white/5 flex-1 sm:flex-none min-w-[160px] relative">
+            <div className="flex items-center gap-2">
+              <Calendar size={14} className="text-black/40 dark:text-slate-500 ml-1" />
+              <select 
+                value={dateFilter.length === 1 && ['all', 'today', 'week', 'month'].includes(dateFilter[0]) ? dateFilter[0] : 'specific'}
+                onChange={(e) => {
+                  if (e.target.value === 'specific') {
+                    setTempSelectedDates(dateFilter.filter(d => !['all', 'today', 'week', 'month'].includes(d)));
+                    setIsCalendarOpen(true);
+                  } else {
+                    setDateFilter([e.target.value]);
+                    setIsCalendarOpen(false);
+                  }
+                }}
+                className="bg-transparent text-xs font-black dark:text-white outline-none cursor-pointer pr-1 w-full"
+              >
+                <option value="all" className="bg-white dark:bg-slate-900 dark:text-white">Todo Período</option>
+                <option value="today" className="bg-white dark:bg-slate-900 dark:text-white">Hoje</option>
+                <option value="week" className="bg-white dark:bg-slate-900 dark:text-white">Últimos 7 dias</option>
+                <option value="month" className="bg-white dark:bg-slate-900 dark:text-white">Último mês</option>
+                <option value="specific" className="bg-white dark:bg-slate-900 dark:text-white">Datas Específicas...</option>
+              </select>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-black/5 dark:border-white/5 flex-1 sm:flex-none">
-            <BookOpen size={14} className="text-black/40 dark:text-slate-500 ml-1 sm:ml-2" />
+          <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 p-2 rounded-2xl border border-black/5 dark:border-white/5 flex-1 sm:flex-none">
+            <BookOpen size={14} className="text-black/40 dark:text-slate-500 ml-1" />
             <select 
               value={subjectFilter}
               onChange={(e) => setSubjectFilter(e.target.value)}
-              className="bg-transparent text-[11px] sm:text-sm font-bold dark:text-white outline-none cursor-pointer pr-1 sm:pr-2 w-full max-w-[120px] sm:max-w-[150px]"
+              className="bg-transparent text-xs font-black dark:text-white outline-none cursor-pointer pr-1 w-full max-w-[150px]"
             >
-              <option value="all">Todas Matérias</option>
+              <option value="all" className="bg-white dark:bg-slate-900 dark:text-white">Todas Matérias</option>
               {allSubjectsFromHistory.map(s => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s} className="bg-white dark:bg-slate-900 dark:text-white">{s}</option>
               ))}
             </select>
           </div>
 
           <button 
             onClick={onClose} 
-            className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all font-bold text-xs sm:text-sm dark:text-white active:scale-95 flex-1 sm:flex-none"
+            className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all font-black text-xs dark:text-white active:scale-95 flex-1 sm:flex-none border border-black/5 dark:border-white/5"
           >
             <ChevronLeft size={18} />
             Voltar
@@ -1045,335 +1295,549 @@ const Dashboard = ({
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm space-y-3 sm:space-y-4"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 sm:p-3 bg-emerald-500/10 rounded-xl sm:rounded-2xl">
-              <CheckCircle2 size={18} className="text-emerald-500 sm:hidden" />
-              <CheckCircle2 size={24} className="text-emerald-500 hidden sm:block" />
-            </div>
-            <h3 className="text-xs sm:text-sm font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">Acertos</h3>
-          </div>
-          <div className="flex items-end gap-2">
-            <p className="text-3xl sm:text-4xl font-black dark:text-white">{stats.totalCorrect}</p>
-            <span className="text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">+{Math.round(stats.avgAccuracy)}%</span>
-          </div>
-        </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm space-y-3 sm:space-y-4"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 sm:p-3 bg-rose-500/10 rounded-xl sm:rounded-2xl">
-              <XCircle size={18} className="text-rose-500 sm:hidden" />
-              <XCircle size={24} className="text-rose-500 hidden sm:block" />
-            </div>
-            <h3 className="text-xs sm:text-sm font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">Erros</h3>
-          </div>
-          <div className="flex items-end gap-2">
-            <p className="text-3xl sm:text-4xl font-black dark:text-white">{stats.totalIncorrect}</p>
-            <span className="text-[10px] sm:text-xs font-bold text-rose-600 dark:text-rose-400 mb-1">-{Math.round(100 - stats.avgAccuracy)}%</span>
-          </div>
-        </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm space-y-3 sm:space-y-4"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 sm:p-3 bg-amber-500/10 rounded-xl sm:rounded-2xl">
-              <Clock size={18} className="text-amber-500 sm:hidden" />
-              <Clock size={24} className="text-amber-500 hidden sm:block" />
-            </div>
-            <h3 className="text-xs sm:text-sm font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">Tempo</h3>
-          </div>
-          <div className="flex items-end gap-2">
-            <p className="text-2xl sm:text-3xl font-black dark:text-white truncate">{formatTime(stats.totalTime)}</p>
-            <span className="text-[10px] sm:text-xs font-bold text-amber-600 dark:text-amber-400 mb-1">Total</span>
-          </div>
-        </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm space-y-3 sm:space-y-4"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 sm:p-3 bg-blue-500/10 rounded-xl sm:rounded-2xl">
-              <Target size={18} className="text-blue-500 sm:hidden" />
-              <Target size={24} className="text-blue-500 hidden sm:block" />
-            </div>
-            <h3 className="text-xs sm:text-sm font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">Quizzes</h3>
-          </div>
-          <div className="flex items-end gap-2">
-            <p className="text-3xl sm:text-4xl font-black dark:text-white">{stats.totalQuizzes}</p>
-            <span className="text-[10px] sm:text-xs font-bold text-blue-600 dark:text-blue-400 mb-1">Sessões</span>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Main Grid */}
-      {stats ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* Left Column: Core Metrics & Subject Heatmap */}
-          <div className="lg:col-span-8 space-y-8">
-            
-            {/* Quick Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: 'Total Quizzes', value: stats.totalQuizzes, icon: History, color: 'text-blue-500' },
-                { label: 'Questões', value: stats.totalQuestions, icon: FileQuestion, color: 'text-indigo-500' },
-                { label: 'Tempo Médio/Q', value: `${stats.avgTimePerQuestion.toFixed(0)}s`, icon: Clock, color: 'text-amber-500' },
-                { label: 'Total Acertos', value: stats.totalCorrect, icon: CheckCircle2, color: 'text-emerald-500' },
-              ].map((stat, i) => (
-                <div key={i} className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-black/5 dark:border-slate-700 shadow-sm">
-                  <stat.icon size={18} className={cn("mb-2 sm:mb-3", stat.color)} />
-                  <p className="text-[9px] sm:text-[10px] font-bold text-black/30 dark:text-slate-500 uppercase tracking-widest mb-1">{stat.label}</p>
-                  <p className="text-xl sm:text-2xl font-bold dark:text-white">{stat.value}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Subject Folders / Detailed List */}
-            <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] border border-black/5 dark:border-slate-800 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-                <h3 className="text-xl font-bold dark:text-white flex items-center gap-3">
-                  <FolderOpen size={24} className={theme.text} />
-                  Organização por Matéria
-                </h3>
-                <span className="text-[10px] font-bold text-black/30 dark:text-slate-500 uppercase tracking-widest">
-                  {stats.subjectData.length} Matérias Analisadas
-                </span>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {stats.totalQuizzes > 0 ? (
+          <>
+            {/* Main Column */}
+            <div className="lg:col-span-3 space-y-8">
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[140px]"
+            >
+              <div className="flex items-end gap-2">
+                <p className="text-3xl font-black dark:text-white">{stats.totalCorrect}</p>
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">+{Math.round(stats.avgAccuracy)}%</span>
               </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {stats.subjectData.map((s, i) => (
-                  <motion.div 
-                    key={i} 
-                    whileHover={{ y: -4, scale: 1.01 }}
-                    className="group relative bg-black/5 dark:bg-white/5 p-5 rounded-3xl border border-transparent hover:border-black/10 dark:hover:border-white/10 transition-all overflow-hidden"
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-500/10 rounded-xl">
+                  <CheckCircle2 size={18} className="text-emerald-500" />
+                </div>
+                <h3 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Acertos</h3>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[140px]"
+            >
+              <div className="flex items-end gap-2">
+                <p className="text-3xl font-black dark:text-white">{stats.totalIncorrect}</p>
+                <span className="text-xs font-bold text-rose-600 dark:text-rose-400 mb-1">-{Math.round(100 - stats.avgAccuracy)}%</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-rose-500/10 rounded-xl">
+                  <XCircle size={18} className="text-rose-500" />
+                </div>
+                <h3 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Erros</h3>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[140px]"
+            >
+              <div className="flex items-end gap-2">
+                <p className="text-2xl font-black dark:text-white truncate">{formatTime(stats.totalTime)}</p>
+                <span className="text-xs font-bold text-amber-600 dark:text-amber-400 mb-1">Total</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/10 rounded-xl">
+                  <Clock size={18} className="text-amber-500" />
+                </div>
+                <h3 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Tempo</h3>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[140px]"
+            >
+              <div className="flex items-end gap-2">
+                <p className="text-4xl font-black dark:text-white">{stats.totalQuizzes}</p>
+                <span className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1">Sessões</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500/10 rounded-xl">
+                  <Target size={18} className="text-blue-500" />
+                </div>
+                <h3 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Quizzes</h3>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Achievements Card */}
+          <div className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 dark:border-slate-800/50 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-1.5 bg-amber-500/10 rounded-lg">
+                  <Trophy size={20} className="text-amber-500" />
+                </div>
+                <h3 className="text-lg font-bold dark:text-white">Conquistas</h3>
+              </div>
+              <span className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">
+                {userProfile?.achievements?.length || 0} Desbloqueadas
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                { id: 'streak_7', title: 'Fogo nos Estudos', desc: '7 dias seguidos', icon: <Flame size={20} /> },
+                { id: 'quizzes_10', title: 'Decatlo', desc: '10 quizzes feitos', icon: <Award size={20} /> },
+                { id: 'correct_100', title: 'Centurião', desc: '100 acertos', icon: <Target size={20} /> },
+                { id: 'streak_30', title: 'Mestre da Constância', desc: '30 dias seguidos', icon: <Zap size={20} /> },
+              ].map(achievement => {
+                const isUnlocked = userProfile?.achievements?.includes(achievement.id);
+                return (
+                  <div 
+                    key={achievement.id}
+                    className={cn(
+                      "p-4 rounded-2xl border transition-all flex flex-col items-center text-center gap-2",
+                      isUnlocked 
+                        ? "bg-amber-500/5 border-amber-500/20 text-amber-900 dark:text-amber-400" 
+                        : "bg-black/5 border-transparent opacity-40 grayscale"
+                    )}
                   >
-                    {/* Folder Tab Effect */}
-                    <div className={cn("absolute top-0 left-6 w-16 h-1.5 rounded-b-lg", 
-                      s.status === 'Mastered' ? "bg-emerald-500" :
-                      s.status === 'Improving' ? "bg-amber-500" : "bg-rose-500"
-                    )} />
-
-                    <div className="flex items-center justify-between mb-4">
-                      <div className={cn("p-3 rounded-xl bg-white dark:bg-slate-800 shadow-sm", 
-                        s.status === 'Mastered' ? "text-emerald-500" :
-                        s.status === 'Improving' ? "text-amber-500" : "text-rose-500"
-                      )}>
-                        <Folder size={20} />
-                      </div>
-                      <div className="text-right">
-                        <p className={cn("text-xl font-black", 
-                          s.status === 'Mastered' ? "text-emerald-500" :
-                          s.status === 'Improving' ? "text-amber-500" : "text-rose-500"
-                        )}>
-                          {s.accuracy}%
-                        </p>
-                      </div>
+                    <div className={cn("p-2 rounded-xl", isUnlocked ? "bg-amber-500/20" : "bg-black/10")}>
+                      {achievement.icon}
                     </div>
+                    <div>
+                      <p className="text-xs font-bold leading-tight">{achievement.title}</p>
+                      <p className="text-[10px] opacity-60">{achievement.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-                    <div className="space-y-3">
-                      <div>
-                        <h4 className="text-sm font-bold dark:text-white leading-tight truncate" title={s.name}>{s.name}</h4>
-                        <p className="text-[10px] text-black/40 dark:text-slate-500 font-medium">
-                          {s.attempts} tent. • {format(s.lastDate, "dd/MM/yy")}
-                        </p>
-                      </div>
+              {/* Main Grid (Subject Performance) */}
+              <div className="space-y-8">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-[0.3em] uppercase mb-1">MÉTRICAS</span>
+                  <h3 className="text-2xl font-black dark:text-white flex items-center gap-3">
+                    <FolderOpen size={28} className={theme.text} />
+                    Desempenho por Matéria
+                  </h3>
+                </div>
 
-                      <div className="h-1.5 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: `${s.accuracy}%` }}
-                          className={cn(
-                            "h-full rounded-full",
-                            s.status === 'Mastered' ? "bg-emerald-500" :
-                            s.status === 'Improving' ? "bg-amber-500" :
-                            "bg-rose-500"
-                          )}
-                        />
-                      </div>
-
-                      <button 
-                        onClick={() => onPracticeTopic(s.name)}
+              <div className="grid grid-cols-1 gap-4">
+                {stats.subjectData.map((s, i) => {
+                  const isExpanded = activeFolder === s.name;
+                  const isSelected = selectedSubjects.includes(s.name);
+                  const isStrength = stats.strengths.some(st => st.name === s.name);
+                  const isFocus = stats.focusTopics.some(ft => ft.name === s.name);
+                  const subjectQuizzes = stats.quizzesBySubject[s.name] || [];
+                  
+                    return (
+                      <motion.div 
+                        key={i}
+                        layout
                         className={cn(
-                          "w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95",
-                          "bg-white dark:bg-slate-800 hover:bg-black/5 dark:hover:bg-white/5 dark:text-white border border-black/5 dark:border-white/10"
+                          "group relative rounded-[2rem] border shadow-xl overflow-hidden transition-all backdrop-blur-2xl",
+                          isSelected ? "bg-blue-500/10 border-blue-500/30 ring-2 ring-blue-500/20" :
+                          isExpanded 
+                            ? "bg-white/60 dark:bg-slate-900/60 border-blue-500/40 shadow-blue-500/10" 
+                            : "bg-white/40 dark:bg-slate-900/40 border-white/20 dark:border-slate-800/50 hover:border-white/40 dark:hover:border-slate-700/50 shadow-black/5"
                         )}
                       >
-                        <RotateCcw size={12} />
-                        Praticar
-                      </button>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </div>
+                        {/* Selection Checkbox */}
+                        {isSelectionMode && (
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSubjectSelection(s.name);
+                            }}
+                            className={cn(
+                              "absolute top-4 right-4 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all z-10 cursor-pointer",
+                              isSelected 
+                                ? "bg-blue-500 border-blue-500 text-white scale-110 shadow-lg shadow-blue-500/20" 
+                                : "bg-white/50 dark:bg-slate-800/50 border-black/10 dark:border-white/10 hover:border-blue-500/50"
+                            )}
+                          >
+                            {isSelected && <CheckCircle2 size={14} />}
+                          </div>
+                        )}
 
-          {/* Right Column: Insights & Focus */}
-          <div className="lg:col-span-4 space-y-8">
-            
-            {/* Priority Focus */}
-            <div className="bg-rose-50 dark:bg-rose-900/10 p-8 rounded-[2.5rem] border border-rose-100 dark:border-rose-900/20 shadow-sm">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="p-3 bg-white dark:bg-rose-900/30 rounded-2xl shadow-sm text-rose-600">
-                  <AlertTriangle size={24} />
+                        {/* Folder Tab Effect (Vertical) */}
+                        <div className={cn(
+                          "absolute top-6 left-0 w-1.5 h-12 rounded-r-xl",
+                          isStrength ? "bg-emerald-500" : isFocus ? "bg-rose-500" : theme.primary
+                        )} />
+                        
+                        <div 
+                          onClick={() => {
+                            setActiveFolder(isExpanded ? null : s.name);
+                          }}
+                          className="p-6 cursor-pointer flex flex-col sm:flex-row sm:items-center gap-6"
+                        >
+                          <div className="flex items-center gap-4 flex-1 min-w-0">
+                            <div className={cn(
+                              "p-4 rounded-2xl shadow-sm shrink-0",
+                              isStrength ? "bg-emerald-500/10 text-emerald-500" :
+                              isFocus ? "bg-rose-500/10 text-rose-500" :
+                              "bg-black/5 dark:bg-white/5 text-black/40 dark:text-slate-400"
+                            )}>
+                              <Folder size={24} />
+                            </div>
+                            <div className="flex flex-col flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[10px] font-black text-black/30 dark:text-slate-500 uppercase tracking-widest">
+                                  {s.total} Questões
+                                </span>
+                                <span className={cn(
+                                  "text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest",
+                                  isStrength ? "bg-emerald-500/10 text-emerald-600" :
+                                  isFocus ? "bg-rose-500/10 text-rose-600" :
+                                  "bg-black/10 text-black/40 dark:text-slate-500"
+                                )}>
+                                  {isStrength ? 'Ponto Forte' : isFocus ? 'Foco Necessário' : 'Em Evolução'}
+                                </span>
+                              </div>
+                              <h4 className={cn(
+                                "font-black dark:text-white leading-tight truncate",
+                                s.name.length > 30 ? "text-base" : "text-lg sm:text-xl"
+                              )} title={s.name}>
+                                {s.name}
+                              </h4>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-4 sm:ml-auto">
+                            <div className="flex items-center gap-3">
+                              <div className="flex flex-col items-center">
+                                <span className="text-[10px] font-black text-emerald-500">{s.correct}</span>
+                                <span className="text-[8px] font-bold text-black/30 uppercase">Acertos</span>
+                              </div>
+                              <div className="w-px h-6 bg-black/5 dark:bg-white/5" />
+                              <div className="flex flex-col items-center">
+                                <span className="text-[10px] font-black text-rose-500">{s.total - s.correct}</span>
+                                <span className="text-[8px] font-bold text-black/30 uppercase">Erros</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-4 min-w-[140px]">
+                              <div className="flex items-center gap-2">
+                                <p className={cn("text-xl font-black", 
+                                  s.accuracy >= 80 ? "text-emerald-500" : 
+                                  s.accuracy >= 60 ? "text-amber-500" : "text-rose-500"
+                                )}>
+                                  {s.accuracy}%
+                                </p>
+                                <div className="h-10 w-1.5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden relative">
+                                  <motion.div 
+                                    initial={{ height: 0 }}
+                                    animate={{ height: `${s.accuracy}%` }}
+                                    className={cn("w-full rounded-full absolute bottom-0", 
+                                      s.accuracy >= 80 ? "bg-emerald-500" : 
+                                      s.accuracy >= 60 ? "bg-amber-500" : "bg-rose-500"
+                                    )}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onPracticeTopic(s.name);
+                                }}
+                                className={cn(
+                                  "px-4 py-2 rounded-xl font-black text-[10px] transition-all active:scale-95 flex items-center gap-2 shadow-lg",
+                                  theme.primary, theme.contrastText
+                                )}
+                              >
+                                <Zap size={14} />
+                                APROFUNDAR
+                              </button>
+                              <div className={cn(
+                                "p-2 rounded-full transition-all",
+                                isExpanded ? "bg-blue-500/10 text-blue-500 rotate-180" : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-600"
+                              )}>
+                                <ChevronDown size={20} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Expanded Content (Quiz History) */}
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.div 
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="px-6 pb-6"
+                            >
+                              <div className="pt-6 border-t border-black/5 dark:border-white/5 space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <h5 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Histórico Recente</h5>
+                                  <button 
+                                    onClick={() => onDeleteSubjectHistory(s.name)}
+                                    className="text-[10px] font-black text-rose-500/60 hover:text-rose-500 transition-colors uppercase tracking-widest flex items-center gap-1.5"
+                                  >
+                                    <Trash2 size={12} />
+                                    Limpar Histórico
+                                  </button>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  {subjectQuizzes.slice().reverse().map((res, idx) => {
+                                    const isQuizSelected = selectedQuizzes.includes(res.id);
+                                    return (
+                                      <div 
+                                        key={idx} 
+                                        onClick={() => isSelectionMode && toggleQuizSelection(res.id)}
+                                        className={cn(
+                                          "flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-white/5 border transition-all group cursor-pointer",
+                                          isQuizSelected ? "border-blue-500 bg-blue-500/5" : "border-transparent hover:border-black/5 dark:hover:border-white/5"
+                                        )}
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          {isSelectionMode && (
+                                            <div className={cn(
+                                              "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
+                                              isQuizSelected ? "bg-blue-500 border-blue-500 text-white" : "border-black/10 dark:border-white/10"
+                                            )}>
+                                              {isQuizSelected && <Check size={12} />}
+                                            </div>
+                                          )}
+                                          <div className={cn(
+                                            "w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs shadow-sm",
+                                            (res.correct / res.total) >= 0.8 ? "bg-emerald-500/10 text-emerald-600" :
+                                            (res.correct / res.total) >= 0.6 ? "bg-amber-500/10 text-amber-600" :
+                                            "bg-rose-500/10 text-rose-600"
+                                          )}>
+                                            {Math.round((res.correct / res.total) * 100)}%
+                                          </div>
+                                          <div>
+                                            <p className="text-xs font-black dark:text-white truncate max-w-[150px]" title={res.fileName}>{res.fileName}</p>
+                                            <p className="text-[9px] font-bold text-black/40 dark:text-slate-500">{format(res.date instanceof Date ? res.date : (res.date as any).toDate(), "dd/MM/yyyy")}</p>
+                                          </div>
+                                        </div>
+                                        {!isSelectionMode && (
+                                          <button 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onDeleteQuiz(res.id);
+                                            }}
+                                            className="p-2 text-black/10 dark:text-white/10 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                                          >
+                                            <Trash2 size={14} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                  {subjectQuizzes.length === 0 && (
+                                    <div className="col-span-full py-8 text-center bg-black/5 dark:bg-white/5 rounded-2xl border border-dashed border-black/10 dark:border-white/10">
+                                      <p className="text-xs font-bold text-black/30 dark:text-slate-500">Nenhum quiz realizado nesta matéria ainda.</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
+                    );
+                  })}
                 </div>
-                <h3 className="text-xl font-bold text-rose-900 dark:text-rose-100">Foco Prioritário</h3>
-              </div>
-              <p className="text-sm text-rose-800/60 dark:text-rose-300/60 mb-6 font-medium leading-relaxed">
-                Baseado no volume de erros e frequência, estas matérias estão prejudicando sua média geral:
-              </p>
-              <div className="space-y-3">
-                {stats.focusTopics.map((topic, i) => (
-                  <div key={i} className="bg-white dark:bg-rose-950/40 p-4 rounded-2xl border border-rose-100 dark:border-rose-800/50 flex items-center justify-between">
-                    <span className="font-bold text-rose-900 dark:text-rose-100 truncate pr-2">{topic.name}</span>
-                    <span className="text-xs font-black text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/50 px-2 py-1 rounded-lg">
-                      {topic.accuracy}%
-                    </span>
-                  </div>
-                ))}
-                {stats.focusTopics.length === 0 && (
-                  <p className="text-center py-4 italic text-rose-400">Nenhum foco crítico identificado. Bom trabalho!</p>
-                )}
-              </div>
             </div>
 
-            {/* Subject Management */}
-            <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-black/5 dark:border-slate-800 shadow-sm">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold dark:text-white flex items-center gap-3">
-                  <PlusCircle size={24} className={theme.text} />
-                  Minhas Matérias
-                </h3>
-              </div>
-              
-              <form onSubmit={handleAddSubject} className="flex gap-2 mb-6">
-                <input 
-                  type="text"
-                  value={newSubjectInput}
-                  onChange={(e) => setNewSubjectInput(e.target.value)}
-                  placeholder="Nova matéria (ex: Direito Civil)"
-                  className="flex-1 bg-black/5 dark:bg-white/5 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
-                />
-                <button 
-                  type="submit"
-                  className={cn("px-6 py-3 rounded-xl font-bold text-sm transition-all active:scale-95", theme.primary, theme.contrastText)}
-                >
-                  Adicionar
-                </button>
-              </form>
+        </div>
 
-              <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                {subjects.map((subject, i) => (
-                  <div key={i} className="group flex items-center gap-2 px-3 py-1.5 bg-black/5 dark:bg-white/5 rounded-xl border border-black/5 dark:border-white/5">
-                    <span className="text-xs font-bold dark:text-slate-300">{subject}</span>
+        {/* Side Column */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Streak Card */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-gradient-to-br from-orange-500 to-rose-600 p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden group"
+          >
+            <div className="absolute top-0 right-0 p-4 opacity-20 group-hover:scale-110 transition-transform">
+              <Flame size={80} />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
+                  <Flame size={20} className="text-white" />
+                </div>
+                <h3 className="text-xs font-bold uppercase tracking-widest opacity-80">Sua Ofensiva</h3>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-black">{userProfile?.streak || 0}</span>
+                <span className="text-lg font-bold opacity-80">Dias</span>
+              </div>
+              <p className="mt-3 text-[11px] font-medium opacity-90 leading-tight">
+                {userProfile?.streak > 0 ? "Continue assim! Você está no caminho certo." : "Comece sua jornada hoje!"}
+              </p>
+            </div>
+          </motion.div>
+
+          {/* SRS Review Card */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[180px]"
+          >
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-1.5 bg-indigo-500/10 rounded-lg">
+                  <RotateCcw size={18} className="text-indigo-500" />
+                </div>
+                <h3 className="text-base font-bold dark:text-white">Repetição Espaçada</h3>
+              </div>
+              <p className="text-[11px] text-black/60 dark:text-slate-400 mb-4 leading-tight">
+                Revise questões no momento ideal para fixar o conhecimento.
+              </p>
+            </div>
+            
+            <div className="flex items-center justify-between mt-auto">
+              <div>
+                <span className="text-xl font-black dark:text-white">{itemsDue.length}</span>
+                <span className="text-[9px] font-bold text-black/40 dark:text-slate-500 ml-2">Pendentes</span>
+              </div>
+              <button 
+                disabled={itemsDue.length === 0}
+                onClick={onStartSRSReview}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95",
+                  itemsDue.length > 0 
+                    ? cn(theme.primary, theme.contrastText, "shadow-lg shadow-indigo-500/20") 
+                    : "bg-black/5 text-black/20 cursor-not-allowed"
+                )}
+              >
+                Revisar
+              </button>
+            </div>
+          </motion.div>
+
+          {/* Quick Action Summary (Focus Topics) */}
+          {stats.focusTopics.length > 0 && (
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm">
+              <h3 className="text-xs font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest mb-4">Focar Agora</h3>
+              <div className="space-y-3">
+                {stats.focusTopics.map((topic, idx) => (
+                  <div key={idx} className="flex items-center justify-between group">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-500 text-[10px] font-bold">
+                        {topic.accuracy}%
+                      </div>
+                      <span className="text-xs font-bold dark:text-white truncate max-w-[80px]">{topic.name}</span>
+                    </div>
                     <button 
-                      onClick={() => handleRemoveSubject(subject)}
-                      className="text-black/20 dark:text-white/20 hover:text-rose-500 transition-colors"
+                      onClick={() => onPracticeTopic(topic.name)}
+                      className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-black/20 dark:text-slate-600 hover:text-blue-500 transition-all"
                     >
-                      <X size={14} />
+                      <Play size={14} fill="currentColor" />
                     </button>
                   </div>
                 ))}
               </div>
             </div>
-
-            {/* Strengths */}
-            <div className="bg-emerald-50 dark:bg-emerald-900/10 p-8 rounded-[2.5rem] border border-emerald-100 dark:border-emerald-900/20 shadow-sm">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="p-3 bg-white dark:bg-emerald-900/30 rounded-2xl shadow-sm text-emerald-600">
-                  <Zap size={24} />
-                </div>
-                <h3 className="text-xl font-bold text-emerald-900 dark:text-emerald-100">Domínio Atual</h3>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {stats.strengths.map((s, i) => (
-                  <span key={i} className="px-4 py-2 bg-white dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold shadow-sm border border-emerald-100 dark:border-emerald-800/50">
-                    {s.name}
-                  </span>
-                ))}
-                {stats.strengths.length === 0 && (
-                  <p className="text-sm italic text-emerald-600/60">Continue praticando para consolidar matérias.</p>
-                )}
-              </div>
+          )}
+          </div>
+          </>
+        ) : (
+          <div className="lg:col-span-4 flex flex-col items-center justify-center p-24 text-center space-y-6 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-black/5 dark:border-slate-800 shadow-sm">
+            <div className="w-20 h-20 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center">
+              <Search size={40} className="text-black/20 dark:text-white/20" />
             </div>
-
-            {/* Action Plan / AI Insights */}
-            <div className="bg-indigo-50 dark:bg-indigo-900/10 p-8 rounded-[2.5rem] border border-indigo-100 dark:border-indigo-900/20 shadow-sm relative overflow-hidden">
-              <div className="absolute -right-4 -bottom-4 opacity-10">
-                <BrainCircuit size={120} className="text-indigo-600" />
-              </div>
-              <div className="flex items-center gap-4 mb-6 relative z-10">
-                <div className="p-3 bg-white dark:bg-indigo-900/30 rounded-2xl shadow-sm text-indigo-600">
-                  <Lightbulb size={24} />
-                </div>
-                <h3 className="text-xl font-bold text-indigo-900 dark:text-indigo-100">Plano de Ação</h3>
-              </div>
-              <div className="space-y-4 relative z-10">
-                <div className="flex gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 shrink-0" />
-                  <p className="text-sm text-indigo-800 dark:text-indigo-200 font-medium leading-relaxed">
-                    {stats.avgAccuracy < 65 
-                      ? "Seu foco deve ser na base teórica. Reduza o volume de questões e aumente o tempo de revisão por erro."
-                      : "Você tem boa base. O foco agora é aumentar a velocidade de resolução sem perder precisão."}
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 shrink-0" />
-                  <p className="text-sm text-indigo-800 dark:text-indigo-200 font-medium leading-relaxed">
-                    {stats.avgTimePerQuestion > 90 
-                      ? "Atenção ao tempo! Você está levando mais de 1:30 por questão. Tente simular provas com cronômetro."
-                      : "Excelente ritmo de resolução. Mantenha a calma para evitar erros por distração."}
-                  </p>
-                </div>
-                {stats.focusTopics.length > 0 && (
-                  <div className="flex gap-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 shrink-0" />
-                    <p className="text-sm text-indigo-800 dark:text-indigo-200 font-medium leading-relaxed">
-                      Próxima sessão sugerida: <strong>{stats.focusTopics[0].name}</strong> para recuperar sua média.
-                    </p>
-                  </div>
-                )}
-              </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold dark:text-white">Nenhum resultado encontrado</h3>
+              <p className="text-xs text-black/40 dark:text-slate-400 max-w-xs mx-auto">Não encontramos dados para os filtros selecionados. Tente ajustar o período ou a matéria.</p>
             </div>
+            <button 
+              onClick={() => { setDateFilter(['all']); setSubjectFilter('all'); }}
+              className={cn("px-6 py-2 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg", theme.primary, theme.contrastText, theme.shadow)}
+            >
+              Limpar Filtros
+            </button>
+          </div>
+        )}
+      </div>
 
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center p-24 text-center space-y-6 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-black/5 dark:border-slate-800 shadow-sm">
-          <div className="w-20 h-20 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center">
-            <Search size={40} className="text-black/20 dark:text-white/20" />
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-2xl font-bold dark:text-white">Nenhum resultado encontrado</h3>
-            <p className="text-black/40 dark:text-slate-400 max-w-xs mx-auto">Não encontramos dados para os filtros selecionados. Tente ajustar o período ou a matéria.</p>
-          </div>
-          <button 
-            onClick={() => { setDateFilter('all'); setSubjectFilter('all'); }}
-            className={cn("px-8 py-3 rounded-2xl font-bold transition-all active:scale-95 shadow-lg", theme.primary, theme.contrastText, theme.shadow)}
+      {/* Floating Action Bar for Selection */}
+      <AnimatePresence>
+        {(isSelectionMode && (selectedQuizzes.length > 0 || selectedSubjects.length > 0)) && (
+          <motion.div 
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-2xl"
           >
-            Limpar Filtros
-          </button>
-        </div>
-      )}
+            <div className="bg-slate-900/90 dark:bg-white/90 backdrop-blur-xl p-4 rounded-3xl border border-white/10 dark:border-black/10 shadow-2xl flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 ml-2">
+                <div className="w-10 h-10 rounded-2xl bg-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                  <Zap size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-white/40 dark:text-black/40 uppercase tracking-widest">Ações em Massa</p>
+                  <p className="text-sm font-black text-white dark:text-black">
+                    {selectedQuizzes.length > 0 && selectedSubjects.length > 0 
+                      ? `${selectedSubjects.length} matérias e ${selectedQuizzes.length} quizzes`
+                      : selectedQuizzes.length > 0 
+                        ? `${selectedQuizzes.length} quizzes selecionados` 
+                        : `${selectedSubjects.length} matérias selecionadas`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleDeepenSelected}
+                  className={cn(
+                    "px-6 py-3 rounded-2xl font-black text-xs transition-all active:scale-95 flex items-center gap-2 shadow-lg",
+                    theme.primary, theme.contrastText
+                  )}
+                >
+                  <Zap size={16} />
+                  APROFUNDAR SELECIONADOS
+                </button>
+                
+                <button 
+                  onClick={() => {
+                    if (selectedQuizzes.length > 0) {
+                      onDeleteQuizzes(selectedQuizzes);
+                      setSelectedQuizzes([]);
+                    }
+                    if (selectedSubjects.length > 0) {
+                      onDeleteSubjectsHistory(selectedSubjects);
+                      setSelectedSubjects([]);
+                    }
+                  }}
+                  className="p-3 rounded-2xl bg-rose-500 text-white hover:bg-rose-600 transition-all active:scale-95 shadow-lg shadow-rose-500/20"
+                  title="Excluir Selecionados"
+                >
+                  <Trash2 size={20} />
+                </button>
+
+                <button 
+                  onClick={() => {
+                    setSelectedQuizzes([]);
+                    setSelectedSubjects([]);
+                    setIsSelectionMode(false);
+                  }}
+                  className="p-3 rounded-2xl bg-white/10 dark:bg-black/10 text-white dark:text-black hover:bg-white/20 dark:hover:bg-black/20 transition-all active:scale-95"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
@@ -1391,44 +1855,86 @@ const StudyMode = ({
   handleAddSubject,
   handleRemoveSubject,
   newSubjectInput,
-  setNewSubjectInput
+  setNewSubjectInput,
+  onDeleteSubjectHistory,
+  onDeleteQuiz,
+  onDeleteQuizzes,
+  onDeleteSubjectsHistory,
+  onOpenRecycleBin,
+  recycleBinCount,
+  selectedSubjects,
+  setSelectedSubjects
 }: { 
   history: QuizResult[], 
   theme: any, 
   onClose: () => void,
   onPracticeIncorrect: (questions: QuizQuestion[], fileName: string) => void,
-  dateFilter: string,
-  setDateFilter: (val: string) => void,
+  dateFilter: string[],
+  setDateFilter: (val: string[]) => void,
   subjectFilter: string,
   setSubjectFilter: (val: string) => void,
   subjects: string[],
   handleAddSubject: (e: React.FormEvent) => void,
   handleRemoveSubject: (subject: string) => void,
   newSubjectInput: string,
-  setNewSubjectInput: (val: string) => void
+  setNewSubjectInput: (val: string) => void,
+  onDeleteSubjectHistory: (subject: string) => void,
+  onDeleteQuiz: (id: string) => void,
+  onDeleteQuizzes: (ids: string[]) => void,
+  onDeleteSubjectsHistory: (subjects: string[]) => void,
+  onOpenRecycleBin: () => void,
+  recycleBinCount: number,
+  selectedSubjects: string[],
+  setSelectedSubjects: React.Dispatch<React.SetStateAction<string[]>>
 }) => {
+  const [activeFolder, setActiveFolder] = React.useState<string | null>(null);
+  const [selectedQuizzes, setSelectedQuizzes] = React.useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = React.useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
+  const [tempSelectedDates, setTempSelectedDates] = React.useState<string[]>([]);
+
+  const toggleQuizSelection = (id: string) => {
+    setSelectedQuizzes(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSubjectSelection = (name: string) => {
+    setSelectedSubjects(prev => 
+      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+    );
+  };
+
+  const clearSelection = () => {
+    setSelectedQuizzes([]);
+    setSelectedSubjects([]);
+    setIsSelectionMode(false);
+  };
+
   const filteredHistory = React.useMemo(() => {
     return history.filter(res => {
       const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
       
       // Date filter
       let dateMatch = true;
-      if (dateFilter === 'today') {
+      if (dateFilter.includes('all')) {
+        dateMatch = true;
+      } else if (dateFilter.includes('today')) {
         const today = new Date();
         dateMatch = date.toDateString() === today.toDateString();
-      } else if (dateFilter === 'week') {
+      } else if (dateFilter.includes('week')) {
         const lastWeek = new Date();
         lastWeek.setDate(lastWeek.getDate() - 7);
         dateMatch = date >= lastWeek;
-      } else if (dateFilter === 'month') {
+      } else if (dateFilter.includes('month')) {
         const lastMonth = new Date();
         lastMonth.setMonth(lastMonth.getMonth() - 1);
         dateMatch = date >= lastMonth;
-      } else if (dateFilter !== 'all') {
-        const filterDate = new Date(dateFilter);
-        if (!isNaN(filterDate.getTime())) {
-          dateMatch = date.toDateString() === filterDate.toDateString();
-        }
+      } else if (dateFilter.length > 0) {
+        dateMatch = dateFilter.some(df => {
+          const filterDate = new Date(df);
+          return !isNaN(filterDate.getTime()) && date.toDateString() === filterDate.toDateString();
+        });
       }
 
       // Subject filter
@@ -1442,15 +1948,31 @@ const StudyMode = ({
   }, [history, dateFilter, subjectFilter]);
 
   const subjectStats = React.useMemo(() => {
-    const stats: { [key: string]: { correct: number, total: number, lastDate: Date, attempts: number, questions: QuizQuestion[], incorrectCount: number } } = {};
+    const stats: { [key: string]: { correct: number, total: number, lastDate: Date, attempts: number, questions: QuizQuestion[], incorrectCount: number, quizzes: QuizResult[] } } = {};
     
+    const getCanonicalSubject = (raw: string) => {
+      if (!raw) return 'Outros';
+      const normalizedRaw = raw.toLowerCase().trim();
+      
+      // Try to find a match in the subjects list
+      const match = subjects.find(s => 
+        normalizedRaw.includes(s.toLowerCase()) || 
+        s.toLowerCase().includes(normalizedRaw)
+      );
+      
+      return match || 'Outros';
+    };
+
     filteredHistory.forEach(res => {
       const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
       
+      // Group the entire quiz under one canonical subject
+      const rawSubject = res.questions[0]?.subject || res.fileName;
+      const topic = getCanonicalSubject(rawSubject);
+
+      if (!stats[topic]) stats[topic] = { correct: 0, total: 0, lastDate: date, attempts: 0, questions: [], incorrectCount: 0, quizzes: [] };
+
       res.questions.forEach((q, idx) => {
-        const topic = q.subject || res.fileName || 'Geral';
-        if (!stats[topic]) stats[topic] = { correct: 0, total: 0, lastDate: date, attempts: 0, questions: [], incorrectCount: 0 };
-        
         stats[topic].total += 1;
         if (res.answers[idx] === q.correctAnswer) {
           stats[topic].correct += 1;
@@ -1463,11 +1985,17 @@ const StudyMode = ({
         if (date > stats[topic].lastDate) stats[topic].lastDate = date;
       });
 
-      // Count attempts per subject per quiz
-      const quizSubjects = new Set(res.questions.map(q => q.subject || res.fileName || 'Geral'));
-      quizSubjects.forEach(s => {
-        if (stats[s]) stats[s].attempts += 1;
-      });
+      if (!stats[topic].quizzes.some(quiz => quiz.id === res.id)) {
+        stats[topic].quizzes.push(res);
+      }
+      stats[topic].attempts += 1;
+    });
+
+    // Ensure all subjects from settings are present
+    subjects.forEach(s => {
+      if (!stats[s]) {
+        stats[s] = { correct: 0, total: 0, lastDate: new Date(), attempts: 0, questions: [], incorrectCount: 0, quizzes: [] };
+      }
     });
 
     return Object.entries(stats)
@@ -1479,10 +2007,15 @@ const StudyMode = ({
         total: data.total,
         correct: data.correct,
         attempts: data.attempts,
-        lastDate: data.lastDate
+        lastDate: data.lastDate,
+        quizzes: data.quizzes
       }))
-      .sort((a, b) => b.incorrectCount - a.incorrectCount);
-  }, [filteredHistory]);
+      .sort((a, b) => {
+        if (a.name === 'Outros') return 1;
+        if (b.name === 'Outros') return -1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [filteredHistory, subjects]);
 
   const allSubjectsFromHistory = React.useMemo(() => {
     const set = new Set<string>();
@@ -1503,64 +2036,174 @@ const StudyMode = ({
       animate={{ opacity: 1, y: 0 }}
       className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 max-w-7xl mx-auto"
     >
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] border border-black/5 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center gap-4 sm:gap-6">
-          <div className={cn("p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-xl transform -rotate-3", theme.primary, theme.contrastText)}>
-            <BookOpen size={24} className="sm:hidden" />
-            <BookOpen size={32} className="hidden sm:block" />
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className={cn("p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-lg transform -rotate-3", theme.primary, theme.contrastText)}>
+            <BookOpen size={20} className="sm:hidden" />
+            <BookOpen size={28} className="hidden sm:block" />
           </div>
           <div>
-            <h2 className="text-2xl sm:text-3xl font-bold dark:text-white tracking-tight">Modo de Estudo</h2>
-            <p className="text-xs sm:text-sm text-black/40 dark:text-slate-400 font-medium">Revise seus erros e foque nos pontos de atenção</p>
+            <h2 className="text-xl sm:text-2xl font-bold dark:text-white tracking-tight">Modo de Estudo</h2>
+            <p className="text-[10px] sm:text-xs text-black/40 dark:text-slate-400 font-medium">Revise seus erros e foque nos pontos de atenção</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-          {/* Filters */}
-          <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-black/5 dark:border-white/5 flex-1 sm:flex-none">
-            <Calendar size={14} className="text-black/40 dark:text-slate-500 ml-1 sm:ml-2" />
-            <select 
-              value={['all', 'today', 'week', 'month'].includes(dateFilter) ? dateFilter : 'specific'}
-              onChange={(e) => {
-                if (e.target.value === 'specific') {
-                  const today = new Date().toISOString().split('T')[0];
-                  setDateFilter(today);
-                } else {
-                  setDateFilter(e.target.value);
-                }
-              }}
-              className="bg-transparent text-[11px] sm:text-sm font-bold dark:text-white outline-none cursor-pointer pr-1 sm:pr-2 w-full"
-            >
-              <option value="all">Todo Período</option>
-              <option value="today">Hoje</option>
-              <option value="week">Últimos 7 dias</option>
-              <option value="month">Último mês</option>
-              <option value="specific">Data Específica...</option>
-            </select>
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+          {/* Filters moved next to Voltar button */}
+          <div className="flex flex-col gap-1 bg-black/5 dark:bg-white/5 p-1 sm:p-1.5 rounded-lg sm:rounded-xl border border-black/5 dark:border-white/5 flex-1 sm:flex-none min-w-[140px] relative">
+            <div className="flex items-center gap-1.5">
+              <Calendar size={12} className="text-black/40 dark:text-slate-500 ml-1" />
+              <div className="flex items-center gap-1.5 w-full">
+                <select 
+                  value={dateFilter.length === 1 && ['all', 'today', 'week', 'month'].includes(dateFilter[0]) ? dateFilter[0] : 'specific'}
+                  onChange={(e) => {
+                    if (e.target.value === 'specific') {
+                      setTempSelectedDates(dateFilter.filter(d => !['all', 'today', 'week', 'month'].includes(d)));
+                      setIsCalendarOpen(true);
+                    } else {
+                      setDateFilter([e.target.value]);
+                      setIsCalendarOpen(false);
+                    }
+                  }}
+                  className="bg-transparent text-[10px] sm:text-xs font-bold dark:text-white outline-none cursor-pointer pr-1"
+                >
+                  <option value="all" className="bg-white dark:bg-slate-900 dark:text-white">Todo Período</option>
+                  <option value="today" className="bg-white dark:bg-slate-900 dark:text-white">Hoje</option>
+                  <option value="week" className="bg-white dark:bg-slate-900 dark:text-white">Últimos 7 dias</option>
+                  <option value="month" className="bg-white dark:bg-slate-900 dark:text-white">Último mês</option>
+                  <option value="specific" className="bg-white dark:bg-slate-900 dark:text-white">Datas Específicas...</option>
+                </select>
+                {(dateFilter.length === 0 || !['all', 'today', 'week', 'month'].includes(dateFilter[0])) && (
+                  <button 
+                    onClick={() => {
+                      setTempSelectedDates(dateFilter.filter(d => !['all', 'today', 'week', 'month'].includes(d)));
+                      setIsCalendarOpen(!isCalendarOpen);
+                    }}
+                    className="flex items-center gap-1 border-l border-black/10 dark:border-white/10 pl-1.5 hover:text-blue-500 transition-colors"
+                  >
+                    <Plus size={10} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {isCalendarOpen && (
+                <MultiDateCalendar 
+                  selectedDates={tempSelectedDates}
+                  onToggleDate={(date) => {
+                    setTempSelectedDates(prev => 
+                      prev.includes(date) ? prev.filter(d => d !== date) : [...prev, date]
+                    );
+                  }}
+                  onApply={() => {
+                    if (tempSelectedDates.length > 0) {
+                      setDateFilter(tempSelectedDates);
+                    } else {
+                      setDateFilter(['all']);
+                    }
+                    setIsCalendarOpen(false);
+                  }}
+                  onCancel={() => setIsCalendarOpen(false)}
+                  theme={theme}
+                />
+              )}
+            </AnimatePresence>
+
+            {dateFilter.length > 0 && !['all', 'today', 'week', 'month'].includes(dateFilter[0]) && (
+              <div className="flex flex-wrap gap-1 px-1">
+                {dateFilter.map(date => (
+                  <span key={date} className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-md text-[8px] font-bold">
+                    {format(new Date(date + 'T12:00:00'), 'dd/MM')}
+                    <button onClick={() => setDateFilter(dateFilter.filter(d => d !== date))} className="hover:text-rose-500">
+                      <X size={8} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-black/5 dark:border-white/5 flex-1 sm:flex-none">
-            <BookOpen size={14} className="text-black/40 dark:text-slate-500 ml-1 sm:ml-2" />
+          <div className="flex items-center gap-1.5 bg-black/5 dark:bg-white/5 p-1 sm:p-1.5 rounded-lg sm:rounded-xl border border-black/5 dark:border-white/5 flex-1 sm:flex-none">
+            <BookOpen size={12} className="text-black/40 dark:text-slate-500 ml-1" />
             <select 
               value={subjectFilter}
               onChange={(e) => setSubjectFilter(e.target.value)}
-              className="bg-transparent text-[11px] sm:text-sm font-bold dark:text-white outline-none cursor-pointer pr-1 sm:pr-2 w-full max-w-[120px] sm:max-w-[150px]"
+              className="bg-transparent text-[10px] sm:text-xs font-bold dark:text-white outline-none cursor-pointer pr-1 w-full max-w-[100px] sm:max-w-[130px]"
             >
-              <option value="all">Todas Matérias</option>
+              <option value="all" className="bg-white dark:bg-slate-900 dark:text-white">Todas Matérias</option>
               {allSubjectsFromHistory.map(s => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s} className="bg-white dark:bg-slate-900 dark:text-white">{s}</option>
               ))}
             </select>
           </div>
 
           <button 
             onClick={onClose} 
-            className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all font-bold text-xs sm:text-sm dark:text-white active:scale-95 flex-1 sm:flex-none"
+            className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all font-bold text-[10px] sm:text-xs dark:text-white active:scale-95 flex-1 sm:flex-none"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={16} />
             Voltar
           </button>
         </div>
       </div>
+
+      {(isSelectionMode || selectedQuizzes.length > 0 || selectedSubjects.length > 0) && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between bg-white dark:bg-slate-800 border border-black/10 dark:border-white/10 p-4 rounded-2xl mb-6 shadow-lg sticky top-20 z-30"
+        >
+          <div className="flex items-center gap-4">
+            <span className={cn("text-sm font-bold", theme.text)}>
+              {activeFolder ? `${selectedQuizzes.length} quizzes selecionados` : `${selectedSubjects.length} matérias selecionadas`}
+            </span>
+            <button 
+              onClick={clearSelection}
+              className="text-xs font-bold text-black/40 dark:text-slate-400 hover:text-black dark:hover:text-white transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+          <div className="flex items-center gap-3">
+            {activeFolder && selectedQuizzes.length > 0 && (
+              <button 
+                onClick={() => {
+                  const selectedQuestions = filteredHistory
+                    .filter(res => selectedQuizzes.includes(res.id))
+                    .flatMap(res => res.questions.filter((q, idx) => res.answers[idx] !== q.correctAnswer));
+                  
+                  if (selectedQuestions.length > 0) {
+                    onPracticeIncorrect(selectedQuestions, `Revisão: ${activeFolder} (Seleção)`);
+                    clearSelection();
+                  }
+                }}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-1.5 rounded-xl font-bold text-xs shadow-lg active:scale-95 transition-all",
+                  theme.primary, theme.contrastText
+                )}
+              >
+                <RotateCcw size={16} />
+                Praticar Erros Selecionados
+              </button>
+            )}
+            <button 
+              onClick={() => {
+                if (activeFolder) {
+                  onDeleteQuizzes(selectedQuizzes);
+                } else {
+                  onDeleteSubjectsHistory(selectedSubjects);
+                }
+                clearSelection();
+              }}
+              disabled={activeFolder ? selectedQuizzes.length === 0 : selectedSubjects.length === 0}
+              className="flex items-center gap-2 px-6 py-2 rounded-xl bg-rose-500 text-white font-bold text-sm shadow-lg active:scale-95 disabled:opacity-50 disabled:scale-100 transition-all"
+            >
+              <Trash2 size={16} />
+              Excluir Selecionados
+            </button>
+          </div>
+        </motion.div>
+      )}
 
       {subjectStats.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
@@ -1604,79 +2247,284 @@ const StudyMode = ({
             </div>
           </div>
 
-          {/* Topics List */}
+          {/* Topics List / Folders */}
           <div className="lg:col-span-2 space-y-6">
-            <h3 className="text-xl font-bold dark:text-white flex items-center gap-3 px-2">
-              <FolderOpen size={24} className={theme.text} />
-              Pastas por Matéria
-            </h3>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {subjectStats.map((s) => (
-                <motion.div 
-                  key={s.name}
-                  whileHover={{ y: -4, scale: 1.01 }}
-                  className="group relative bg-white dark:bg-slate-800 p-5 rounded-3xl border border-black/5 dark:border-slate-700 shadow-sm flex flex-col gap-4 overflow-hidden"
-                >
-                  {/* Folder Tab Effect */}
-                  <div className={cn("absolute top-0 left-6 w-16 h-1.5 rounded-b-lg", theme.primary)} />
-                  
-                  <div className="flex items-center justify-between">
-                    <div className={cn("p-3 rounded-xl bg-black/5 dark:bg-white/5", theme.text)}>
-                      <Folder size={20} />
-                    </div>
-                    <div className="text-right">
-                      <p className={cn("text-xl font-black", 
-                        s.accuracy >= 80 ? "text-emerald-500" : 
-                        s.accuracy >= 60 ? "text-amber-500" : "text-rose-500"
-                      )}>
-                        {s.accuracy}%
+            {activeFolder ? (
+              <motion.div 
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] border border-white/20 dark:border-slate-800/50 shadow-2xl"
+              >
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center gap-4">
+                    <button 
+                      onClick={() => setActiveFolder(null)}
+                      className="p-3 rounded-2xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all"
+                    >
+                      <ChevronLeft size={24} className="dark:text-white" />
+                    </button>
+                    <div>
+                      <h3 className="text-2xl font-bold dark:text-white flex items-center gap-3">
+                        <FolderOpen size={28} className={theme.text} />
+                        {activeFolder}
+                      </h3>
+                      <p className="text-sm text-black/40 dark:text-slate-500 font-medium">
+                        {subjectStats.find(s => s.name === activeFolder)?.quizzes.length || 0} arquivos encontrados
                       </p>
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-bold dark:text-white truncate" title={s.name}>{s.name}</h4>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-rose-500/10 text-rose-600 rounded-full flex items-center gap-1">
-                        <XCircle size={10} />
-                        {s.incorrectCount} erros
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-500/10 text-emerald-600 rounded-full flex items-center gap-1">
-                        <CheckCircle2 size={10} />
-                        {s.correct} acertos
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Mini Progress Bar */}
-                  <div className="h-1.5 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${s.accuracy}%` }}
-                      className={cn("h-full rounded-full", 
-                        s.accuracy >= 80 ? "bg-emerald-500" : 
-                        s.accuracy >= 60 ? "bg-amber-500" : "bg-rose-500"
+                  <div className="flex items-center gap-3">
+                    <button 
+                      disabled={subjectStats.find(s => s.name === activeFolder)?.incorrectCount === 0}
+                      onClick={() => {
+                        const s = subjectStats.find(s => s.name === activeFolder);
+                        if (s) onPracticeIncorrect(s.questions, `Revisão: ${s.name}`);
+                      }}
+                      className={cn(
+                        "px-6 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 shadow-lg",
+                        subjectStats.find(s => s.name === activeFolder)?.incorrectCount === 0 
+                          ? "bg-black/5 text-black/20 cursor-not-allowed" 
+                          : cn(theme.primary, theme.contrastText, theme.shadow)
                       )}
-                    />
+                    >
+                      Praticar Todos os Erros
+                    </button>
                   </div>
+              </div>
 
-                  <button 
-                    disabled={s.incorrectCount === 0}
-                    onClick={() => onPracticeIncorrect(s.questions, `Revisão: ${s.name}`)}
-                    className={cn(
-                      "w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 active:scale-95",
-                      s.incorrectCount === 0 
-                        ? "bg-black/5 text-black/20 cursor-not-allowed" 
-                        : cn("bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 dark:text-white border border-black/5 dark:border-white/10")
-                    )}
-                  >
-                    <RotateCcw size={12} />
-                    Praticar Erros
-                  </button>
-                </motion.div>
-              ))}
-            </div>
+                <div className="space-y-8">
+                  {(() => {
+                    const subject = subjectStats.find(s => s.name === activeFolder);
+                    if (!subject) return null;
+
+                    const grouped: { [key: string]: QuizResult[] } = {};
+                    subject.quizzes.sort((a, b) => b.date.getTime() - a.date.getTime()).forEach(q => {
+                      const dateStr = format(q.date, "dd.MM.yyyy", { locale: ptBR });
+                      if (!grouped[dateStr]) grouped[dateStr] = [];
+                      grouped[dateStr].push(q);
+                    });
+
+                    return Object.entries(grouped).map(([date, dateQuizzes]) => (
+                      <div key={date} className="space-y-4">
+                        <div className="flex items-center gap-2 ml-2">
+                          <Folder size={16} className="text-amber-500" />
+                          <h4 className="text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">
+                            {date}
+                          </h4>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 ml-6">
+                          {dateQuizzes.map((res) => {
+                            const isSelected = selectedQuizzes.includes(res.id);
+                            const incorrectInThisQuiz = res.questions.filter((q, idx) => res.answers[idx] !== q.correctAnswer);
+                            return (
+                              <div 
+                                key={res.id} 
+                                onClick={() => toggleQuizSelection(res.id)}
+                                className={cn(
+                                  "group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer gap-4",
+                                  isSelected 
+                                    ? "bg-rose-500/5 border-rose-500/20 shadow-sm" 
+                                    : "bg-white/40 dark:bg-slate-800/40 backdrop-blur-md border-white/20 dark:border-slate-700/50 hover:border-white/40 dark:hover:border-slate-600/50"
+                                )}
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div className={cn(
+                                    "w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0",
+                                    isSelected ? "bg-rose-500 border-rose-500" : "border-black/10 dark:border-white/10"
+                                  )}>
+                                    {isSelected && <Check size={12} className="text-white" />}
+                                  </div>
+                                  <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500 shrink-0">
+                                    <FileText size={20} />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h4 className="text-sm font-bold dark:text-white truncate max-w-[200px] sm:max-w-[300px]" title={res.fileName}>
+                                      {res.fileName}
+                                    </h4>
+                                    <div className="flex items-center gap-3 mt-1">
+                                      <p className="text-[10px] text-black/40 dark:text-slate-500 font-medium">
+                                        {res.total} questões
+                                      </p>
+                                      <div className="flex items-center gap-1">
+                                        <span className="w-1 h-1 rounded-full bg-black/10 dark:bg-white/10" />
+                                        <span className={cn(
+                                          "text-[10px] font-bold",
+                                          incorrectInThisQuiz.length === 0 ? "text-emerald-500" : "text-rose-500"
+                                        )}>
+                                          {incorrectInThisQuiz.length} erros
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 ml-9 sm:ml-0">
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onPracticeIncorrect(res.questions, res.fileName);
+                                    }}
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95 flex items-center gap-1.5",
+                                      theme.primary, theme.contrastText
+                                    )}
+                                  >
+                                    <RotateCcw size={12} />
+                                    Refazer Tudo
+                                  </button>
+                                  {incorrectInThisQuiz.length > 0 && (
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onPracticeIncorrect(incorrectInThisQuiz, `Erros: ${res.fileName}`);
+                                      }}
+                                      className="px-3 py-1.5 rounded-lg font-bold text-[10px] bg-rose-500 text-white transition-all active:scale-95 flex items-center gap-1.5 shadow-lg shadow-rose-500/20"
+                                    >
+                                      <XCircle size={12} />
+                                      Praticar Erros
+                                    </button>
+                                  )}
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onDeleteQuiz(res.id);
+                                    }}
+                                    className="p-2 text-black/10 dark:text-white/10 hover:text-rose-500 transition-colors"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </motion.div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between px-2">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-[0.3em] uppercase mb-1">EXERCÍCIOS</span>
+                    <h3 className="text-2xl font-black dark:text-white flex items-center gap-3">
+                      <FolderOpen size={28} className={theme.text} />
+                      Pastas por Matéria
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setIsSelectionMode(!isSelectionMode)}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all",
+                        isSelectionMode ? "bg-rose-500 text-white" : "bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400"
+                      )}
+                    >
+                      <CheckSquare size={16} />
+                      {isSelectionMode ? "Sair da Seleção" : "Selecionar Várias"}
+                    </button>
+                    <button 
+                      onClick={onOpenRecycleBin}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400 hover:bg-black/10 dark:hover:bg-white/10 transition-all relative"
+                    >
+                      <Trash2 size={16} />
+                      Lixeira
+                      {recycleBinCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900">
+                          {recycleBinCount}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col gap-4">
+                  {subjectStats.map((s) => {
+                    const isSelected = selectedSubjects.includes(s.name);
+                    return (
+                      <motion.div 
+                        key={s.name}
+                        whileHover={{ x: 8, scale: 1.005 }}
+                        onClick={() => isSelectionMode ? toggleSubjectSelection(s.name) : setActiveFolder(s.name)}
+                        className={cn(
+                          "group relative p-6 rounded-[2rem] border shadow-xl flex flex-col sm:flex-row sm:items-center gap-6 overflow-hidden transition-all backdrop-blur-2xl",
+                          isSelected 
+                            ? "bg-rose-500/10 border-rose-500/30" 
+                            : "bg-white/40 dark:bg-slate-900/40 border-white/20 dark:border-slate-800/50 hover:border-white/40 dark:hover:border-slate-700/50 shadow-black/5"
+                        )}
+                      >
+                        {/* Folder Tab Effect (Vertical) */}
+                        <div className={cn("absolute top-6 left-0 w-1 h-12 rounded-r-xl", theme.primary)} />
+                        
+                        <div className="flex items-center gap-4 shrink-0">
+                          {isSelectionMode ? (
+                            <div className={cn(
+                              "w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-all",
+                              isSelected ? "bg-rose-500 border-rose-500" : "border-black/10 dark:border-white/10"
+                            )}>
+                              {isSelected && <Check size={16} className="text-white" />}
+                            </div>
+                          ) : (
+                            <div className={cn("p-4 rounded-2xl bg-black/5 dark:bg-white/5", theme.text)}>
+                              <Folder size={24} />
+                            </div>
+                          )}
+                          <div className="flex flex-col">
+                            <h4 className="text-lg font-black dark:text-white leading-tight" title={s.name}>{s.name}</h4>
+                            <span className="text-[10px] font-black text-black/30 dark:text-slate-500 uppercase tracking-widest">
+                              {s.quizzes.length} {s.quizzes.length === 1 ? 'Arquivo' : 'Arquivos'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 sm:ml-auto">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold px-3 py-1 bg-rose-500/10 text-rose-600 rounded-full flex items-center gap-1.5">
+                              <XCircle size={12} />
+                              {s.incorrectCount} erros
+                            </span>
+                            <span className="text-[10px] font-bold px-3 py-1 bg-emerald-500/10 text-emerald-600 rounded-full flex items-center gap-1.5">
+                              <CheckCircle2 size={12} />
+                              {s.correct} acertos
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-4">
+                            <div className="flex flex-col items-end">
+                              <p className={cn("text-xl font-black", 
+                                s.accuracy >= 80 ? "text-emerald-500" : 
+                                s.accuracy >= 60 ? "text-amber-500" : "text-rose-500"
+                              )}>
+                                {s.accuracy}%
+                              </p>
+                              <span className="text-[8px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-widest">Precisão</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {!isSelectionMode && (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteSubjectHistory(s.name);
+                                }}
+                                className="p-2 text-black/10 dark:text-white/10 hover:text-rose-500 transition-colors"
+                                title="Excluir histórico desta matéria"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            )}
+                            <div className="flex items-center gap-1 text-emerald-500 font-bold text-[10px] uppercase ml-2">
+                              <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : (
@@ -1685,12 +2533,12 @@ const StudyMode = ({
             <Search size={40} className="text-black/20 dark:text-white/20" />
           </div>
           <div className="space-y-2">
-            <h3 className="text-2xl font-bold dark:text-white">Nenhum erro encontrado</h3>
-            <p className="text-black/40 dark:text-slate-400 max-w-xs mx-auto">Não encontramos erros para os filtros selecionados. Tente ajustar o período ou a matéria.</p>
+            <h3 className="text-xl font-bold dark:text-white">Nenhum erro encontrado</h3>
+            <p className="text-xs text-black/40 dark:text-slate-400 max-w-xs mx-auto">Não encontramos erros para os filtros selecionados. Tente ajustar o período ou a matéria.</p>
           </div>
           <button 
-            onClick={() => { setDateFilter('all'); setSubjectFilter('all'); }}
-            className={cn("px-8 py-3 rounded-2xl font-bold transition-all active:scale-95 shadow-lg", theme.primary, theme.contrastText, theme.shadow)}
+            onClick={() => { setDateFilter(['all']); setSubjectFilter('all'); }}
+            className={cn("px-6 py-2 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg", theme.primary, theme.contrastText, theme.shadow)}
           >
             Limpar Filtros
           </button>
@@ -1700,17 +2548,188 @@ const StudyMode = ({
   );
 };
 
-interface QuizResult {
-  id: string;
-  date: Date;
-  correct: number;
-  total: number;
-  timeSpent: number; // in seconds
-  fileName: string;
-  questions: QuizQuestion[];
-  answers: (string | null)[];
-  content?: ContentItem | ContentItem[];
-}
+const RecycleBin = ({ 
+  items, 
+  theme, 
+  onClose, 
+  onRestore, 
+  onRestoreMultiple,
+  onDelete,
+  onDeleteMultiple
+}: { 
+  items: QuizResult[], 
+  theme: any, 
+  onClose: () => void,
+  onRestore: (id: string) => void,
+  onRestoreMultiple: (ids: string[]) => void,
+  onDelete: (id: string) => void,
+  onDeleteMultiple: (ids: string[]) => void
+}) => {
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+
+  const toggleSelection = (id: string) => {
+    setSelectedItems(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const clearSelection = () => {
+    setSelectedItems([]);
+    setIsSelectionMode(false);
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-xl max-w-4xl mx-auto w-full"
+    >
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={onClose}
+            className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all"
+          >
+            <ChevronLeft size={20} className="dark:text-white" />
+          </button>
+          <div>
+            <h3 className="text-xl font-bold dark:text-white flex items-center gap-2">
+              <Trash2 size={24} className="text-rose-500" />
+              Lixeira
+            </h3>
+            <p className="text-[10px] text-black/40 dark:text-slate-500 font-medium">
+              {items.length} itens excluídos
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {items.length > 0 && (
+            <button 
+              onClick={() => setIsSelectionMode(!isSelectionMode)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all",
+                isSelectionMode ? "bg-rose-500 text-white" : "bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400"
+              )}
+            >
+              <CheckSquare size={16} />
+              {isSelectionMode ? "Sair da Seleção" : "Selecionar Vários"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {isSelectionMode && selectedItems.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl mb-6"
+        >
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-bold text-rose-600">
+              {selectedItems.length} itens selecionados
+            </span>
+            <button 
+              onClick={clearSelection}
+              className="text-xs font-bold text-black/40 dark:text-slate-400 hover:text-black dark:hover:text-white transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => {
+                onRestoreMultiple(selectedItems);
+                clearSelection();
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 text-white font-bold text-xs shadow-lg active:scale-95 transition-all"
+            >
+              <RotateCcw size={14} />
+              Restaurar
+            </button>
+            <button 
+              onClick={() => {
+                onDeleteMultiple(selectedItems);
+                clearSelection();
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500 text-white font-bold text-xs shadow-lg active:scale-95 transition-all"
+            >
+              <Trash2 size={14} />
+              Excluir Permanentemente
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {items.length === 0 ? (
+        <div className="py-20 text-center space-y-4">
+          <div className="w-20 h-20 bg-black/5 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto">
+            <Trash2 size={40} className="text-black/10 dark:text-white/10" />
+          </div>
+          <p className="text-black/40 dark:text-slate-500 font-medium">Sua lixeira está vazia.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {items.map((item) => (
+            <div 
+              key={item.id}
+              onClick={() => isSelectionMode && toggleSelection(item.id)}
+              className={cn(
+                "group flex items-center justify-between p-5 rounded-3xl border transition-all",
+                isSelectionMode ? "cursor-pointer" : "cursor-default",
+                selectedItems.includes(item.id)
+                  ? "bg-rose-500/10 border-rose-500/30" 
+                  : "bg-black/5 dark:bg-white/5 border-transparent hover:border-black/10 dark:hover:border-white/10"
+              )}
+            >
+              <div className="flex items-center gap-4">
+                {isSelectionMode ? (
+                  <div className={cn(
+                    "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
+                    selectedItems.includes(item.id) ? "bg-rose-500 border-rose-500" : "border-black/10 dark:border-white/10"
+                  )}>
+                    {selectedItems.includes(item.id) && <Check size={14} className="text-white" />}
+                  </div>
+                ) : (
+                  <div className="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center">
+                    <Trash2 size={24} className="text-rose-500" />
+                  </div>
+                )}
+                <div>
+                  <h4 className="text-sm font-bold dark:text-white truncate max-w-[200px]" title={item.fileName}>
+                    {item.fileName}
+                  </h4>
+                  <p className="text-[10px] text-black/40 dark:text-slate-500 font-medium">
+                    Excluído em: {item.deletedAt ? format(item.deletedAt, "dd/MM/yyyy HH:mm") : 'Desconhecido'}
+                  </p>
+                </div>
+              </div>
+              {!isSelectionMode && (
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => onRestore(item.id)}
+                    className="p-2 text-black/20 dark:text-white/20 hover:text-emerald-500 transition-colors"
+                    title="Restaurar"
+                  >
+                    <RotateCcw size={16} />
+                  </button>
+                  <button 
+                    onClick={() => onDelete(item.id)}
+                    className="p-2 text-black/20 dark:text-white/20 hover:text-rose-500 transition-colors"
+                    title="Excluir Permanentemente"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  );
+};
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, errorInfo: string | null }> {
   constructor(props: { children: React.ReactNode }) {
@@ -1773,6 +2792,57 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   }
 }
 
+const ConfirmationModal = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  message, 
+  theme 
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  onConfirm: () => void, 
+  title: string, 
+  message: string,
+  theme: any
+}) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 max-w-md w-full shadow-2xl border border-black/5 dark:border-white/10 space-y-6"
+      >
+        <div className="flex items-center gap-4 text-rose-500">
+          <div className="p-3 bg-rose-500/10 rounded-2xl">
+            <AlertTriangle size={32} />
+          </div>
+          <h3 className="text-2xl font-bold dark:text-white">{title}</h3>
+        </div>
+        <p className="text-black/60 dark:text-slate-400 font-medium leading-relaxed">
+          {message}
+        </p>
+        <div className="flex gap-3 pt-2">
+          <button 
+            onClick={onClose}
+            className="flex-1 py-3 rounded-xl font-bold bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all dark:text-white"
+          >
+            Cancelar
+          </button>
+          <button 
+            onClick={onConfirm}
+            className={cn("flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95", theme.primary)}
+          >
+            Confirmar
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -1781,12 +2851,122 @@ export default function App() {
   );
 }
 
+const QuizSummary = ({ questions, answers, theme }: { questions: QuizQuestion[], answers: (string | null)[], theme: any }) => {
+  const results = questions.map((q, i) => ({
+    ...q,
+    userAnswer: answers[i],
+    isCorrect: answers[i] === q.correctAnswer
+  }));
+
+  // Difficulty data
+  const difficultyData = ['easy', 'medium', 'hard'].map(diff => {
+    const diffResults = results.filter(r => r.difficulty === diff);
+    const correct = diffResults.filter(r => r.isCorrect).length;
+    const incorrect = diffResults.length - correct;
+    return {
+      name: diff === 'easy' ? 'Fácil' : diff === 'medium' ? 'Médio' : 'Difícil',
+      correct,
+      incorrect,
+      total: diffResults.length
+    };
+  }).filter(d => d.total > 0);
+
+  // Subject data
+  const subjectStats: Record<string, { correct: number, total: number }> = {};
+  results.forEach((r) => {
+    const subject = r.subject || 'Geral';
+    if (!subjectStats[subject]) subjectStats[subject] = { correct: 0, total: 0 };
+    subjectStats[subject].total++;
+    if (r.isCorrect) subjectStats[subject].correct++;
+  });
+
+  const subjectRanking = Object.entries(subjectStats)
+    .map(([name, stats]) => ({
+      name,
+      accuracy: Math.round((stats.correct / stats.total) * 100),
+      correct: stats.correct,
+      total: stats.total
+    }))
+    .sort((a, b) => b.accuracy - a.accuracy);
+
+  return (
+    <div className="space-y-12 mt-12">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Difficulty Chart */}
+        <div className="bg-[#F5F5F0] dark:bg-slate-800 rounded-[32px] p-8 space-y-6">
+          <h3 className="text-xl font-bold dark:text-white flex items-center gap-2">
+            <Target size={20} className={theme.icon} />
+            Desempenho por Dificuldade
+          </h3>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={difficultyData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#00000010" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  cursor={{ fill: '#00000005' }}
+                />
+                <Legend iconType="circle" />
+                <Bar dataKey="correct" name="Acertos" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="incorrect" name="Erros" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Subject Ranking */}
+        <div className="bg-[#F5F5F0] dark:bg-slate-800 rounded-[32px] p-8 space-y-6">
+          <h3 className="text-xl font-bold dark:text-white flex items-center gap-2">
+            <Award size={20} className={theme.icon} />
+            Ranking por Matéria
+          </h3>
+          <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+            {subjectRanking.map((item, idx) => (
+              <div key={item.name} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-black/5 dark:border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
+                    idx === 0 ? "bg-yellow-100 text-yellow-700" : 
+                    idx === subjectRanking.length - 1 ? "bg-rose-100 text-rose-700" : 
+                    "bg-slate-100 text-slate-700"
+                  )}>
+                    {idx + 1}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold dark:text-white">{item.name}</p>
+                    <p className="text-[10px] text-black/40 dark:text-slate-500 font-medium">{item.correct}/{item.total} acertos</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={cn(
+                    "text-lg font-bold",
+                    item.accuracy >= 70 ? "text-emerald-600" : 
+                    item.accuracy >= 40 ? "text-amber-600" : 
+                    "text-rose-600"
+                  )}>
+                    {item.accuracy}%
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function QuizApp() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [state, setState] = useState<QuizState>('idle');
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingStatus, setLoadingStatus] = useState('');
   const [deepDiveProgress, setDeepDiveProgress] = useState(0);
+  const [deepDiveStatus, setDeepDiveStatus] = useState('');
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<(string | null)[]>([]);
@@ -1799,20 +2979,187 @@ function QuizApp() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isReviewMode, setIsReviewMode] = useState(false);
+  const [showHint, setShowHint] = useState(false);
   const [isQuestionStarted, setIsQuestionStarted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [backgroundUrl, setBackgroundUrl] = useState<string>(() => localStorage.getItem('app_background') || 'none');
+  const [backgroundBlur, setBackgroundBlur] = useState<number>(() => Number(localStorage.getItem('app_background_blur')) || 8);
+  const [backgroundOpacity, setBackgroundOpacity] = useState<number>(() => Number(localStorage.getItem('app_background_opacity')) || 15);
+  const fileInputBackgroundRef = useRef<HTMLInputElement>(null);
+
+  const defaultBackgrounds = [
+    { id: 'none', name: 'Padrão', url: '' }
+  ];
+
+  const [customBackgrounds, setCustomBackgrounds] = useState<{id: string, name: string, url: string}[]>(() => {
+    const saved = localStorage.getItem('app_custom_backgrounds');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const handleCustomBackgroundUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (customBackgrounds.length >= 15) {
+        alert("Você atingiu o limite máximo de 15 planos de fundo personalizados. Remova algum para adicionar um novo.");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // Max dimension 1024px to save space in Firestore
+          const maxDim = 1024;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = (height / width) * maxDim;
+              width = maxDim;
+            } else {
+              width = (width / height) * maxDim;
+              height = maxDim;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            // Compress as JPEG with 0.6 quality to stay under 1MB limit for 15 images
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+            
+            const newBg = {
+              id: `custom-${Date.now()}`,
+              name: file.name.split('.')[0] || 'Personalizado',
+              url: compressedBase64
+            };
+            const updated = [...customBackgrounds, newBg];
+            setCustomBackgrounds(updated);
+            localStorage.setItem('app_custom_backgrounds', JSON.stringify(updated));
+            setBackgroundUrl(compressedBase64);
+          }
+        };
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDeleteBackground = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = customBackgrounds.filter(bg => bg.id !== id);
+    setCustomBackgrounds(updated);
+    localStorage.setItem('app_custom_backgrounds', JSON.stringify(updated));
+    if (backgroundUrl === customBackgrounds.find(bg => bg.id === id)?.url) {
+      setBackgroundUrl('none');
+    }
+  };
+
+  // Sync background and theme settings with Firestore
+  useEffect(() => {
+    if (userProfile) {
+      if (userProfile.backgroundUrl !== undefined && userProfile.backgroundUrl !== backgroundUrl) {
+        setBackgroundUrl(userProfile.backgroundUrl);
+      }
+      if (userProfile.backgroundBlur !== undefined && userProfile.backgroundBlur !== backgroundBlur) {
+        setBackgroundBlur(userProfile.backgroundBlur);
+      }
+      if (userProfile.backgroundOpacity !== undefined && userProfile.backgroundOpacity !== backgroundOpacity) {
+        setBackgroundOpacity(userProfile.backgroundOpacity);
+      }
+      if (userProfile.themeColor !== undefined && userProfile.themeColor !== themeColor) {
+        setThemeColor(userProfile.themeColor);
+      }
+      if (userProfile.customThemeColor !== undefined && userProfile.customThemeColor !== customColor) {
+        setCustomColor(userProfile.customThemeColor);
+      }
+      if (userProfile.customBackgrounds !== undefined) {
+        // Only update if different to avoid loops
+        const currentIds = customBackgrounds.map(b => b.id).sort().join(',');
+        const profileIds = (userProfile.customBackgrounds as any[]).map(b => b.id).sort().join(',');
+        if (currentIds !== profileIds) {
+          setCustomBackgrounds(userProfile.customBackgrounds);
+        }
+      }
+      if (userProfile.subjects !== undefined) {
+        const currentSubjects = subjects.sort().join(',');
+        const profileSubjects = (userProfile.subjects as string[]).sort().join(',');
+        if (currentSubjects !== profileSubjects) {
+          setSubjects(userProfile.subjects);
+        }
+      }
+    }
+  }, [userProfile]);
+
+  // Debounced background settings sync
+  useEffect(() => {
+    localStorage.setItem('app_background', backgroundUrl);
+    localStorage.setItem('app_background_blur', backgroundBlur.toString());
+    localStorage.setItem('app_background_opacity', backgroundOpacity.toString());
+    localStorage.setItem('app_custom_backgrounds', JSON.stringify(customBackgrounds));
+    localStorage.setItem('studySubjects', JSON.stringify(subjects));
+    
+    if (!user) return;
+
+    const timer = setTimeout(() => {
+      const userRef = doc(db, 'users', user.uid);
+      
+      // Only write if different from userProfile to avoid unnecessary writes
+      const hasChanges = 
+        userProfile?.backgroundUrl !== backgroundUrl ||
+        userProfile?.backgroundBlur !== backgroundBlur ||
+        userProfile?.backgroundOpacity !== backgroundOpacity ||
+        JSON.stringify(userProfile?.customBackgrounds) !== JSON.stringify(customBackgrounds) ||
+        JSON.stringify(userProfile?.subjects) !== JSON.stringify(subjects);
+
+      if (!hasChanges) return;
+
+      const settingsToSave = {
+        backgroundUrl,
+        backgroundBlur,
+        backgroundOpacity,
+        customBackgrounds,
+        subjects
+      };
+      
+      const estimatedSize = JSON.stringify(settingsToSave).length;
+      
+      if (estimatedSize < 800000) { // 800KB safety margin
+        setDoc(userRef, settingsToSave, { merge: true })
+          .catch(e => console.error("Error updating background in Firestore", e));
+      } else {
+        console.warn("Background settings too large to save to Firestore. Try removing some custom backgrounds.");
+        setDoc(userRef, {
+          backgroundUrl: backgroundUrl.length > 100000 ? 'none' : backgroundUrl,
+          backgroundBlur,
+          backgroundOpacity
+        }, { merge: true }).catch(e => console.error("Error updating minimal background in Firestore", e));
+      }
+    }, 2000); // 2 second debounce
+
+    return () => clearTimeout(timer);
+  }, [backgroundUrl, backgroundBlur, backgroundOpacity, customBackgrounds, user, userProfile]);
   const [lastContent, setLastContent] = useState<ContentItem | ContentItem[] | null>(null);
   const [lastFileName, setLastFileName] = useState('');
+  const [pendingContent, setPendingContent] = useState<ContentItem | ContentItem[] | null>(null);
+  const [pendingFileName, setPendingFileName] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState('');
   const [urlInput, setUrlInput] = useState('');
   const [hasApiKey, setHasApiKey] = useState(true);
   const [manualApiKey, setManualApiKey] = useState(localStorage.getItem('GEMINI_API_KEY') || '');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
+  const [srsItems, setSrsItems] = useState<any[]>([]);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'incorrect'>('all');
   const [showDashboard, setShowDashboard] = useState(false);
   const [showStudyMode, setShowStudyMode] = useState(false);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [showBancaDropdown, setShowBancaDropdown] = useState(false);
   const [showQuantityDropdown, setShowQuantityDropdown] = useState(false);
   
@@ -1828,6 +3175,9 @@ function QuizApp() {
   const [isBancaMindset, setIsBancaMindset] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [history, setHistory] = useState<QuizResult[]>([]);
+  const [recycleBin, setRecycleBin] = useState<QuizResult[]>([]);
+  const [showRecycleBin, setShowRecycleBin] = useState(false);
+  const [showExitQuizConfirmation, setShowExitQuizConfirmation] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [themeColor, setThemeColor] = useState<ThemeColor>(() => {
@@ -1852,17 +3202,26 @@ function QuizApp() {
         document.documentElement.style.setProperty('--theme-bg-dark', customColor);
       }
       localStorage.setItem('customThemeColor', customColor);
+      
+      if (user && userProfile?.customThemeColor !== customColor) {
+        const timer = setTimeout(() => {
+          const userRef = doc(db, 'users', user.uid);
+          setDoc(userRef, { customThemeColor: customColor }, { merge: true })
+            .catch(e => console.error("Error updating customThemeColor in Firestore", e));
+        }, 2000);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [themeColor, customColor]);
+  }, [themeColor, customColor, user, userProfile]);
 
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Dashboard Filters
-  const [dashboardDateFilter, setDashboardDateFilter] = useState<string>('all');
+  const [dashboardDateFilter, setDashboardDateFilter] = useState<string[]>(['all']);
   const [dashboardSubjectFilter, setDashboardSubjectFilter] = useState<string>('all');
 
   // Study Mode Filters
-  const [studyModeDateFilter, setStudyModeDateFilter] = useState<string>('all');
+  const [studyModeDateFilter, setStudyModeDateFilter] = useState<string[]>(['all']);
   const [studyModeSubjectFilter, setStudyModeSubjectFilter] = useState<string>('all');
 
   const [subjects, setSubjects] = useState<string[]>(() => {
@@ -1885,6 +3244,8 @@ function QuizApp() {
   }, [subjects]);
 
   const [newSubjectInput, setNewSubjectInput] = useState('');
+  const [subjectToDelete, setSubjectToDelete] = useState<string | null>(null);
+  const [quizToDelete, setQuizToDelete] = useState<string | null>(null);
 
   const handleAddSubject = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1901,28 +3262,192 @@ function QuizApp() {
     setSubjects(prev => prev.filter(s => s !== subject));
   };
 
+  const handleDeleteSubjectHistory = async (subject: string) => {
+    if (!user) return;
+    
+    try {
+      const resultsToDelete = history.filter(res => {
+        const quizSubjects = new Set(res.questions.map(q => normalizeSubject(q.subject || res.fileName)));
+        return quizSubjects.has(subject);
+      });
+
+      if (resultsToDelete.length === 0) return;
+
+      const batch = writeBatch(db);
+      resultsToDelete.forEach(res => {
+        const docRef = doc(db, 'results', res.id);
+        batch.update(docRef, { 
+          deleted: true, 
+          deletedAt: Timestamp.now() 
+        });
+      });
+
+      await batch.commit();
+      setSubjectToDelete(null);
+    } catch (error) {
+      console.error("Erro ao excluir histórico:", error);
+    }
+  };
+
+  const handleDeleteQuiz = async (id: string) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'results', id), { 
+        deleted: true, 
+        deletedAt: Timestamp.now() 
+      });
+      setQuizToDelete(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `results/${id}`);
+    }
+  };
+
+  const handleDeleteQuizzes = async (ids: string[]) => {
+    if (!user || ids.length === 0) return;
+    try {
+      const batch = writeBatch(db);
+      ids.forEach(id => {
+        batch.update(doc(db, 'results', id), { 
+          deleted: true, 
+          deletedAt: Timestamp.now() 
+        });
+      });
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'results/multiple');
+    }
+  };
+
+  const handleDeleteSubjectsHistory = async (subjects: string[]) => {
+    if (!user || subjects.length === 0) return;
+    try {
+      const batch = writeBatch(db);
+      const subjectsSet = new Set(subjects);
+      
+      const resultsToDelete = history.filter(res => {
+        const quizSubjects = new Set(res.questions.map(q => normalizeSubject(q.subject || res.fileName)));
+        return Array.from(quizSubjects).some(s => subjectsSet.has(s));
+      });
+
+      resultsToDelete.forEach(res => {
+        batch.update(doc(db, 'results', res.id), { 
+          deleted: true, 
+          deletedAt: Timestamp.now() 
+        });
+      });
+
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'results/subjects');
+    }
+  };
+
+  const handleRestoreQuiz = async (id: string) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'results', id), { 
+        deleted: false, 
+        deletedAt: null 
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `results/${id}`);
+    }
+  };
+
+  const handleRestoreQuizzes = async (ids: string[]) => {
+    if (!user || ids.length === 0) return;
+    try {
+      const batch = writeBatch(db);
+      ids.forEach(id => {
+        batch.update(doc(db, 'results', id), { 
+          deleted: false, 
+          deletedAt: null 
+        });
+      });
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'results/multiple');
+    }
+  };
+
+  const handlePermanentlyDeleteQuiz = async (id: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'results', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `results/${id}`);
+    }
+  };
+
+  const handlePermanentlyDeleteQuizzes = async (ids: string[]) => {
+    if (!user || ids.length === 0) return;
+    try {
+      const batch = writeBatch(db);
+      ids.forEach(id => {
+        batch.delete(doc(db, 'results', id));
+      });
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'results/multiple');
+    }
+  };
+
   useEffect(() => {
     let interval: NodeJS.Timeout;
+    let statusInterval: NodeJS.Timeout;
+    
+    const statuses = [
+      "Analisando materiais...",
+      "Extraindo conceitos chave...",
+      "Estruturando questões...",
+      "Simulando estilo da banca...",
+      "Refinando alternativas...",
+      "Finalizando quiz personalizado..."
+    ];
+
     if (state === 'loading') {
       setLoadingProgress(0);
+      setLoadingStatus(statuses[0]);
+      
       interval = setInterval(() => {
         setLoadingProgress(prev => {
           if (prev >= 98) return prev;
-          // Slower as it gets higher to simulate complex processing
           const increment = Math.max(0.05, (100 - prev) / 40);
           return Math.min(98, prev + increment);
         });
       }, 100);
+
+      let statusIdx = 0;
+      statusInterval = setInterval(() => {
+        statusIdx = (statusIdx + 1) % statuses.length;
+        setLoadingStatus(statuses[statusIdx]);
+      }, 3000);
     } else {
       setLoadingProgress(0);
+      setLoadingStatus('');
     }
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearInterval(statusInterval);
+    };
   }, [state]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
+    let statusInterval: NodeJS.Timeout;
+
+    const statuses = [
+      "Consultando base de conhecimento...",
+      "Aprofundando conceitos...",
+      "Criando mnemônicos...",
+      "Buscando referências extras...",
+      "Formatando conteúdo pedagógico..."
+    ];
+
     if (isDeepDiveLoading) {
       setDeepDiveProgress(0);
+      setDeepDiveStatus(statuses[0]);
+
       interval = setInterval(() => {
         setDeepDiveProgress(prev => {
           if (prev >= 98) return prev;
@@ -1930,10 +3455,20 @@ function QuizApp() {
           return Math.min(98, prev + increment);
         });
       }, 100);
+
+      let statusIdx = 0;
+      statusInterval = setInterval(() => {
+        statusIdx = (statusIdx + 1) % statuses.length;
+        setDeepDiveStatus(statuses[statusIdx]);
+      }, 2500);
     } else {
       setDeepDiveProgress(0);
+      setDeepDiveStatus('');
     }
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearInterval(statusInterval);
+    };
   }, [isDeepDiveLoading]);
 
   useEffect(() => {
@@ -1947,7 +3482,15 @@ function QuizApp() {
 
   useEffect(() => {
     localStorage.setItem('themeColor', themeColor);
-  }, [themeColor]);
+    if (user && userProfile?.themeColor !== themeColor) {
+      const timer = setTimeout(() => {
+        const userRef = doc(db, 'users', user.uid);
+        setDoc(userRef, { themeColor }, { merge: true })
+          .catch(e => console.error("Error updating themeColor in Firestore", e));
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [themeColor, user, userProfile]);
   const [timeAlertThreshold, setTimeAlertThreshold] = useState(100); // Default 1:40
   
   const [darkMode, setDarkMode] = useState(() => {
@@ -2025,12 +3568,78 @@ function QuizApp() {
         return {
           ...data,
           id: doc.id,
-          date: data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date)
+          date: data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date),
+          deletedAt: data.deletedAt instanceof Timestamp ? data.deletedAt.toDate() : (data.deletedAt ? new Date(data.deletedAt) : undefined)
         } as QuizResult;
       });
-      setHistory(results);
+      setHistory(results.filter(r => r.deleted !== true));
+      setRecycleBin(results.filter(r => r.deleted === true));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'results');
+    });
+
+    return () => unsubscribe();
+  }, [isAuthReady, user]);
+
+  // User Profile Listener
+  useEffect(() => {
+    if (!isAuthReady || !user) {
+      setUserProfile(null);
+      return;
+    }
+
+    const userRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userRef, (doc) => {
+      if (doc.exists()) {
+        setUserProfile(doc.data());
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+    });
+
+    return () => unsubscribe();
+  }, [isAuthReady, user]);
+
+  // SRS Items Listener (Registry Version)
+  useEffect(() => {
+    if (!isAuthReady || !user) {
+      setSrsItems([]);
+      return;
+    }
+
+    const registryRef = doc(db, 'srs_registries', user.uid);
+    const unsubscribe = onSnapshot(registryRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        const items = Object.entries(data.items || {}).map(([id, item]: [string, any]) => ({
+          ...item,
+          id,
+          nextReviewDate: item.nextReviewDate instanceof Timestamp ? item.nextReviewDate.toDate() : new Date(item.nextReviewDate)
+        }));
+        // Sort by nextReviewDate in memory
+        items.sort((a, b) => a.nextReviewDate.getTime() - b.nextReviewDate.getTime());
+        setSrsItems(items);
+      } else {
+        // Fallback to legacy srs collection if registry doesn't exist yet
+        const q = query(
+          collection(db, 'srs'),
+          where('uid', '==', user.uid),
+          orderBy('nextReviewDate', 'asc')
+        );
+        
+        getDocs(q).then(snapshot => {
+          if (!snapshot.empty) {
+            const legacyItems = snapshot.docs.map(doc => ({
+              ...doc.data(),
+              id: doc.id,
+              nextReviewDate: doc.data().nextReviewDate instanceof Timestamp ? doc.data().nextReviewDate.toDate() : new Date(doc.data().nextReviewDate)
+            }));
+            setSrsItems(legacyItems);
+          }
+        }).catch(e => console.error("Error loading legacy SRS", e));
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'srs_registries');
     });
 
     return () => unsubscribe();
@@ -2072,7 +3681,13 @@ function QuizApp() {
   useEffect(() => {
     if (state === 'active' && answers[currentIndex] === null && isQuestionStarted && !isPaused) {
       timerRef.current = setInterval(() => {
-        setQuestionTime(prev => prev + 1);
+        setQuestionTime(prev => {
+          if (prev <= 0) {
+            if (timerRef.current) clearInterval(timerRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
         setTotalTime(prev => prev + 1);
       }, 1000);
     } else {
@@ -2123,7 +3738,10 @@ function QuizApp() {
       const cleanFileNames = fileNames.map(name => name.replace(/^\d+[\s\.\-\:]*/, '').trim());
       const combinedFileName = cleanFileNames.join(', ');
 
-      startQuiz(contents, combinedFileName);
+      setPendingContent(contents);
+      setPendingFileName(combinedFileName);
+      // Don't call startQuiz immediately
+      setState('idle');
     } catch (err: any) {
       setError(err.message || "Erro ao processar os materiais.");
       setState('idle');
@@ -2143,12 +3761,12 @@ function QuizApp() {
   };
 
   const startQuiz = async (content: ContentItem | ContentItem[], fileName: string) => {
-    console.log("Iniciando geração de quiz...", { count: questionCount, fileName });
+    console.log("Iniciando geração de quiz...", { count: questionCount, fileName, selectedSubject });
     setState('loading');
     setError(null);
     setShowDashboard(false);
     setLastContent(content);
-    const cleanName = fileName
+    const cleanName = selectedSubject || fileName
       .replace(/^\d+[\s\.\-\:]*/, '')
       .replace(/\d+\s*arquivos\s*\(/i, '')
       .replace(/\s*arquivos\s*/i, '')
@@ -2175,25 +3793,41 @@ function QuizApp() {
 
       console.log("Chamando generateQuiz...", { count: questionCount, format: derivedFormat, board: examBoardStr, isBancaMindset });
       const generatedQuestions = await generateQuiz(content, questionCount, derivedFormat, examBoardStr, isBancaMindset, subjects);
-      setLoadingProgress(90);
-      console.log("Quiz gerado com sucesso!", { count: generatedQuestions?.length });
       
-      if (!generatedQuestions || generatedQuestions.length === 0) {
+      // If a subject was selected, ensure all questions are categorized under it
+      const finalQuestions = generatedQuestions.map(q => ({
+        ...q,
+        subject: selectedSubject || q.subject || 'Geral',
+        options: q.options || [],
+        explanation: q.explanation || '',
+        hint: q.hint || '',
+        id: q.id || Math.random().toString(36).substr(2, 9)
+      }));
+
+      setLoadingProgress(90);
+      console.log("Quiz gerado com sucesso!", { count: finalQuestions?.length });
+      
+      if (!finalQuestions || finalQuestions.length === 0) {
         throw new Error("Não foi possível gerar o quiz com o conteúdo fornecido.");
       }
 
-      setQuestions(generatedQuestions);
-      setAnswers(new Array(generatedQuestions.length).fill(null));
-      setQuestionTimes(new Array(generatedQuestions.length).fill(0));
+      setQuestions(finalQuestions);
+      setAnswers(new Array(finalQuestions.length).fill(null));
+      setQuestionTimes(new Array(finalQuestions.length).fill(0));
       setCurrentIndex(0);
       setTotalTime(0);
-      setQuestionTime(0);
+      setQuestionTime(timeAlertThreshold);
       setIsQuestionStarted(false);
       setIsPaused(false);
       setState('active');
       setShowDeepDive(false);
       setIsDeepDiveExpanded(false);
       setIsReviewMode(false);
+      
+      // Clear pending content
+      setPendingContent(null);
+      setPendingFileName('');
+      setSelectedSubject('');
     } catch (err: any) {
       console.error("Erro ao gerar quiz:", err);
       if (err.message?.includes("Requested entity was not found")) {
@@ -2209,6 +3843,29 @@ function QuizApp() {
     }
   };
 
+  const handleCreateQuiz = () => {
+    let contentToUse = pendingContent;
+    let nameToUse = pendingFileName;
+
+    if (!contentToUse && urlInput.trim()) {
+      const urls = urlInput.split('\n').map(u => u.trim()).filter(u => u.startsWith('http'));
+      if (urls.length > 0) {
+        contentToUse = urls;
+        nameToUse = urls.length === 1 ? urls[0] : `${urls.length} links`;
+      }
+    }
+
+    if (!contentToUse) {
+      setError("Por favor, selecione um arquivo ou insira um link primeiro.");
+      return;
+    }
+    if (!selectedSubject.trim()) {
+      setError("Por favor, informe o nome da matéria para organizar seu quiz.");
+      return;
+    }
+    startQuiz(contentToUse, nameToUse);
+  };
+
   const handleUrlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!urlInput.trim()) return;
@@ -2219,7 +3876,8 @@ function QuizApp() {
       return;
     }
     
-    startQuiz(urls, urls.length === 1 ? urls[0] : `${urls.length} links`);
+    setPendingContent(urls);
+    setPendingFileName(urls.length === 1 ? urls[0] : `${urls.length} links`);
     setUrlInput('');
   };
 
@@ -2285,27 +3943,21 @@ function QuizApp() {
     const userMsg = chatInput.trim();
     setChatInput('');
     
-    // Use functional update to ensure we have the latest history and trigger API call
-    setChatHistory(prev => {
-      const newHistory = [...prev, { role: 'user' as const, text: userMsg }];
-      
-      // Trigger the API call in the background with the updated history
-      (async () => {
-        setIsChatLoading(true);
-        try {
-          // Pass the history BEFORE the current message, as chatWithProfessor adds the current message
-          const response = await chatWithProfessor(questions[currentIndex], prev, userMsg);
-          setChatHistory(current => [...current, { role: 'model' as const, text: response }]);
-        } catch (err) {
-          console.error("Chat error:", err);
-          setChatHistory(current => [...current, { role: 'model' as const, text: "Desculpe, tive um problema ao processar sua pergunta. Tente novamente." }]);
-        } finally {
-          setIsChatLoading(false);
-        }
-      })();
-      
-      return newHistory;
-    });
+    // Update history with user message first
+    const currentHistory = [...chatHistory, { role: 'user' as const, text: userMsg }];
+    setChatHistory(currentHistory);
+    
+    setIsChatLoading(true);
+    try {
+      // Pass the history BEFORE the current message, as chatWithProfessor adds the current message
+      const response = await chatWithProfessor(questions[currentIndex], chatHistory, userMsg);
+      setChatHistory(current => [...current, { role: 'model' as const, text: response }]);
+    } catch (err) {
+      console.error("Chat error:", err);
+      setChatHistory(current => [...current, { role: 'model' as const, text: "Desculpe, tive um problema ao processar sua pergunta. Tente novamente." }]);
+    } finally {
+      setIsChatLoading(false);
+    }
   };
 
   const handleAnswer = (answer: string) => {
@@ -2316,7 +3968,7 @@ function QuizApp() {
     setAnswers(newAnswers);
 
     const newQuestionTimes = [...questionTimes];
-    newQuestionTimes[currentIndex] = questionTime;
+    newQuestionTimes[currentIndex] = timeAlertThreshold - questionTime;
     setQuestionTimes(newQuestionTimes);
 
     // No automatic deep dive trigger
@@ -2429,8 +4081,9 @@ function QuizApp() {
 
       if (nextIdx < questions.length) {
         setCurrentIndex(nextIdx);
-        setQuestionTime(0);
+        setQuestionTime(timeAlertThreshold);
         setIsQuestionStarted(true);
+        setShowHint(false);
         if (!isReviewMode) {
           setShowDeepDive(false);
           setIsDeepDiveExpanded(false);
@@ -2463,7 +4116,199 @@ function QuizApp() {
 
       if (prevIdx >= 0) {
         setCurrentIndex(prevIdx);
+        setShowHint(false);
       }
+    }
+  };
+
+  const updateStreakAndStats = async (correct: number, total: number) => {
+    if (!user) return;
+    const userRef = doc(db, 'users', user.uid);
+    try {
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        const now = new Date();
+        const lastActivity = data.lastActivity ? (data.lastActivity instanceof Timestamp ? data.lastActivity.toDate() : new Date(data.lastActivity)) : null;
+        
+        let newStreak = data.streak || 0;
+        if (lastActivity) {
+          // Reset time to start of day for comparison
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const lastDay = new Date(lastActivity.getFullYear(), lastActivity.getMonth(), lastActivity.getDate());
+          const diffTime = today.getTime() - lastDay.getTime();
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          
+          if (diffDays === 1) {
+            newStreak += 1;
+          } else if (diffDays > 1) {
+            newStreak = 1;
+          } else if (diffDays === 0) {
+            // Already active today, streak stays the same
+          }
+        } else {
+          newStreak = 1;
+        }
+
+        const updates: any = {
+          streak: newStreak,
+          lastActivity: Timestamp.fromDate(now),
+          totalCorrectAnswers: (data.totalCorrectAnswers || 0) + correct,
+          totalQuizzesTaken: (data.totalQuizzesTaken || 0) + 1
+        };
+
+        // Check achievements
+        const currentAchievements = data.achievements || [];
+        const newAchievements = [...currentAchievements];
+        
+        if (newStreak >= 7 && !newAchievements.includes('streak_7')) newAchievements.push('streak_7');
+        if (newStreak >= 30 && !newAchievements.includes('streak_30')) newAchievements.push('streak_30');
+        if (updates.totalQuizzesTaken >= 10 && !newAchievements.includes('quizzes_10')) newAchievements.push('quizzes_10');
+        if (updates.totalCorrectAnswers >= 100 && !newAchievements.includes('correct_100')) newAchievements.push('correct_100');
+
+        if (newAchievements.length > currentAchievements.length) {
+          updates.achievements = newAchievements;
+        }
+
+        await setDoc(userRef, updates, { merge: true });
+      }
+    } catch (error) {
+      console.error("Error updating streak and stats", error);
+    }
+  };
+
+  const addToSRS = async (questions: QuizQuestion[], answers: (string | null)[]) => {
+    if (!user) return;
+    
+    try {
+      const registryRef = doc(db, 'srs_registries', user.uid);
+      const registryDoc = await getDoc(registryRef);
+      const registryData = registryDoc.exists() ? registryDoc.data() : { items: {} };
+      const items = { ...registryData.items };
+      
+      let hasNewItems = false;
+      questions.forEach((q, idx) => {
+        const isCorrect = answers[idx] === q.correctAnswer;
+        const questionId = q.id || q.question.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '_');
+        
+        const nextReview = new Date();
+        if (isCorrect) {
+          nextReview.setDate(nextReview.getDate() + 1);
+        }
+        
+        items[questionId] = {
+          uid: user.uid,
+          questionId: questionId,
+          question: q.question || '',
+          options: q.options || [],
+          correctAnswer: q.correctAnswer || '',
+          explanation: q.explanation || '',
+          subject: q.subject || 'Geral',
+          interval: isCorrect ? 1 : 0,
+          easeFactor: 2.5,
+          nextReviewDate: Timestamp.fromDate(nextReview),
+          consecutiveCorrect: isCorrect ? 1 : 0
+        };
+        hasNewItems = true;
+      });
+      
+      if (hasNewItems) {
+        await setDoc(registryRef, { uid: user.uid, items, lastUpdated: Timestamp.now() }, { merge: true });
+      }
+    } catch (error) {
+      console.error("Error adding to SRS registry", error);
+      handleFirestoreError(error, OperationType.WRITE, `srs_registries/${user.uid}`);
+    }
+  };
+
+  const updateSRSAfterReview = async (results: any[]) => {
+    if (!user) return;
+    
+    try {
+      const registryRef = doc(db, 'srs_registries', user.uid);
+      const registryDoc = await getDoc(registryRef);
+      
+      if (registryDoc.exists()) {
+        const registryData = registryDoc.data();
+        const items = { ...registryData.items };
+        
+        results.forEach(res => {
+          const item = items[res.id];
+          if (item) {
+            const isCorrect = res.userAnswer === res.correctAnswer;
+            
+            // Simple SRS algorithm (SuperMemo-2 like)
+            let interval = item.interval || 0;
+            let easeFactor = item.easeFactor || 2.5;
+            let consecutiveCorrect = item.consecutiveCorrect || 0;
+            
+            if (isCorrect) {
+              consecutiveCorrect += 1;
+              if (consecutiveCorrect === 1) interval = 1;
+              else if (consecutiveCorrect === 2) interval = 6;
+              else interval = Math.round(interval * easeFactor);
+              
+              easeFactor = Math.max(1.3, easeFactor + 0.1);
+            } else {
+              consecutiveCorrect = 0;
+              interval = 1;
+              easeFactor = Math.max(1.3, easeFactor - 0.2);
+            }
+            
+            const nextReview = new Date();
+            nextReview.setDate(nextReview.getDate() + interval);
+            
+            items[res.id] = {
+              ...item,
+              interval,
+              easeFactor,
+              consecutiveCorrect,
+              nextReviewDate: Timestamp.fromDate(nextReview),
+              lastReviewed: Timestamp.fromDate(new Date())
+            };
+          }
+        });
+        
+        await setDoc(registryRef, { uid: user.uid, items, lastUpdated: Timestamp.now() }, { merge: true });
+      } else {
+        // Fallback to legacy individual updates if registry doesn't exist
+        const batch = writeBatch(db);
+        results.forEach(res => {
+          const srsItem = srsItems.find(item => item.questionId === res.id);
+          if (srsItem) {
+            const isCorrect = res.userAnswer === res.correctAnswer;
+            let { interval, easeFactor, consecutiveCorrect } = srsItem;
+            
+            if (isCorrect) {
+              consecutiveCorrect += 1;
+              if (consecutiveCorrect === 1) interval = 1;
+              else if (consecutiveCorrect === 2) interval = 6;
+              else interval = Math.round(interval * easeFactor);
+              easeFactor = Math.max(1.3, easeFactor + 0.1);
+            } else {
+              consecutiveCorrect = 0;
+              interval = 1;
+              easeFactor = Math.max(1.3, easeFactor - 0.2);
+            }
+            
+            const nextReviewDate = new Date();
+            nextReviewDate.setDate(nextReviewDate.getDate() + interval);
+            
+            const itemRef = doc(db, 'srs', srsItem.id);
+            batch.update(itemRef, {
+              interval,
+              easeFactor,
+              consecutiveCorrect,
+              nextReviewDate: Timestamp.fromDate(nextReviewDate),
+              lastReviewed: Timestamp.fromDate(new Date())
+            });
+          }
+        });
+        await batch.commit();
+      }
+    } catch (error) {
+      console.error("Error updating SRS registry after review", error);
+      handleFirestoreError(error, OperationType.WRITE, `srs_registries/${user.uid}`);
     }
   };
 
@@ -2505,8 +4350,32 @@ function QuizApp() {
           };
 
           await setDoc(resultRef, resultToSave);
+          
+          // Update stats and SRS
+          await updateStreakAndStats(correct, questions.length);
+          
+          if (isReviewMode) {
+            // If we are in review mode, update existing SRS items
+            const reviewResults = questions.map((q, i) => ({
+              id: q.id,
+              userAnswer: answers[i],
+              correctAnswer: q.correctAnswer
+            }));
+            await updateSRSAfterReview(reviewResults);
+          } else {
+            // If it's a new quiz, add questions to SRS
+            await addToSRS(questions, answers);
+          }
         } catch (e) {
           console.error("Failed to save history to Firestore in background", e);
+          if (e instanceof Error) {
+            try {
+              const errInfo = JSON.parse(e.message);
+              setError(errInfo.error);
+            } catch {
+              setError("Erro ao salvar histórico no banco de dados.");
+            }
+          }
         }
       })();
     } else {
@@ -2522,7 +4391,7 @@ function QuizApp() {
     setAnswers([]);
     setQuestionTimes([]);
     setTotalTime(0);
-    setQuestionTime(0);
+    setQuestionTime(timeAlertThreshold);
     setShowDeepDive(false);
     setIsDeepDiveExpanded(false);
     setIsReviewMode(false);
@@ -2680,7 +4549,7 @@ function QuizApp() {
     setQuestionTimes(new Array(questions.length).fill(0));
     setCurrentIndex(0);
     setTotalTime(0);
-    setQuestionTime(0);
+    setQuestionTime(timeAlertThreshold);
     setIsQuestionStarted(false);
     setState('active');
     setShowDeepDive(false);
@@ -2705,12 +4574,19 @@ function QuizApp() {
   };
 
   const practiceIncorrect = (incorrectQuestions: QuizQuestion[], fileName: string) => {
-    setQuestions(incorrectQuestions);
-    setAnswers(new Array(incorrectQuestions.length).fill(null));
-    setQuestionTimes(new Array(incorrectQuestions.length).fill(0));
+    const sanitizedQuestions = incorrectQuestions.map(q => ({
+      ...q,
+      options: q.options || [],
+      explanation: q.explanation || '',
+      hint: q.hint || '',
+      id: q.id || Math.random().toString(36).substr(2, 9)
+    }));
+    setQuestions(sanitizedQuestions);
+    setAnswers(new Array(sanitizedQuestions.length).fill(null));
+    setQuestionTimes(new Array(sanitizedQuestions.length).fill(0));
     setCurrentIndex(0);
     setTotalTime(0);
-    setQuestionTime(0);
+    setQuestionTime(timeAlertThreshold);
     setIsQuestionStarted(false);
     setState('active');
     setShowDeepDive(false);
@@ -2729,22 +4605,70 @@ function QuizApp() {
     }
   };
 
-  const onPracticeTopic = (topicName: string) => {
-    const lastResult = history.find(res => res.fileName === topicName);
+  const onPracticeTopic = (topicName: string, quizIds?: string[]) => {
+    console.log("Tentando praticar tópico:", topicName, "com quizzes:", quizIds);
+    
+    if (quizIds && quizIds.length > 0) {
+      const selectedResults = history.filter(res => quizIds.includes(res.id));
+      const combinedContent: ContentItem[] = [];
+      
+      selectedResults.forEach(res => {
+        if (res.content) {
+          if (Array.isArray(res.content)) {
+            combinedContent.push(...res.content);
+          } else {
+            combinedContent.push(res.content);
+          }
+        }
+      });
+
+      if (combinedContent.length > 0) {
+        console.log("Iniciando quiz com conteúdo combinado de", selectedResults.length, "quizzes");
+        startQuiz(combinedContent, topicName);
+        setShowDashboard(false);
+        setShowStudyMode(false);
+      } else {
+        setError("Não foi possível recuperar o conteúdo dos quizzes selecionados.");
+      }
+      return;
+    }
+
+    // Fallback to original behavior if no quizIds provided
+    const lastResult = history.find(res => 
+      res.questions.some(q => normalizeSubject(q.subject || res.fileName) === topicName) ||
+      normalizeSubject(res.fileName) === topicName
+    );
+    
     if (lastResult && lastResult.content) {
+      // Check if it's the "too large" placeholder
+      if (typeof lastResult.content === 'object' && 'content' in lastResult.content && (lastResult.content as any).content === 'Conteúdo muito grande para ser salvo no histórico.') {
+        setError("O conteúdo original deste assunto é muito grande para ser recuperado do histórico.");
+        return;
+      }
+      console.log("Conteúdo encontrado, iniciando quiz...", lastResult.fileName);
       startQuiz(lastResult.content, lastResult.fileName);
       setShowDashboard(false);
       setShowStudyMode(false);
+    } else {
+      console.warn("Could not find content for topic:", topicName);
+      setError(`Não foi possível encontrar o conteúdo original para a matéria "${topicName}". Tente gerar um novo quiz a partir de um arquivo.`);
     }
   };
 
   const handleHistoryClick = (res: QuizResult) => {
-    setQuestions(res.questions);
+    const sanitizedQuestions = res.questions.map(q => ({
+      ...q,
+      options: q.options || [],
+      explanation: q.explanation || '',
+      hint: q.hint || '',
+      id: q.id || Math.random().toString(36).substr(2, 9)
+    }));
+    setQuestions(sanitizedQuestions);
     setAnswers(res.answers);
-    setQuestionTimes(new Array(res.questions.length).fill(0));
+    setQuestionTimes(new Array(sanitizedQuestions.length).fill(0));
     setCurrentIndex(0);
     setTotalTime(res.timeSpent);
-    setQuestionTime(0);
+    setQuestionTime(timeAlertThreshold);
     setIsQuestionStarted(true);
     setIsReviewMode(true);
     setState('active');
@@ -2772,9 +4696,12 @@ function QuizApp() {
     e.stopPropagation();
     if (user) {
       try {
-        await deleteDoc(doc(db, 'results', id));
+        await updateDoc(doc(db, 'results', id), { 
+          deleted: true, 
+          deletedAt: Timestamp.now() 
+        });
       } catch (e) {
-        handleFirestoreError(e, OperationType.DELETE, `results/${id}`);
+        handleFirestoreError(e, OperationType.UPDATE, `results/${id}`);
       }
     } else {
       // Local fallback
@@ -2830,9 +4757,49 @@ function QuizApp() {
   const currentAnswer = answers[currentIndex];
   const isCorrect = currentAnswer === currentQuestion?.correctAnswer;
 
+  const itemsDue = React.useMemo(() => {
+    const now = new Date();
+    return srsItems.filter(item => item.nextReviewDate <= now);
+  }, [srsItems]);
+
+  const handleStartSRSReview = () => {
+    if (itemsDue.length === 0) return;
+    
+    setQuestions(itemsDue.map(item => ({
+      id: item.questionId,
+      question: item.question,
+      options: item.options,
+      correctAnswer: item.correctAnswer,
+      explanation: item.explanation,
+      subject: item.subject,
+      hint: '',
+      type: 'multiple-choice',
+      difficulty: 'medium'
+    })));
+    setAnswers(new Array(itemsDue.length).fill(null));
+    setCurrentIndex(0);
+    setState('active');
+    setIsReviewMode(true);
+    setShowDashboard(false);
+  };
+
   return (
     <div className={cn("min-h-screen bg-[#F5F5F0] dark:bg-slate-950 text-[#1A1A1A] dark:text-slate-100 font-sans flex overflow-hidden relative", theme.selection)}>
       
+      {/* Background Watermark */}
+      {backgroundUrl !== 'none' && (
+        <div 
+          className="fixed inset-0 z-0 pointer-events-none transition-opacity duration-1000"
+          style={{ 
+            backgroundImage: `url(${backgroundUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: `blur(${backgroundBlur}px)`,
+            opacity: backgroundOpacity / 100
+          }}
+        />
+      )}
+
       {/* Sidebar Overlay for Mobile */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -2856,7 +4823,7 @@ function QuizApp() {
         }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
         className={cn(
-          "bg-white dark:bg-slate-900 border-r border-black/5 dark:border-slate-800 flex-shrink-0 relative overflow-hidden flex flex-col z-[70]",
+          "bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border-r border-white/20 dark:border-slate-800/50 flex-shrink-0 relative overflow-hidden flex flex-col z-[70]",
           "fixed inset-y-0 left-0 lg:relative lg:translate-x-0"
         )}
       >
@@ -2872,6 +4839,106 @@ function QuizApp() {
             <button className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:text-slate-400 transition-colors">
               <ChevronLeft size={20} />
             </button>
+          </div>
+
+          <div className="space-y-4 relative">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Plano de Fundo</label>
+                <span className="text-[10px] text-black/40 dark:text-white/40 font-bold uppercase">
+                  {customBackgrounds.length}/15 Arquivos
+                </span>
+              </div>
+              <button 
+                onClick={() => fileInputBackgroundRef.current?.click()}
+                className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+              >
+                <PlusCircle size={10} />
+                Adicionar
+              </button>
+              <input 
+                type="file" 
+                ref={fileInputBackgroundRef} 
+                className="hidden" 
+                accept="image/*" 
+                onChange={handleCustomBackgroundUpload}
+              />
+            </div>
+
+            {/* Controls */}
+            <div className="space-y-3 p-3 bg-black/5 dark:bg-white/5 rounded-2xl">
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-bold text-black/40 dark:text-white/40 uppercase">
+                  <span>Desfoque</span>
+                  <span>{backgroundBlur}px</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="20" 
+                  value={backgroundBlur} 
+                  onChange={(e) => setBackgroundBlur(Number(e.target.value))}
+                  className="w-full h-1.5 bg-black/10 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-bold text-black/40 dark:text-white/40 uppercase">
+                  <span>Opacidade</span>
+                  <span>{backgroundOpacity}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="5" 
+                  max="100" 
+                  value={backgroundOpacity} 
+                  onChange={(e) => setBackgroundOpacity(Number(e.target.value))}
+                  className="w-full h-1.5 bg-black/10 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+              {[...defaultBackgrounds, ...customBackgrounds].map((opt) => (
+                <div
+                  key={opt.id}
+                  onClick={() => setBackgroundUrl(opt.url || 'none')}
+                  className={cn(
+                    "relative h-16 rounded-xl overflow-hidden border-2 transition-all group cursor-pointer",
+                    (backgroundUrl === opt.url || (opt.id === 'none' && backgroundUrl === 'none'))
+                      ? theme.border 
+                      : "border-black/5 dark:border-slate-800 hover:border-black/20 dark:hover:border-white/20"
+                  )}
+                >
+                  {opt.id === 'none' ? (
+                    <div className="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                      <span className="text-[10px] font-bold opacity-40 uppercase">Nenhum</span>
+                    </div>
+                  ) : (
+                    <>
+                      <img 
+                        src={opt.url} 
+                        alt={opt.name} 
+                        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" 
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-black/20 flex items-end p-1.5">
+                        <span className="text-[8px] font-bold text-white uppercase truncate">{opt.name}</span>
+                      </div>
+                      
+                      {/* Delete Button for custom backgrounds */}
+                      {opt.id.startsWith('custom-') && (
+                        <button
+                          onClick={(e) => handleDeleteBackground(opt.id, e)}
+                          className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 shadow-lg z-10"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-4 relative">
@@ -3010,6 +5077,41 @@ function QuizApp() {
 
 
           <div className="space-y-4 p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
+            <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Gerenciar Matérias</label>
+            <form onSubmit={handleAddSubject} className="flex gap-2">
+              <input 
+                type="text"
+                value={newSubjectInput}
+                onChange={(e) => setNewSubjectInput(e.target.value)}
+                placeholder="Nova matéria..."
+                className="flex-1 bg-white dark:bg-slate-800 border-2 border-black/5 dark:border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 transition-all dark:text-slate-200"
+              />
+              <button 
+                type="submit"
+                className={cn("p-2 rounded-xl text-white transition-all", theme.primary, theme.primaryHover)}
+              >
+                <PlusCircle size={18} />
+              </button>
+            </form>
+            <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto pr-1 custom-scrollbar">
+              {subjects.map(subject => (
+                <div 
+                  key={subject}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-black/5 dark:border-slate-700 rounded-lg group"
+                >
+                  <span className="text-[10px] font-bold dark:text-slate-300">{subject}</span>
+                  <button 
+                    onClick={() => handleRemoveSubject(subject)}
+                    className="text-black/20 dark:text-slate-500 hover:text-rose-500 transition-colors"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-4 p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
             <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Alerta de Tempo (segundos)</label>
             <div className="flex items-center gap-4">
               <input 
@@ -3027,7 +5129,7 @@ function QuizApp() {
           </div>
 
           <div className="space-y-4">
-            <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Backup e Restauração</label>
+              <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Backup e Restauração</label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={handleBackup}
@@ -3045,21 +5147,6 @@ function QuizApp() {
           </div>
 
           <div className="flex-1 flex flex-col min-h-0">
-            <div className="mb-6">
-              <button 
-                onClick={() => setShowDashboard(true)}
-                className={cn(
-                  "w-full flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all group",
-                  showDashboard 
-                    ? "bg-black text-white border-black dark:bg-white dark:text-black dark:border-white" 
-                    : "bg-white dark:bg-slate-900 border-black/5 dark:border-slate-800 hover:border-black/20 dark:hover:border-slate-700"
-                )}
-              >
-                <LayoutDashboard size={20} className={cn("transition-transform group-hover:scale-110", showDashboard ? "" : theme.icon)} />
-                <span className="text-xs font-bold uppercase tracking-widest">Dashboard</span>
-              </button>
-            </div>
-
             <h3 className="font-bold text-lg flex items-center gap-2 mb-4 dark:text-slate-100">
               <History size={20} className={theme.icon} />
               Histórico
@@ -3255,7 +5342,7 @@ function QuizApp() {
 
       <div className="flex-1 flex flex-col min-h-0 relative">
         {/* Header */}
-        <header className="border-b border-black/5 dark:border-slate-800 bg-white/80 dark:bg-transparent backdrop-blur-md sticky top-0 z-50">
+        <header className="border-b border-white/20 dark:border-slate-800/50 bg-white/40 dark:bg-slate-950/40 backdrop-blur-xl sticky top-0 z-50">
           <div className="max-w-full mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-4">
               <button 
@@ -3265,13 +5352,7 @@ function QuizApp() {
                 {sidebarOpen ? <ChevronLeft size={20} className="dark:text-slate-400" /> : <Settings size={20} className="group-hover:rotate-90 transition-transform duration-500 dark:text-slate-400" />}
                 <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-black/60 dark:text-slate-500 hidden xs:inline">Ajuste</span>
               </button>
-              <div className="flex items-center gap-2">
-                <div className={cn("w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br rounded-lg flex items-center justify-center shadow-lg", theme.gradientFrom, theme.gradientTo, theme.shadow)}>
-                  <BrainCircuit size={18} className="text-white sm:hidden" />
-                  <BrainCircuit size={20} className="text-white hidden sm:block" />
-                </div>
-                <span className="font-semibold text-base sm:text-lg tracking-tight dark:text-slate-100 truncate max-w-[120px] sm:max-w-none">Quiz AI Expert</span>
-              </div>
+              <Logo theme={theme} />
             </div>
 
             <div className="flex items-center gap-2">
@@ -3294,7 +5375,20 @@ function QuizApp() {
                 </div>
               ) : (
                 <button 
-                  onClick={loginWithGoogle}
+                  onClick={async () => {
+                    try {
+                      await loginWithGoogle();
+                    } catch (err: any) {
+                      console.error("Login error:", err);
+                      if (err.code === 'auth/unauthorized-domain') {
+                        setError("Este domínio não está autorizado no Firebase. Por favor, adicione este domínio no console do Firebase ou execute a configuração do Firebase novamente.");
+                      } else if (err.code === 'auth/popup-blocked') {
+                        setError("O popup de login foi bloqueado pelo navegador. Por favor, permita popups para este site.");
+                      } else {
+                        setError(err.message || "Erro ao fazer login com Google.");
+                      }
+                    }
+                  }}
                   className={cn("flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md active:scale-95", theme.primary, theme.contrastText, theme.shadow)}
                 >
                   <LogIn size={16} />
@@ -3372,6 +5466,25 @@ function QuizApp() {
                   handleRemoveSubject={handleRemoveSubject}
                   newSubjectInput={newSubjectInput}
                   setNewSubjectInput={setNewSubjectInput}
+                  onDeleteSubjectHistory={(s) => setSubjectToDelete(s)}
+                  onDeleteQuiz={(id) => setQuizToDelete(id)}
+                  userProfile={userProfile}
+                  itemsDue={itemsDue}
+                  onStartSRSReview={handleStartSRSReview}
+                  selectedSubjects={selectedSubjects}
+                  setSelectedSubjects={setSelectedSubjects}
+                  onDeleteQuizzes={handleDeleteQuizzes}
+                  onDeleteSubjectsHistory={handleDeleteSubjectsHistory}
+                />
+              ) : showRecycleBin ? (
+                <RecycleBin 
+                  items={recycleBin}
+                  theme={theme}
+                  onClose={() => setShowRecycleBin(false)}
+                  onRestore={handleRestoreQuiz}
+                  onRestoreMultiple={handleRestoreQuizzes}
+                  onDelete={handlePermanentlyDeleteQuiz}
+                  onDeleteMultiple={handlePermanentlyDeleteQuizzes}
                 />
               ) : showStudyMode ? (
                 <StudyMode 
@@ -3389,6 +5502,14 @@ function QuizApp() {
                   handleRemoveSubject={handleRemoveSubject}
                   newSubjectInput={newSubjectInput}
                   setNewSubjectInput={setNewSubjectInput}
+                  onDeleteSubjectHistory={(s) => setSubjectToDelete(s)}
+                  onDeleteQuiz={(id) => setQuizToDelete(id)}
+                  onDeleteQuizzes={handleDeleteQuizzes}
+                  onDeleteSubjectsHistory={handleDeleteSubjectsHistory}
+                  onOpenRecycleBin={() => setShowRecycleBin(true)}
+                  recycleBinCount={recycleBin.length}
+                  selectedSubjects={selectedSubjects}
+                  setSelectedSubjects={setSelectedSubjects}
                 />
               ) : state === 'idle' ? (
                 <motion.div
@@ -3398,16 +5519,42 @@ function QuizApp() {
                   exit={{ opacity: 0, y: -20 }}
                   className="max-w-5xl mx-auto text-center space-y-8"
                 >
-                  <div className="flex justify-center">
-                    <div className={cn("w-20 h-20 bg-gradient-to-br rounded-3xl flex items-center justify-center shadow-2xl rotate-3", theme.gradientFrom, theme.gradientTo, theme.shadowLg)}>
-                      <BrainCircuit size={48} className="text-white" />
-                    </div>
+                  <div className="flex justify-center items-center pt-6" style={{ height: '90px' }}>
+                    <Logo theme={theme} className="scale-150" />
                   </div>
+
+                  {/* Streak Indicator on Main Screen */}
+                  {userProfile?.streak > 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-full text-orange-600 dark:text-orange-400 font-bold text-sm"
+                    >
+                      <Flame size={16} />
+                      <span>{userProfile.streak} Dias de Ofensiva!</span>
+                    </motion.div>
+                  )}
+
                   <div className="space-y-4">
-                    <h1 className="text-5xl font-medium tracking-tight leading-tight dark:text-slate-100">
-                      Transforme seus documentos em <span className={cn("italic font-serif", theme.textLight, theme.textLightDark)}>conhecimento</span>
+                    <h1 
+                      className="text-5xl font-medium tracking-tight leading-tight dark:text-slate-100"
+                      style={{ 
+                        height: '124px', 
+                        width: '1023px', 
+                        marginBottom: '14px',
+                        marginRight: '0px',
+                        marginLeft: '0px',
+                        marginTop: '0px',
+                        padding: '0px',
+                        borderRadius: '1px',
+                        borderStyle: 'solid',
+                        borderWidth: '0px',
+                        color: '#1f2022'
+                      }}
+                    >
+                      Transforme seus documentos em <span className={cn("italic font-serif", theme.textLight, theme.textLightDark)} style={{ color: '#2b842b' }}>conhecimento</span>
                       <br />
-                      <span className={cn("italic font-serif", theme.textLight, theme.textLightDark)}>vivo</span>.
+                      <span className={cn("italic font-serif", theme.textLight, theme.textLightDark)} style={{ color: '#2b842b' }}>vivo</span>.
                     </h1>
                     <p className="text-lg text-black/60 dark:text-slate-400 max-w-3xl mx-auto">
                       Envie qualquer arquivo (PDF, Word, Imagem, Texto) e nossa IA criará um quiz personalizado.
@@ -3614,86 +5761,140 @@ function QuizApp() {
                     </div>
                   </div>
 
-                  <div 
-                    onClick={() => {
-                      fileInputRef.current?.click();
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const files = e.dataTransfer.files;
-                      if (files && files.length > 0) {
-                        const event = { target: { files } } as any;
-                        handleFileUpload(event);
-                      }
-                    }}
-                    className={cn("group relative border-2 border-dashed border-black/10 dark:border-slate-800 rounded-3xl p-12 cursor-pointer transition-all duration-300", `hover:${theme.border}/50`, `hover:${theme.bg}/30`, `dark:hover:${theme.bgDark}`)}
-                  >
-                    <input 
-                      type="file" 
-                      ref={fileInputRef} 
-                      onChange={handleFileUpload} 
-                      multiple
-                      className="hidden" 
-                      accept=".txt,.md,.pdf,.docx,image/*"
-                    />
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                        <BrainCircuit className={theme.icon} size={32} />
+                  <div className="space-y-6">
+                    {/* Subject Selection */}
+                    <div className="max-w-xl mx-auto space-y-3">
+                      <div className="flex items-center justify-between px-1">
+                        <label className="text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">1. Nome da Matéria</label>
+                        {selectedSubject && (
+                          <button onClick={() => setSelectedSubject('')} className="text-[10px] font-bold text-rose-500 hover:underline">Limpar</button>
+                        )}
                       </div>
-                      <div>
-                        <p className="font-medium text-lg dark:text-slate-100">
-                          Gerar Quiz de Materiais
-                        </p>
-                        <p className="text-sm text-black/40 dark:text-slate-500">Clique ou arraste seus arquivos PDF, DOCX, Imagens, TXT ou MD</p>
-                      </div>
-                      <div className="mt-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            fileInputRef.current?.click();
-                          }}
-                          className={cn("flex items-center gap-2 px-8 py-3 rounded-2xl font-bold transition-all active:scale-95 shadow-lg", theme.primary, theme.contrastText, theme.shadow)}
-                        >
-                          <Upload size={20} />
-                          Selecionar Arquivos
-                        </button>
+                      <div className="relative group">
+                        <div className={cn("absolute left-4 top-1/2 -translate-y-1/2 text-black/20 dark:text-slate-600 transition-colors", selectedSubject ? theme.text : "")}>
+                          <Folder size={20} />
+                        </div>
+                        <input 
+                          type="text"
+                          list="existing-subjects"
+                          value={selectedSubject}
+                          onChange={(e) => setSelectedSubject(e.target.value)}
+                          placeholder="Ex: Direito Constitucional, Português..."
+                          className={cn("w-full bg-white dark:bg-slate-900 border-2 border-black/5 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 transition-all outline-none font-bold dark:text-white", `focus:${theme.border}`, theme.ring)}
+                        />
+                        <datalist id="existing-subjects">
+                          {subjects.map(s => <option key={s} value={s} />)}
+                        </datalist>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="relative flex items-center gap-4">
-                    <div className="flex-1 h-px bg-black/5 dark:bg-slate-800"></div>
-                    <span className="text-xs font-bold text-black/20 dark:text-slate-600 uppercase tracking-widest">ou use links</span>
-                    <div className="flex-1 h-px bg-black/5 dark:bg-slate-800"></div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="relative group">
-                      <div className={cn("absolute left-4 top-4 text-black/20 dark:text-slate-600 transition-colors", `group-focus-within:${theme.text}`)}>
-                        <LinkIcon size={20} />
+                    <div className="max-w-xl mx-auto space-y-3">
+                      <label className="block text-left px-1 text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">2. Selecione o Material</label>
+                      
+                      <div 
+                        onClick={() => {
+                          fileInputRef.current?.click();
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const files = e.dataTransfer.files;
+                          if (files && files.length > 0) {
+                            const event = { target: { files } } as any;
+                            handleFileUpload(event);
+                          }
+                        }}
+                        className={cn(
+                          "group relative border-2 border-dashed rounded-3xl p-8 cursor-pointer transition-all duration-300", 
+                          pendingContent && pendingFileName ? cn(theme.border, theme.bg, "border-solid") : "border-black/10 dark:border-slate-800",
+                          `hover:${theme.border}/50`, `hover:${theme.bg}/30`, `dark:hover:${theme.bgDark}`
+                        )}
+                      >
+                        <input 
+                          type="file" 
+                          ref={fileInputRef} 
+                          onChange={handleFileUpload} 
+                          multiple
+                          className="hidden" 
+                          accept=".txt,.md,.pdf,.docx,image/*"
+                        />
+                        <div className="flex flex-col items-center gap-3">
+                          <div className={cn("w-12 h-12 rounded-xl shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300", pendingContent ? cn(theme.primary, theme.contrastText) : "bg-white dark:bg-slate-800")}>
+                            {pendingContent ? <Check size={24} /> : <Upload className={theme.icon} size={24} />}
+                          </div>
+                          <div>
+                            <p className="font-bold text-base dark:text-slate-100">
+                              {pendingContent ? "Material Selecionado" : "Carregar Arquivos"}
+                            </p>
+                            <p className="text-xs text-black/40 dark:text-slate-500">
+                              {pendingContent ? pendingFileName : "PDF, DOCX, Imagens, TXT ou MD"}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <textarea
-                        value={urlInput}
-                        onChange={(e) => setUrlInput(e.target.value)}
-                        placeholder="Cole links da web ou YouTube (um por linha)..."
-                        className={cn("w-full bg-white dark:bg-slate-900 border-2 border-black/5 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 min-h-[100px] transition-all outline-none resize-none text-sm dark:text-slate-100 dark:placeholder:text-slate-600", `focus:${theme.border}`, theme.ring)}
-                      />
+
+                      <div className="relative flex items-center gap-4 py-2">
+                        <div className="flex-1 h-px bg-black/5 dark:bg-slate-800"></div>
+                        <span className="text-[10px] font-bold text-black/20 dark:text-slate-600 uppercase tracking-widest text-center">ou use links</span>
+                        <div className="flex-1 h-px bg-black/5 dark:bg-slate-800"></div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="relative group">
+                          <div className={cn("absolute left-4 top-4 text-black/20 dark:text-slate-600 transition-colors", urlInput ? theme.text : "")}>
+                            <LinkIcon size={18} />
+                          </div>
+                          <textarea
+                            value={urlInput}
+                            onChange={(e) => setUrlInput(e.target.value)}
+                            placeholder="Cole links da web ou YouTube..."
+                            className={cn("w-full bg-white dark:bg-slate-900 border-2 border-black/5 dark:border-slate-800 rounded-2xl py-3 pl-12 pr-4 min-h-[80px] transition-all outline-none resize-none text-sm dark:text-slate-100 dark:placeholder:text-slate-600", `focus:${theme.border}`, theme.ring)}
+                          />
+                        </div>
+                        {urlInput.trim() && (
+                          <button 
+                            onClick={() => {
+                              const urls = urlInput.split('\n').map(u => u.trim()).filter(u => u.startsWith('http'));
+                              if (urls.length > 0) {
+                                setPendingContent(urls);
+                                setPendingFileName(urls.length === 1 ? urls[0] : `${urls.length} links`);
+                                setUrlInput('');
+                              }
+                            }}
+                            className={cn("w-full py-2 rounded-xl text-xs font-bold transition-all", theme.bg, theme.text, "hover:opacity-80")}
+                          >
+                            Confirmar Links
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-1 gap-4">
+
+                    <div className="max-w-xl mx-auto pt-4">
                       <button
                         type="button"
-                        disabled={!urlInput.trim()}
-                        onClick={handleUrlSubmit}
-                        className={cn("py-4 rounded-2xl font-bold disabled:opacity-50 transition-all shadow-lg flex items-center justify-center gap-2", theme.primary, theme.contrastText, theme.shadow, theme.primaryHover)}
+                        disabled={(!pendingContent && !urlInput.trim()) || !selectedSubject.trim()}
+                        onClick={handleCreateQuiz}
+                        className={cn(
+                          "w-full py-5 rounded-[2rem] font-black text-lg transition-all shadow-2xl flex items-center justify-center gap-3 active:scale-[0.98]",
+                          (pendingContent || urlInput.trim()) && selectedSubject.trim()
+                            ? cn(theme.primary, theme.contrastText, theme.shadow, theme.primaryHover)
+                            : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-700 cursor-not-allowed"
+                        )}
                       >
-                        <BrainCircuit size={20} />
-                        Gerar Quiz de Links
+                        <BrainCircuit size={24} />
+                        CRIAR QUIZ AGORA
                       </button>
+                      
+                      {!pendingContent && !urlInput.trim() && (
+                        <p className="mt-3 text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-widest">Selecione um material para habilitar</p>
+                      )}
+                      {(pendingContent || urlInput.trim()) && !selectedSubject.trim() && (
+                        <p className="mt-3 text-[10px] font-bold text-amber-500 uppercase tracking-widest">Informe a matéria para continuar</p>
+                      )}
                     </div>
                   </div>
 
@@ -3789,12 +5990,14 @@ function QuizApp() {
                       <div className="flex-1 space-y-1">
                         <p className="text-xs font-medium uppercase tracking-wider text-black/40 dark:text-slate-500">Status</p>
                         <p className="text-sm dark:text-slate-300">
-                          {loadingProgress < 20 && "Iniciando análise de conteúdo..."}
-                          {loadingProgress >= 20 && loadingProgress < 40 && "Mapeando conceitos fundamentais..."}
-                          {loadingProgress >= 40 && loadingProgress < 60 && "Estruturando questões estratégicas..."}
-                          {loadingProgress >= 60 && loadingProgress < 80 && "Refinando alternativas e explicações..."}
-                          {loadingProgress >= 80 && loadingProgress < 95 && "Finalizando detalhes técnicos..."}
-                          {loadingProgress >= 95 && "Quase pronto! Organizando sua sessão..."}
+                          {loadingStatus || (
+                            loadingProgress < 20 ? "Iniciando análise de conteúdo..." :
+                            loadingProgress < 40 ? "Mapeando conceitos fundamentais..." :
+                            loadingProgress < 60 ? "Estruturando questões estratégicas..." :
+                            loadingProgress < 80 ? "Refinando alternativas e explicações..." :
+                            loadingProgress < 95 ? "Finalizando detalhes técnicos..." :
+                            "Quase pronto! Organizando sua sessão..."
+                          )}
                         </p>
                       </div>
                       <div className="flex-1 space-y-1 text-right">
@@ -3842,7 +6045,7 @@ function QuizApp() {
                                   key={idx} 
                                   onClick={() => {
                                     setCurrentIndex(idx);
-                                    setQuestionTime(0);
+                                    setQuestionTime(timeAlertThreshold);
                                     setIsQuestionStarted(true);
                                   }}
                                   className={cn(
@@ -3917,12 +6120,19 @@ function QuizApp() {
                             <div className="flex items-center gap-4 sm:gap-8 overflow-x-auto no-scrollbar w-full sm:w-auto">
                               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                                 <span className="text-[8px] sm:text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Dificuldade</span>
-                                <span className={cn(
-                                  "px-2 sm:px-3 py-0.5 sm:py-1 rounded-lg text-[8px] sm:text-[10px] font-bold uppercase tracking-wider w-fit",
-                                  currentQuestion.difficulty === 'easy' ? theme.difficultyEasy :
-                                  currentQuestion.difficulty === 'medium' ? "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" :
-                                  "bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400"
-                                )}>
+                                <span 
+                                  className={cn(
+                                    "px-2 sm:px-3 py-0.5 sm:py-1 rounded-lg text-[8px] sm:text-[10px] font-bold uppercase tracking-wider w-fit cursor-help",
+                                    currentQuestion.difficulty === 'easy' ? theme.difficultyEasy :
+                                    currentQuestion.difficulty === 'medium' ? "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" :
+                                    "bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400"
+                                  )}
+                                  title={
+                                    currentQuestion.difficulty === 'easy' ? "Fácil: Questões com conceitos diretos e fundamentais." :
+                                    currentQuestion.difficulty === 'medium' ? "Médio: Questões que exigem aplicação de conceitos e análise moderada." :
+                                    "Difícil: Questões complexas que exigem síntese de múltiplos conceitos e análise profunda."
+                                  }
+                                >
                                   {currentQuestion.difficulty === 'easy' ? 'Fácil' : 
                                    currentQuestion.difficulty === 'medium' ? 'Médio' : 'Difícil'}
                                 </span>
@@ -3931,11 +6141,11 @@ function QuizApp() {
                                 <span className="text-[8px] sm:text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Tempo</span>
                                 <div className={cn(
                                   "flex items-center gap-1 sm:gap-1.5 font-mono font-bold transition-all duration-300",
-                                  questionTime >= timeAlertThreshold 
+                                  questionTime <= 15 
                                     ? "text-rose-600 text-lg sm:text-xl animate-pulse" 
                                     : cn(theme.text, theme.textDark, "text-base sm:text-lg")
                                 )}>
-                                  <Clock size={questionTime >= timeAlertThreshold ? 18 : 14} />
+                                  <Clock size={questionTime <= 15 ? 18 : 14} />
                                   {formatTime(questionTime)}
                                 </div>
                               </div>
@@ -3949,11 +6159,7 @@ function QuizApp() {
                             </div>
 
                             <button 
-                              onClick={() => {
-                                if (window.confirm("Deseja realmente sair do quiz? Seu progresso atual não será salvo.")) {
-                                  setState('idle');
-                                }
-                              }}
+                              onClick={() => setShowExitQuizConfirmation(true)}
                               className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-rose-500/10 hover:text-rose-600 transition-all text-[10px] font-bold dark:text-slate-400 shrink-0"
                             >
                               <X size={14} />
@@ -3979,6 +6185,40 @@ function QuizApp() {
                                   {currentQuestion.question}
                                 </h2>
                               </div>
+
+                              {currentQuestion.hint && currentAnswer === null && !isReviewMode && (
+                                <div className="flex flex-col items-center">
+                                  <button
+                                    onClick={() => setShowHint(!showHint)}
+                                    className={cn(
+                                      "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all",
+                                      showHint 
+                                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" 
+                                        : "bg-black/5 dark:bg-white/5 text-black/40 dark:text-slate-500 hover:bg-amber-50 dark:hover:bg-amber-900/10 hover:text-amber-600"
+                                    )}
+                                  >
+                                    <Lightbulb size={16} className={cn(showHint && "fill-amber-500")} />
+                                    {showHint ? 'Esconder Dica' : 'Ver Dica'}
+                                  </button>
+                                  
+                                  <AnimatePresence>
+                                    {showHint && (
+                                      <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        className="mt-3 w-full"
+                                      >
+                                        <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-900/30 text-center">
+                                          <p className="text-sm font-medium text-amber-800 dark:text-amber-300 italic">
+                                            "{currentQuestion.hint}"
+                                          </p>
+                                        </div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              )}
                             </div>
 
                             <div className={cn(
@@ -4357,10 +6597,12 @@ function QuizApp() {
                                   <div className="space-y-1">
                                     <p className="text-[10px] font-normal uppercase tracking-wider text-black/40 dark:text-slate-500">Status do Professor</p>
                                     <p className="text-xs dark:text-slate-300 italic">
-                                      {deepDiveProgress < 30 && "Revisando o contexto da questão..."}
-                                      {deepDiveProgress >= 30 && deepDiveProgress < 60 && "Consultando referências técnicas..."}
-                                      {deepDiveProgress >= 60 && deepDiveProgress < 85 && "Sintetizando explicação pedagógica..."}
-                                      {deepDiveProgress >= 85 && "Finalizando detalhes do aprofundamento..."}
+                                      {deepDiveStatus || (
+                                        deepDiveProgress < 30 ? "Revisando o contexto da questão..." :
+                                        deepDiveProgress < 60 ? "Consultando referências técnicas..." :
+                                        deepDiveProgress < 85 ? "Sintetizando explicação pedagógica..." :
+                                        "Finalizando detalhes do aprofundamento..."
+                                      )}
                                     </p>
                                   </div>
                                 </div>
@@ -4581,7 +6823,15 @@ function QuizApp() {
                       </motion.div>
                     </div>
 
+                    <QuizSummary questions={questions} answers={answers} theme={theme} />
+
                     <div className="flex flex-wrap items-center justify-center gap-4">
+                      {error && (
+                        <div className="w-full mb-4 p-4 bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/20 rounded-2xl text-rose-600 dark:text-rose-400 text-sm flex items-center gap-3 text-left">
+                          <AlertCircle size={18} className="shrink-0" />
+                          <p className="font-medium">{error}</p>
+                        </div>
+                      )}
                       <button
                         onClick={resetQuiz}
                         className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400 hover:bg-black/10 dark:hover:bg-white/10 transition-all active:scale-95"
@@ -4645,6 +6895,36 @@ function QuizApp() {
                 </motion.div>
               ) : null}
             </AnimatePresence>
+
+            <ConfirmationModal 
+              isOpen={showExitQuizConfirmation}
+              onClose={() => setShowExitQuizConfirmation(false)}
+              onConfirm={() => {
+                setState('idle');
+                setShowExitQuizConfirmation(false);
+              }}
+              title="Sair do Quiz"
+              message="Deseja realmente sair do quiz? Seu progresso atual não será salvo."
+              theme={theme}
+            />
+
+            <ConfirmationModal 
+              isOpen={!!subjectToDelete}
+              onClose={() => setSubjectToDelete(null)}
+              onConfirm={() => subjectToDelete && handleDeleteSubjectHistory(subjectToDelete)}
+              title="Excluir Histórico"
+              message={`Deseja mover TODO o histórico da matéria "${subjectToDelete}" para a lixeira? Você poderá restaurá-lo mais tarde.`}
+              theme={theme}
+            />
+
+            <ConfirmationModal 
+              isOpen={!!quizToDelete}
+              onClose={() => setQuizToDelete(null)}
+              onConfirm={() => quizToDelete && handleDeleteQuiz(quizToDelete)}
+              title="Mover para Lixeira"
+              message="Deseja mover este quiz para a lixeira? Você poderá restaurá-lo a qualquer momento."
+              theme={theme}
+            />
           </div>
         </main>
         {/* Hidden PDF Content */}

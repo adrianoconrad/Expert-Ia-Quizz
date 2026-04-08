@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, orderBy, onSnapshot, Timestamp, getDocFromServer, deleteDoc, writeBatch } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, orderBy, onSnapshot, Timestamp, getDocFromServer, deleteDoc, writeBatch, updateDoc } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase
@@ -46,8 +46,13 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const isQuotaExceeded = errorMessage.includes('resource-exhausted') || errorMessage.includes('Quota exceeded');
+  
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: isQuotaExceeded 
+      ? 'Limite de uso diário do banco de dados atingido (Quota Exceeded). O acesso será restaurado automaticamente amanhã.' 
+      : errorMessage,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -64,7 +69,13 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  
+  if (isQuotaExceeded) {
+    console.error('Firestore Quota Exceeded: ', JSON.stringify(errInfo));
+  } else {
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+  }
+  
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -92,6 +103,7 @@ export {
   onSnapshot, 
   Timestamp,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  updateDoc
 };
 export { onAuthStateChanged };

@@ -10,9 +10,40 @@
         "email": { "type": "string", "format": "email", "description": "The user's email address." },
         "photoURL": { "type": "string", "description": "The user's profile photo URL." },
         "createdAt": { "type": "string", "format": "date-time", "description": "The time the user profile was created." },
-        "role": { "type": "string", "enum": ["user", "admin"], "description": "The user's role in the application." }
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "The user's role in the application." },
+        "streak": { "type": "integer", "description": "The current consecutive days of study." },
+        "lastActivity": { "type": "string", "format": "date-time", "description": "The last time the user completed a quiz." },
+        "achievements": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked achievement IDs." },
+        "totalCorrectAnswers": { "type": "integer", "description": "Total correct answers across all quizzes." },
+        "totalQuizzesTaken": { "type": "integer", "description": "Total number of quizzes completed." },
+        "backgroundUrl": { "type": "string", "description": "The URL or base64 string of the user's background image." },
+        "backgroundBlur": { "type": "integer", "description": "The blur level for the background image." },
+        "backgroundOpacity": { "type": "integer", "description": "The opacity level for the background image." },
+        "customBackgrounds": { "type": "array", "items": { "type": "object" }, "description": "List of custom background objects {id, name, url}." },
+        "themeColor": { "type": "string", "description": "The selected theme color ID." },
+        "customThemeColor": { "type": "string", "description": "The hex code for the custom theme color." },
+        "subjects": { "type": "array", "items": { "type": "string" }, "description": "List of study subjects managed by the user." }
       },
       "required": ["uid", "email", "createdAt", "role"]
+    },
+    "SRSItem": {
+      "title": "SRS Item",
+      "description": "Stores a question for spaced repetition review.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The UID of the user who owns this item." },
+        "questionId": { "type": "string", "description": "The original question ID." },
+        "question": { "type": "string", "description": "The question text." },
+        "options": { "type": "array", "items": { "type": "string" }, "description": "The options for the question." },
+        "correctAnswer": { "type": "string", "description": "The correct answer." },
+        "explanation": { "type": "string", "description": "The explanation for the answer." },
+        "subject": { "type": "string", "description": "The subject of the question." },
+        "interval": { "type": "integer", "description": "The interval in days until the next review." },
+        "easeFactor": { "type": "number", "description": "The SM-2 ease factor." },
+        "nextReviewDate": { "type": "string", "format": "date-time", "description": "The date and time for the next review." },
+        "consecutiveCorrect": { "type": "integer", "description": "Number of consecutive correct answers." }
+      },
+      "required": ["uid", "questionId", "question", "correctAnswer", "interval", "easeFactor", "nextReviewDate"]
     },
     "QuizResult": {
       "title": "Quiz Result",
@@ -30,6 +61,44 @@
         "content": { "type": "object", "description": "The source content used to generate the quiz." }
       },
       "required": ["uid", "date", "correct", "total", "timeSpent", "fileName", "questions", "answers"]
+    },
+    "Flashcard": {
+      "title": "Flashcard",
+      "description": "A study flashcard with a front and back side.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user ID who owns this flashcard." },
+        "front": { "type": "string", "description": "The question or concept on the front." },
+        "back": { "type": "string", "description": "The answer or explanation on the back." },
+        "subject": { "type": "string", "description": "The subject of the flashcard." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "front", "back", "subject", "createdAt"]
+    },
+    "MindMap": {
+      "title": "MindMap",
+      "description": "An AI-generated mind map in Mermaid.js format.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user ID who owns this mind map." },
+        "mermaidCode": { "type": "string", "description": "The Mermaid.js code for the diagram." },
+        "subject": { "type": "string", "description": "The subject of the mind map." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "mermaidCode", "subject", "createdAt"]
+    },
+    "SRSRegistry": {
+      "title": "SRS Registry",
+      "description": "Consolidated spaced repetition items for a user to reduce write operations.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The UID of the user who owns this registry." },
+        "items": { 
+          "type": "object", 
+          "description": "Map of SRS items where keys are item IDs."
+        }
+      },
+      "required": ["uid", "items"]
     }
   },
   "firestore": {
@@ -40,6 +109,22 @@
     "/results/{resultId}": {
       "schema": "QuizResult",
       "description": "Collection of quiz results."
+    },
+    "/srs/{itemId}": {
+      "schema": "SRSItem",
+      "description": "Collection of spaced repetition items."
+    },
+    "/srs_registries/{uid}": {
+      "schema": "SRSRegistry",
+      "description": "User consolidated SRS data."
+    },
+    "/flashcards/{cardId}": {
+      "schema": "Flashcard",
+      "description": "User study flashcards."
+    },
+    "/mindmaps/{mapId}": {
+      "schema": "MindMap",
+      "description": "User AI-generated mind maps."
     }
   }
 }
