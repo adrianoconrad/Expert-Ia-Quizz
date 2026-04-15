@@ -75,6 +75,47 @@ export const generateFlashcards = async (content: ContentItem | ContentItem[]): 
   return cards.map((c: any) => ({ ...c, id: Math.random().toString(36).substr(2, 9) }));
 };
 
+export const generateFlashcardsFromIncorrectQuestions = async (
+  incorrectQuestions: QuizQuestion[]
+): Promise<Flashcard[]> => {
+  const ai = getAI();
+  const prompt = `Com base nas seguintes questões que o aluno errou em um quiz, crie flashcards de revisão focados nos conceitos que causaram a dúvida.
+  Para cada questão, identifique o conceito fundamental e crie um flashcard que ajude a fixar esse conhecimento para que o erro não se repita.
+  O flashcard deve ter uma pergunta ou conceito na frente (front) e uma explicação clara, concisa e didática no verso (back).
+  
+  QUESTÕES ERRADAS:
+  ${incorrectQuestions.map((q, i) => `
+  Questão ${i + 1}: ${q.question}
+  Resposta Correta: ${q.correctAnswer}
+  Explicação: ${q.explanation}
+  `).join('\n')}
+  
+  Retorne em formato JSON: array de objetos com {front, back, subject}.`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: [{ text: prompt }],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            front: { type: Type.STRING },
+            back: { type: Type.STRING },
+            subject: { type: Type.STRING }
+          },
+          required: ["front", "back", "subject"]
+        }
+      }
+    }
+  });
+
+  const cards = JSON.parse(response.text || "[]");
+  return cards.map((c: any) => ({ ...c, id: Math.random().toString(36).substr(2, 9) }));
+};
+
 export const generateMindMap = async (content: ContentItem | ContentItem[]): Promise<MindMapData> => {
   const ai = getAI();
   const contentArray = Array.isArray(content) ? content : [content];
@@ -110,7 +151,8 @@ export async function generateQuiz(
   format: QuizFormat = 'both',
   examBoard?: string,
   isBancaMindset: boolean = false,
-  availableSubjects: string[] = []
+  availableSubjects: string[] = [],
+  hypotheticalCasesCount: number = 0
 ): Promise<QuizQuestion[]> {
   // If count is large, split into parallel batches for speed and reliability
   if (questionCount > 25) {
@@ -118,16 +160,22 @@ export async function generateQuiz(
     const numBatches = Math.ceil(questionCount / batchSize);
     const batchPromises = [];
     
+    // Distribute hypothetical cases across batches
+    let remainingHypothetical = hypotheticalCasesCount;
+    
     for (let i = 0; i < numBatches; i++) {
       const currentBatchSize = Math.min(batchSize, questionCount - i * batchSize);
-      batchPromises.push(_generateQuizBatch(content, currentBatchSize, format, examBoard, isBancaMindset, availableSubjects));
+      const batchHypothetical = Math.min(remainingHypothetical, currentBatchSize);
+      remainingHypothetical -= batchHypothetical;
+      
+      batchPromises.push(_generateQuizBatch(content, currentBatchSize, format, examBoard, isBancaMindset, availableSubjects, batchHypothetical));
     }
     
     const results = await Promise.all(batchPromises);
     return results.flat();
   }
 
-  return _generateQuizBatch(content, questionCount, format, examBoard, isBancaMindset, availableSubjects);
+  return _generateQuizBatch(content, questionCount, format, examBoard, isBancaMindset, availableSubjects, hypotheticalCasesCount);
 }
 
 async function _generateQuizBatch(
@@ -136,7 +184,8 @@ async function _generateQuizBatch(
   format: QuizFormat,
   examBoard?: string,
   isBancaMindset: boolean = false,
-  availableSubjects: string[] = []
+  availableSubjects: string[] = [],
+  hypotheticalCasesCount: number = 0
 ): Promise<QuizQuestion[]> {
   const ai = getAI();
   const formatInstruction = format === 'both' 
@@ -153,6 +202,10 @@ async function _generateQuizBatch(
     ? `MODO PRÓPRIA BANCA ATIVADO: Pense como o elaborador da prova. Crie questões que não apenas testem o conhecimento, mas que busquem identificar se o candidato realmente domina as nuances, exceções e interpretações complexas do material. Seja rigoroso, use enunciados que exijam atenção máxima e elabore alternativas que pareçam corretas mas tenham detalhes sutis que as tornem incorretas.`
     : '';
 
+  const hypotheticalInstruction = hypotheticalCasesCount > 0
+    ? `CASOS HIPOTÉTICOS: Exatamente ${hypotheticalCasesCount} das ${questionCount} questões DEVEM ser formuladas como "Casos Hipotéticos". Nestas questões, apresente uma situação prática, um cenário ou um problema do mundo real e peça ao aluno para aplicar a teoria do material para resolver ou analisar o caso. Isso simula como as bancas testam a aplicação prática do conhecimento.`
+    : '';
+
   const subjectsInstruction = availableSubjects.length > 0
     ? `CATEGORIZAÇÃO: Para cada questão, identifique a qual matéria ela pertence. Use preferencialmente uma destas: ${availableSubjects.join(', ')}. Se a questão não se encaixar em nenhuma destas, identifique a matéria correta (ex: se for sobre previdência, use 'Seguridade Social').`
     : 'CATEGORIZAÇÃO: Identifique a matéria de cada questão (ex: Português, Direito Constitucional, etc).';
@@ -161,6 +214,7 @@ async function _generateQuizBatch(
     Você é um especialista em educação e bancas de concurso.
     ${boardInstruction}
     ${mindsetInstruction}
+    ${hypotheticalInstruction}
     ${subjectsInstruction}
     Com base no conteúdo fornecido (texto, materiais ou links), elabore exatamente ${questionCount} questões de quiz.
     
@@ -254,7 +308,7 @@ async function _generateQuizBatch(
 }
 
 export async function generateDeepDive(
-  content: ContentItem | ContentItem[],
+  content: ContentItem | ContentItem[] | null,
   question: QuizQuestion
 ): Promise<string> {
   const ai = getAI();
@@ -279,7 +333,7 @@ export async function generateDeepDive(
   let contentParts: any[] = [{ text: prompt }];
   let tools: any[] = [];
 
-  const items = Array.isArray(content) ? content : [content];
+  const items = Array.isArray(content) ? content : (content ? [content] : []);
 
   for (const item of items) {
     if (typeof item === 'string') {
@@ -292,6 +346,10 @@ export async function generateDeepDive(
     } else if (item.data && item.mimeType) {
       contentParts.push({ inlineData: { data: item.data, mimeType: item.mimeType } });
     }
+  }
+
+  if (items.length === 0) {
+    contentParts.push({ text: "Nota: O conteúdo original não está disponível. Baseie sua explicação exclusivamente no enunciado da questão e nos conceitos gerais da matéria." });
   }
 
   const response = await ai.models.generateContent({

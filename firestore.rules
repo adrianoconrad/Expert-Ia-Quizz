@@ -24,6 +24,7 @@ service cloud.firestore {
     // Collection: results
     // Document ID: {resultId}
     // Fields:
+    //   - id: string (optional) - The result ID.
     //   - uid: string (required) - The UID of the user who took the quiz.
     //   - date: timestamp (required) - The date and time the quiz was completed.
     //   - correct: int (required) - The number of correct answers.
@@ -32,7 +33,24 @@ service cloud.firestore {
     //   - fileName: string (required) - The name of the source file.
     //   - questions: list (required) - The list of questions.
     //   - answers: list (required) - The user's answers.
-    //   - content: map (optional) - The source content.
+    //   - content: any (optional) - The source content.
+    //   - isSimulado: bool (optional) - Whether it was a simulation.
+    //   - subject: string (optional) - The main subject of the quiz.
+    //   - revisionTasks: list (optional) - List of revision task IDs.
+    //   - deleted: bool (optional) - Soft delete flag.
+    //   - deletedAt: timestamp (optional) - Soft delete timestamp.
+    //
+    // Collection: revisionTasks
+    // Document ID: {taskId}
+    // Fields:
+    //   - id: string (required)
+    //   - uid: string (required)
+    //   - quizId: string (required)
+    //   - subject: string (required)
+    //   - fileName: string (required)
+    //   - dueDate: timestamp (required)
+    //   - completed: bool (required)
+    //   - intervalDays: int (required)
     //
     // Collection: srs
     // Document ID: {itemId}
@@ -57,6 +75,11 @@ service cloud.firestore {
     //   - back: string (required) - The answer or explanation on the back.
     //   - subject: string (required) - The subject of the flashcard.
     //   - createdAt: timestamp (required) - The time the flashcard was created.
+    //   - interval: int (optional) - The interval in days until next review.
+    //   - easeFactor: number (optional) - The SM-2 ease factor.
+    //   - nextReviewDate: timestamp (optional) - The date for next review.
+    //   - consecutiveCorrect: int (optional) - Number of consecutive correct answers.
+    //   - lastReviewed: timestamp (optional) - The last time the card was reviewed.
     //
     // Collection: mindmaps
     // Document ID: {mapId}
@@ -132,6 +155,7 @@ service cloud.firestore {
 
     function isValidSRSItem(data) {
       return hasRequiredFields(['uid', 'questionId', 'question', 'correctAnswer', 'interval', 'easeFactor', 'nextReviewDate']) &&
+             hasOnlyAllowedFields(['uid', 'questionId', 'question', 'options', 'correctAnswer', 'explanation', 'subject', 'interval', 'easeFactor', 'nextReviewDate', 'consecutiveCorrect']) &&
              data.uid == request.auth.uid &&
              data.questionId is string &&
              data.question is string &&
@@ -147,7 +171,7 @@ service cloud.firestore {
 
     function isValidResult(data) {
       return hasRequiredFields(['uid', 'date', 'correct', 'total', 'timeSpent', 'fileName', 'questions', 'answers']) &&
-             hasOnlyAllowedFields(['id', 'uid', 'date', 'correct', 'total', 'timeSpent', 'fileName', 'questions', 'answers', 'content', 'deleted', 'deletedAt']) &&
+             hasOnlyAllowedFields(['id', 'uid', 'date', 'correct', 'total', 'timeSpent', 'fileName', 'questions', 'answers', 'content', 'deleted', 'deletedAt', 'isSimulado', 'subject', 'revisionTasks']) &&
              data.uid == request.auth.uid &&
              data.date is timestamp &&
              data.correct is int && data.correct >= 0 &&
@@ -158,20 +182,44 @@ service cloud.firestore {
              data.answers is list && data.answers.size() <= 100 &&
              (!('id' in data) || data.id is string) &&
              (!('deleted' in data) || data.deleted is bool) &&
-             (!('deletedAt' in data) || data.deletedAt is timestamp || data.deletedAt == null);
+             (!('deletedAt' in data) || data.deletedAt is timestamp || data.deletedAt == null) &&
+             (!('isSimulado' in data) || data.isSimulado is bool) &&
+             (!('subject' in data) || data.subject is string) &&
+             (!('revisionTasks' in data) || data.revisionTasks is list);
+    }
+
+    function isValidRevisionTask(data) {
+      return hasRequiredFields(['id', 'uid', 'quizId', 'subject', 'fileName', 'dueDate', 'completed', 'intervalDays']) &&
+             hasOnlyAllowedFields(['id', 'uid', 'quizId', 'subject', 'fileName', 'dueDate', 'completed', 'intervalDays']) &&
+             data.uid == request.auth.uid &&
+             data.id is string &&
+             data.quizId is string &&
+             data.subject is string &&
+             data.fileName is string &&
+             data.dueDate is timestamp &&
+             data.completed is bool &&
+             data.intervalDays is int;
     }
 
     function isValidFlashcard(data) {
       return hasRequiredFields(['uid', 'front', 'back', 'subject', 'createdAt']) &&
+             hasOnlyAllowedFields(['id', 'uid', 'front', 'back', 'subject', 'createdAt', 'interval', 'easeFactor', 'nextReviewDate', 'consecutiveCorrect', 'lastReviewed']) &&
              data.uid == request.auth.uid &&
              data.front is string && data.front.size() > 0 && data.front.size() < 2000 &&
              data.back is string && data.back.size() > 0 && data.back.size() < 5000 &&
              data.subject is string &&
-             data.createdAt is timestamp;
+             data.createdAt is timestamp &&
+             (!('id' in data) || data.id is string) &&
+             (!('interval' in data) || data.interval is int) &&
+             (!('easeFactor' in data) || data.easeFactor is number) &&
+             (!('nextReviewDate' in data) || data.nextReviewDate is timestamp) &&
+             (!('consecutiveCorrect' in data) || data.consecutiveCorrect is int) &&
+             (!('lastReviewed' in data) || data.lastReviewed is timestamp);
     }
 
     function isValidMindMap(data) {
       return hasRequiredFields(['uid', 'mermaidCode', 'subject', 'createdAt']) &&
+             hasOnlyAllowedFields(['uid', 'mermaidCode', 'subject', 'createdAt']) &&
              data.uid == request.auth.uid &&
              data.mermaidCode is string && data.mermaidCode.size() > 0 && data.mermaidCode.size() < 10000 &&
              data.subject is string &&
@@ -227,6 +275,14 @@ service cloud.firestore {
       allow read: if isDocOwner() || isAdmin();
       allow create: if isAuthenticated() && isValidMindMap(request.resource.data);
       allow update: if isDocOwner() && isValidMindMap(request.resource.data);
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    // Revision Tasks collection
+    match /revisionTasks/{taskId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidRevisionTask(request.resource.data);
+      allow update: if isDocOwner() && isValidRevisionTask(request.resource.data);
       allow delete: if isDocOwner() || isAdmin();
     }
 

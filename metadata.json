@@ -1,5 +1,5 @@
 {
   "name": "Experte IA Quizz",
-  "description": "Gerador de quizzes interativos baseados em seus documentos, com explicações detalhadas e formatos variados (Múltipla Escolha e Cebraspe).",
+  "description": "Gerador de quizzes interativos com IA, simulados realistas e agenda de revisão espaçada baseada em neurociência para fixação de longo prazo.",
   "requestFramePermissions": ["microphone"]
 }

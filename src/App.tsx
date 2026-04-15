@@ -80,7 +80,11 @@ import {
   eachDayOfInterval, 
   addMonths, 
   subMonths, 
-  isToday 
+  isToday,
+  addDays,
+  isAfter,
+  isBefore,
+  startOfDay
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
@@ -96,9 +100,11 @@ import {
   ResponsiveContainer,
   Cell,
   PieChart,
-  Pie
+  Pie,
+  LineChart,
+  Line
 } from 'recharts';
-import { generateQuiz, QuizQuestion, QuizFormat, generateDeepDive, generateSpeech, ContentItem, chatWithProfessor } from './services/geminiService';
+import { generateQuiz, QuizQuestion, QuizFormat, generateDeepDive, generateSpeech, ContentItem, chatWithProfessor, generateFlashcardsFromIncorrectQuestions } from './services/geminiService';
 import { cn } from './lib/utils';
 import Logo from './components/Logo';
 
@@ -804,6 +810,16 @@ const THEME_CONFIG = {
   }
 };
 
+interface RevisionTask {
+  id: string;
+  quizId: string;
+  subject: string;
+  fileName: string;
+  dueDate: Date;
+  completed: boolean;
+  intervalDays: number;
+}
+
 interface QuizResult {
   id: string;
   date: Date;
@@ -816,6 +832,9 @@ interface QuizResult {
   content?: ContentItem | ContentItem[];
   deleted?: boolean;
   deletedAt?: Date;
+  isSimulado?: boolean;
+  subject?: string;
+  revisionTasks?: string[]; // IDs of RevisionTask
 }
 
 const MultiDateCalendar = ({ 
@@ -938,7 +957,10 @@ const Dashboard = ({
   selectedSubjects,
   setSelectedSubjects,
   onDeleteQuizzes,
-  onDeleteSubjectsHistory
+  onDeleteSubjectsHistory,
+  onEditSubject,
+  flashcards,
+  onOpenFlashcards
 }: { 
   history: QuizResult[], 
   theme: any, 
@@ -962,9 +984,13 @@ const Dashboard = ({
   selectedSubjects: string[],
   setSelectedSubjects: React.Dispatch<React.SetStateAction<string[]>>,
   onDeleteQuizzes: (ids: string[]) => void,
-  onDeleteSubjectsHistory: (subjects: string[]) => void
+  onDeleteSubjectsHistory: (subjects: string[]) => void,
+  onEditSubject: (original: string, newName: string) => void,
+  flashcards: any[],
+  onOpenFlashcards: () => void
 }) => {
   const [activeFolder, setActiveFolder] = React.useState<string | null>(null);
+  const [editingSubject, setEditingSubject] = React.useState<{ original: string, current: string } | null>(null);
   const [selectedQuizzes, setSelectedQuizzes] = React.useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = React.useState(false);
 
@@ -1430,6 +1456,8 @@ const Dashboard = ({
                   </h3>
                 </div>
 
+                <SubjectPerformanceBarChart subjectStats={stats.subjectData} theme={theme} />
+
               <div className="grid grid-cols-1 gap-4">
                 {stats.subjectData.map((s, i) => {
                   const isExpanded = activeFolder === s.name;
@@ -1503,12 +1531,48 @@ const Dashboard = ({
                                   {isStrength ? 'Ponto Forte' : isFocus ? 'Foco Necessário' : 'Em Evolução'}
                                 </span>
                               </div>
-                              <h4 className={cn(
-                                "font-black dark:text-white leading-tight truncate",
-                                s.name.length > 30 ? "text-base" : "text-lg sm:text-xl"
-                              )} title={s.name}>
-                                {s.name}
-                              </h4>
+                              <div className="flex items-center gap-2">
+                                {editingSubject?.original === s.name ? (
+                                  <input 
+                                    autoFocus
+                                    type="text"
+                                    value={editingSubject.current}
+                                    onChange={(e) => setEditingSubject({ ...editingSubject, current: e.target.value })}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        onEditSubject(s.name, editingSubject.current);
+                                        setEditingSubject(null);
+                                      }
+                                      if (e.key === 'Escape') setEditingSubject(null);
+                                    }}
+                                    onBlur={() => {
+                                      onEditSubject(s.name, editingSubject.current);
+                                      setEditingSubject(null);
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="bg-transparent border-b-2 border-blue-500 outline-none font-black text-lg sm:text-xl dark:text-white w-full"
+                                  />
+                                ) : (
+                                  <>
+                                    <h4 className={cn(
+                                      "font-black dark:text-white leading-tight truncate",
+                                      s.name.length > 30 ? "text-base" : "text-lg sm:text-xl"
+                                    )} title={s.name}>
+                                      {s.name}
+                                    </h4>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingSubject({ original: s.name, current: s.name });
+                                      }}
+                                      className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-black/20 dark:text-slate-600 hover:text-blue-500 transition-all opacity-0 group-hover:opacity-100"
+                                      title="Editar Nome"
+                                    >
+                                      <Settings size={14} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -1579,19 +1643,26 @@ const Dashboard = ({
                               exit={{ height: 0, opacity: 0 }}
                               className="px-6 pb-6"
                             >
-                              <div className="pt-6 border-t border-black/5 dark:border-white/5 space-y-4">
-                                <div className="flex items-center justify-between">
-                                  <h5 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Histórico Recente</h5>
-                                  <button 
-                                    onClick={() => onDeleteSubjectHistory(s.name)}
-                                    className="text-[10px] font-black text-rose-500/60 hover:text-rose-500 transition-colors uppercase tracking-widest flex items-center gap-1.5"
-                                  >
-                                    <Trash2 size={12} />
-                                    Limpar Histórico
-                                  </button>
-                                </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div className="pt-6 border-t border-black/5 dark:border-white/5 space-y-6">
+                                <PerformanceTimeline 
+                                  history={subjectQuizzes} 
+                                  theme={theme} 
+                                  title={`Evolução: ${s.name}`} 
+                                />
+
+                                <div className="space-y-4">
+                                  <div className="flex items-center justify-between">
+                                    <h5 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Histórico Recente</h5>
+                                    <button 
+                                      onClick={() => onDeleteSubjectHistory(s.name)}
+                                      className="text-[10px] font-black text-rose-500/60 hover:text-rose-500 transition-colors uppercase tracking-widest flex items-center gap-1.5"
+                                    >
+                                      <Trash2 size={12} />
+                                      Limpar Histórico
+                                    </button>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                   {subjectQuizzes.slice().reverse().map((res, idx) => {
                                     const isQuizSelected = selectedQuizzes.includes(res.id);
                                     return (
@@ -1646,9 +1717,10 @@ const Dashboard = ({
                                   )}
                                 </div>
                               </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                       </motion.div>
                     );
                   })}
@@ -1685,11 +1757,58 @@ const Dashboard = ({
             </div>
           </motion.div>
 
+          {/* Flashcards Card */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={() => onOpenFlashcards()}
+            className={cn(
+              "bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[180px] transition-all cursor-pointer hover:border-indigo-500/30 hover:shadow-md"
+            )}
+          >
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                  <BrainCircuit size={18} className="text-emerald-500" />
+                </div>
+                <h3 className="text-base font-bold dark:text-white">Flashcards</h3>
+              </div>
+              <p className="text-[11px] text-black/60 dark:text-slate-400 mb-4 leading-tight">
+                Revise conceitos-chave gerados automaticamente a partir dos seus erros.
+              </p>
+            </div>
+            
+            <div className="flex items-center justify-between mt-auto">
+              <div>
+                <span className="text-xl font-black dark:text-white">
+                  {flashcards.filter((c: any) => !c.nextReviewDate || new Date() >= c.nextReviewDate).length}
+                </span>
+                <span className="text-[9px] font-bold text-black/40 dark:text-slate-500 ml-2">Para Revisar</span>
+              </div>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenFlashcards();
+                }}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95 shadow-lg shadow-emerald-500/20",
+                  theme.primary, theme.contrastText
+                )}
+              >
+                Estudar
+              </button>
+            </div>
+          </motion.div>
+
           {/* SRS Review Card */}
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[180px]"
+            onClick={() => itemsDue.length > 0 && onStartSRSReview()}
+            className={cn(
+              "bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[180px] transition-all",
+              itemsDue.length > 0 ? "cursor-pointer hover:border-indigo-500/30 hover:shadow-md" : "opacity-80"
+            )}
           >
             <div>
               <div className="flex items-center gap-3 mb-2">
@@ -1710,7 +1829,10 @@ const Dashboard = ({
               </div>
               <button 
                 disabled={itemsDue.length === 0}
-                onClick={onStartSRSReview}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartSRSReview();
+                }}
                 className={cn(
                   "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95",
                   itemsDue.length > 0 
@@ -1729,7 +1851,11 @@ const Dashboard = ({
               <h3 className="text-xs font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest mb-4">Focar Agora</h3>
               <div className="space-y-3">
                 {stats.focusTopics.map((topic, idx) => (
-                  <div key={idx} className="flex items-center justify-between group">
+                  <div 
+                    key={idx} 
+                    onClick={() => onPracticeTopic(topic.name)}
+                    className="flex items-center justify-between group cursor-pointer p-1 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                  >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-500 text-[10px] font-bold">
                         {topic.accuracy}%
@@ -1737,8 +1863,11 @@ const Dashboard = ({
                       <span className="text-xs font-bold dark:text-white truncate max-w-[80px]">{topic.name}</span>
                     </div>
                     <button 
-                      onClick={() => onPracticeTopic(topic.name)}
-                      className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-black/20 dark:text-slate-600 hover:text-blue-500 transition-all"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPracticeTopic(topic.name);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-black/20 dark:text-slate-600 hover:text-blue-500 transition-all"
                     >
                       <Play size={14} fill="currentColor" />
                     </button>
@@ -1838,6 +1967,576 @@ const Dashboard = ({
           </motion.div>
         )}
       </AnimatePresence>
+    </motion.div>
+  );
+};
+
+const PerformanceTimeline = ({ history, theme, title = "Desempenho no Tempo" }: { history: QuizResult[], theme: any, title?: string }) => {
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  const timelineData = React.useMemo(() => {
+    const grouped: { [key: string]: { date: string, displayDate: string, correct: number, incorrect: number, total: number } } = {};
+    
+    history.forEach(res => {
+      const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
+      const dateKey = format(date, 'yyyy-MM-dd');
+      
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = { 
+          date: dateKey,
+          displayDate: format(date, 'dd/MM'), 
+          correct: 0, 
+          incorrect: 0, 
+          total: 0 
+        };
+      }
+      
+      grouped[dateKey].correct += res.correct;
+      grouped[dateKey].incorrect += (res.total - res.correct);
+      grouped[dateKey].total += res.total;
+    });
+
+    return Object.values(grouped).sort((a, b) => a.date.localeCompare(b.date));
+  }, [history]);
+
+  if (timelineData.length === 0) return null;
+
+  return (
+    <div className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 dark:border-slate-800/50 shadow-2xl space-y-6 overflow-hidden transition-all">
+      <div 
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-between cursor-pointer group"
+      >
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-blue-500/10 rounded-2xl group-hover:bg-blue-500/20 transition-colors">
+            <TrendingUp size={24} className="text-blue-500" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold dark:text-white">{title}</h3>
+            <p className="text-[10px] uppercase tracking-widest text-black/40 dark:text-slate-500 font-bold">Evolução de acertos e erros</p>
+          </div>
+        </div>
+        <div className={cn(
+          "p-2 rounded-full transition-all",
+          isExpanded ? "bg-blue-500/10 text-blue-500 rotate-180" : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-600"
+        )}>
+          <ChevronDown size={20} />
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+          >
+            <div className="h-[300px] w-full mt-4 pt-6 border-t border-black/5 dark:border-white/5">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={timelineData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis 
+                    dataKey="displayDate" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      borderRadius: '16px', 
+                      border: 'none', 
+                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                      backdropFilter: 'blur(4px)'
+                    }}
+                    itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
+                    labelStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}
+                  />
+                  <Legend 
+                    verticalAlign="top" 
+                    align="right" 
+                    iconType="circle"
+                    wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="correct" 
+                    name="Acertos" 
+                    stroke="#10b981" 
+                    strokeWidth={4} 
+                    dot={{ r: 6, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={{ r: 8, strokeWidth: 0 }}
+                    label={{ position: 'top', fontSize: 10, fontWeight: 800, fill: '#10b981' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="incorrect" 
+                    name="Erros" 
+                    stroke="#f43f5e" 
+                    strokeWidth={4} 
+                    dot={{ r: 6, fill: '#f43f5e', strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={{ r: 8, strokeWidth: 0 }}
+                    label={{ position: 'bottom', fontSize: 10, fontWeight: 800, fill: '#f43f5e' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const SubjectPerformanceBarChart = ({ subjectStats, theme }: { subjectStats: any[], theme: any }) => {
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  const data = React.useMemo(() => {
+    return subjectStats
+      .filter(s => s.total > 0)
+      .map(s => ({
+        name: s.name,
+        acertos: s.correct,
+        erros: s.total - s.correct
+      }));
+  }, [subjectStats]);
+
+  if (data.length === 0) return null;
+
+  return (
+    <div className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 dark:border-slate-800/50 shadow-2xl space-y-6 overflow-hidden transition-all">
+      <div 
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-between cursor-pointer group"
+      >
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-indigo-500/10 rounded-2xl group-hover:bg-indigo-500/20 transition-colors">
+            <BarChart2 size={24} className="text-indigo-500" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold dark:text-white">Desempenho Geral por Matéria</h3>
+            <p className="text-[10px] uppercase tracking-widest text-black/40 dark:text-slate-500 font-bold">Comparativo de acertos e erros</p>
+          </div>
+        </div>
+        <div className={cn(
+          "p-2 rounded-full transition-all",
+          isExpanded ? "bg-indigo-500/10 text-indigo-500 rotate-180" : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-600"
+        )}>
+          <ChevronDown size={20} />
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+          >
+            <div className="h-[300px] w-full mt-4 pt-6 border-t border-black/5 dark:border-white/5">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      borderRadius: '16px', 
+                      border: 'none', 
+                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                      backdropFilter: 'blur(4px)'
+                    }}
+                    cursor={{ fill: 'rgba(0,0,0,0.02)' }}
+                  />
+                  <Legend 
+                    verticalAlign="top" 
+                    align="right" 
+                    iconType="circle"
+                    wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                  />
+                  <Bar dataKey="acertos" name="Acertos" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30} />
+                  <Bar dataKey="erros" name="Erros" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={30} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const RevisionAgenda = ({ 
+  tasks, 
+  theme, 
+  onClose, 
+  onCompleteTask,
+  onPracticeQuiz
+}: { 
+  tasks: RevisionTask[], 
+  theme: any, 
+  onClose: () => void,
+  onCompleteTask: (taskId: string) => void,
+  onPracticeQuiz: (quizId: string) => void
+}) => {
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  
+  const tasksByDate = React.useMemo(() => {
+    const grouped: { [key: string]: RevisionTask[] } = {};
+    tasks.forEach(task => {
+      const dateKey = format(task.dueDate, 'yyyy-MM-dd');
+      if (!grouped[dateKey]) grouped[dateKey] = [];
+      grouped[dateKey].push(task);
+    });
+    return grouped;
+  }, [tasks]);
+
+  const currentDayTasks = tasksByDate[format(selectedDate, 'yyyy-MM-dd')] || [];
+  const pendingTasksCount = tasks.filter(t => !t.completed && isBefore(t.dueDate, addDays(new Date(), 1))).length;
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto"
+    >
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2.5rem] border border-white/20 dark:border-slate-800/50 shadow-2xl">
+        <div className="flex items-center gap-4">
+          <div className={cn("p-4 rounded-3xl shadow-lg transform -rotate-3", theme.primary, theme.contrastText)}>
+            <Calendar size={28} />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold dark:text-white tracking-tight">Agenda de Revisão Ativa</h2>
+            <p className="text-xs text-black/40 dark:text-slate-400 font-medium">Baseado em Neurociência e Repetição Espaçada</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          {pendingTasksCount > 0 && (
+            <div className="px-4 py-2 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center gap-2">
+              <AlertTriangle size={14} />
+              <span>{pendingTasksCount} Revisões Pendentes</span>
+            </div>
+          )}
+          <button 
+            onClick={onClose} 
+            className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all font-bold text-sm dark:text-white active:scale-95"
+          >
+            <ChevronLeft size={18} />
+            Voltar
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Calendar Sidebar */}
+        <div className="lg:col-span-4 space-y-6">
+          <div className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 dark:border-slate-800/50 shadow-xl">
+             <div className="flex items-center justify-between mb-6">
+                <h3 className="font-bold dark:text-white flex items-center gap-2">
+                  <Calendar size={18} className={theme.text} />
+                  Calendário
+                </h3>
+                <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-widest uppercase">Selecione o Dia</span>
+             </div>
+             
+             <div className="grid grid-cols-7 gap-1">
+                {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
+                  <div key={`${d}-${i}`} className="text-center text-[10px] font-bold text-black/20 dark:text-slate-600 py-2">{d}</div>
+                ))}
+                {(() => {
+                  const start = startOfWeek(startOfMonth(selectedDate));
+                  const end = endOfWeek(endOfMonth(selectedDate));
+                  const days = eachDayOfInterval({ start, end });
+                  
+                  return days.map(day => {
+                    const isSelected = isSameDay(day, selectedDate);
+                    const isCurrentMonth = day.getMonth() === selectedDate.getMonth();
+                    const hasTasks = tasksByDate[format(day, 'yyyy-MM-dd')]?.length > 0;
+                    const allCompleted = hasTasks && tasksByDate[format(day, 'yyyy-MM-dd')].every(t => t.completed);
+                    
+                    return (
+                      <button
+                        key={day.toISOString()}
+                        onClick={() => setSelectedDate(day)}
+                        className={cn(
+                          "relative aspect-square flex flex-col items-center justify-center rounded-xl text-xs font-bold transition-all",
+                          isSelected 
+                            ? cn(theme.primary, theme.contrastText, "shadow-md scale-110 z-10")
+                            : isCurrentMonth 
+                              ? "hover:bg-black/5 dark:hover:bg-white/5 dark:text-white" 
+                              : "text-black/10 dark:text-slate-700",
+                          isToday(day) && !isSelected && "ring-2 ring-blue-500/30"
+                        )}
+                      >
+                        {day.getDate()}
+                        {hasTasks && !isSelected && (
+                          <div className={cn(
+                            "absolute bottom-1.5 w-1 h-1 rounded-full",
+                            allCompleted ? "bg-emerald-500" : "bg-rose-500"
+                          )} />
+                        )}
+                      </button>
+                    );
+                  });
+                })()}
+             </div>
+          </div>
+
+          <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 p-6 rounded-[2rem] space-y-4">
+            <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400">
+              <Lightbulb size={20} />
+              <h4 className="font-bold uppercase tracking-widest text-[10px]">Dica Neurocientífica</h4>
+            </div>
+            <p className="text-xs text-amber-800/80 dark:text-amber-200/80 font-medium leading-relaxed">
+              A curva do esquecimento de Ebbinghaus mostra que perdemos 70% do que aprendemos em 24h. Revisar em intervalos de 1, 3, 7 e 30 dias fixa a informação na memória de longo prazo.
+            </p>
+          </div>
+        </div>
+
+        {/* Tasks List */}
+        <div className="lg:col-span-8 space-y-6">
+          <div className="flex items-center justify-between px-4">
+            <h3 className="text-xl font-bold dark:text-white flex items-center gap-3">
+              <Hash size={24} className={theme.text} />
+              Revisões para {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
+            </h3>
+            <span className="px-3 py-1 bg-black/5 dark:bg-white/5 rounded-full text-[10px] font-black text-black/40 dark:text-slate-500 uppercase tracking-widest">
+              {currentDayTasks.length} Tarefas
+            </span>
+          </div>
+
+          {currentDayTasks.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4">
+              {currentDayTasks.map(task => (
+                <motion.div
+                  key={task.id}
+                  layoutId={task.id}
+                  className={cn(
+                    "group flex items-center justify-between p-5 rounded-[2rem] border transition-all",
+                    task.completed 
+                      ? "bg-emerald-500/5 border-emerald-500/20 opacity-60" 
+                      : "bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl border-white/20 dark:border-slate-800/50 shadow-lg hover:border-white/40 dark:hover:border-slate-700"
+                  )}
+                >
+                  <div className="flex items-center gap-5">
+                    <button 
+                      onClick={() => onCompleteTask(task.id)}
+                      className={cn(
+                        "w-8 h-8 rounded-2xl border-2 flex items-center justify-center transition-all",
+                        task.completed 
+                          ? "bg-emerald-500 border-emerald-500 text-white" 
+                          : "border-black/10 dark:border-white/10 hover:border-emerald-500/50"
+                      )}
+                    >
+                      {task.completed && <Check size={18} />}
+                    </button>
+                    
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-md text-[9px] font-black uppercase tracking-wider">
+                          {task.subject}
+                        </span>
+                        <span className="text-[10px] font-bold text-black/20 dark:text-slate-600 italic">
+                          Revisão de {task.intervalDays} dias
+                        </span>
+                      </div>
+                      <h4 className={cn("text-base font-bold dark:text-white", task.completed && "line-through opacity-50")}>
+                        {task.fileName}
+                      </h4>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {!task.completed && (
+                      <button
+                        onClick={() => onPracticeQuiz(task.quizId)}
+                        className={cn(
+                          "flex items-center gap-2 px-5 py-2 rounded-xl font-bold text-xs shadow-lg active:scale-95 transition-all",
+                          theme.primary, theme.contrastText
+                        )}
+                      >
+                        <RotateCcw size={14} />
+                        Iniciar Revisão
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 bg-white/20 dark:bg-slate-900/20 rounded-[3rem] border-2 border-dashed border-black/5 dark:border-white/5">
+              <div className="p-6 bg-black/5 dark:bg-white/5 rounded-full mb-4">
+                <Calendar size={40} className="text-black/10 dark:text-white/10" />
+              </div>
+              <p className="text-sm font-bold text-black/40 dark:text-slate-500">Nenhuma revisão agendada para este dia.</p>
+              <p className="text-[10px] text-black/20 dark:text-slate-600 mt-1 uppercase tracking-widest font-black">Aproveite para descansar ou estudar novos conteúdos!</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const FlashcardsView = ({
+  flashcards,
+  onClose,
+  onUpdateSRS,
+  theme
+}: {
+  flashcards: any[],
+  onClose: () => void,
+  onUpdateSRS: (id: string, isCorrect: boolean) => void,
+  theme: any
+}) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  const dueCards = React.useMemo(() => {
+    return flashcards.filter(card => {
+      if (!card.nextReviewDate) return true;
+      return new Date() >= card.nextReviewDate;
+    });
+  }, [flashcards]);
+
+  const cardsToReview = React.useMemo(() => {
+    return showAll ? flashcards : dueCards;
+  }, [showAll, dueCards, flashcards]);
+
+  const handleNext = () => {
+    setIsFlipped(false);
+    if (currentIndex < cardsToReview.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      // Finished review
+      onClose();
+    }
+  };
+
+  const handleReview = (isCorrect: boolean) => {
+    onUpdateSRS(cardsToReview[currentIndex].id, isCorrect);
+    handleNext();
+  };
+
+  if (cardsToReview.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 text-center space-y-6 min-h-[60vh]">
+        <div className="w-24 h-24 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center">
+          <BrainCircuit size={48} className="text-black/20 dark:text-white/20" />
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-2xl font-bold dark:text-white">Tudo em dia!</h3>
+          <p className="text-black/40 dark:text-slate-400 max-w-xs mx-auto">Você não tem flashcards para revisar no momento. Volte mais tarde ou estude todos os seus cartões.</p>
+        </div>
+        <div className="flex gap-4">
+          <button onClick={() => setShowAll(true)} className="px-6 py-2 rounded-xl font-bold border border-black/10 dark:border-white/10 dark:text-white">Ver Todos</button>
+          <button onClick={onClose} className={cn("px-8 py-3 rounded-2xl font-bold transition-all active:scale-95 shadow-lg", theme.primary, theme.contrastText, theme.shadow)}>Voltar</button>
+        </div>
+      </div>
+    );
+  }
+
+  const currentCard = cardsToReview[currentIndex];
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-2xl mx-auto min-h-[80vh] flex flex-col"
+    >
+      <div className="flex items-center justify-between">
+        <button onClick={onClose} className="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 dark:text-white transition-all">
+          <ChevronLeft size={24} />
+        </button>
+        <div className="text-center">
+          <h2 className="text-xl font-black dark:text-white">Flashcards de Revisão</h2>
+          <p className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">
+            {currentIndex + 1} de {cardsToReview.length} • {currentCard.subject}
+          </p>
+        </div>
+        <div className="w-10" />
+      </div>
+
+      <div className="flex-1 flex flex-col items-center justify-center perspective-1000">
+        <motion.div
+          animate={{ rotateY: isFlipped ? 180 : 0 }}
+          transition={{ duration: 0.6, type: "spring", stiffness: 260, damping: 20 }}
+          onClick={() => setIsFlipped(!isFlipped)}
+          className="relative w-full aspect-[4/3] cursor-pointer preserve-3d"
+        >
+          {/* Front */}
+          <div className={cn(
+            "absolute inset-0 backface-hidden bg-white dark:bg-slate-900 rounded-[2.5rem] border-2 border-black/5 dark:border-slate-800 shadow-2xl p-8 flex flex-col items-center justify-center text-center",
+            isFlipped ? "pointer-events-none" : ""
+          )}>
+            <span className="text-[10px] font-black text-indigo-500 tracking-[0.3em] uppercase mb-4">CONCEITO / PERGUNTA</span>
+            <h3 className="text-2xl sm:text-3xl font-bold dark:text-white leading-tight">
+              {currentCard.front}
+            </h3>
+            <p className="mt-8 text-xs text-black/20 dark:text-slate-600 font-bold animate-pulse">Clique para virar</p>
+          </div>
+
+          {/* Back */}
+          <div className={cn(
+            "absolute inset-0 backface-hidden bg-white dark:bg-slate-900 rounded-[2.5rem] border-2 border-indigo-500/30 dark:border-indigo-500/30 shadow-2xl p-8 flex flex-col items-center justify-center text-center rotate-y-180",
+            !isFlipped ? "pointer-events-none" : ""
+          )}>
+            <span className="text-[10px] font-black text-emerald-500 tracking-[0.3em] uppercase mb-4">RESPOSTA / EXPLICAÇÃO</span>
+            <div className="max-h-full overflow-y-auto w-full custom-scrollbar">
+              <p className="text-lg sm:text-xl font-medium dark:text-slate-200 leading-relaxed">
+                {currentCard.back}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      <div className="flex gap-4 justify-center">
+        {isFlipped ? (
+          <>
+            <button 
+              onClick={() => handleReview(false)}
+              className="flex-1 max-w-[160px] py-4 rounded-2xl bg-rose-500 text-white font-black shadow-lg shadow-rose-500/20 active:scale-95 transition-all flex flex-col items-center gap-1"
+            >
+              <XCircle size={20} />
+              <span>Errei</span>
+            </button>
+            <button 
+              onClick={() => handleReview(true)}
+              className="flex-1 max-w-[160px] py-4 rounded-2xl bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex flex-col items-center gap-1"
+            >
+              <CheckCircle2 size={20} />
+              <span>Acertei</span>
+            </button>
+          </>
+        ) : (
+          <button 
+            onClick={() => setIsFlipped(true)}
+            className={cn("px-12 py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-all", theme.primary, theme.contrastText)}
+          >
+            Ver Resposta
+          </button>
+        )}
+      </div>
     </motion.div>
   );
 };
@@ -2249,6 +2948,8 @@ const StudyMode = ({
 
           {/* Topics List / Folders */}
           <div className="lg:col-span-2 space-y-6">
+            <SubjectPerformanceBarChart subjectStats={subjectStats} theme={theme} />
+            
             {activeFolder ? (
               <motion.div 
                 initial={{ opacity: 0, x: -20 }}
@@ -2293,6 +2994,21 @@ const StudyMode = ({
               </div>
 
                 <div className="space-y-8">
+                  {(() => {
+                    const subject = subjectStats.find(s => s.name === activeFolder);
+                    if (!subject) return null;
+
+                    return (
+                      <div className="mb-8">
+                        <PerformanceTimeline 
+                          history={subject.quizzes} 
+                          theme={theme} 
+                          title={`Desempenho: ${activeFolder}`} 
+                        />
+                      </div>
+                    );
+                  })()}
+
                   {(() => {
                     const subject = subjectStats.find(s => s.name === activeFolder);
                     if (!subject) return null;
@@ -3060,6 +3776,30 @@ function QuizApp() {
     }
   };
 
+  // Fetch revision tasks
+  useEffect(() => {
+    if (!user) {
+      setRevisionTasks([]);
+      return;
+    }
+
+    const q = query(collection(db, 'revisionTasks'), where('uid', '==', user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const tasks = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : new Date(data.dueDate)
+        } as RevisionTask;
+      });
+      setRevisionTasks(tasks);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'revisionTasks');
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
   // Sync background and theme settings with Firestore
   useEffect(() => {
     if (userProfile) {
@@ -3156,9 +3896,11 @@ function QuizApp() {
   
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
   const [srsItems, setSrsItems] = useState<any[]>([]);
+  const [flashcards, setFlashcards] = useState<any[]>([]);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'incorrect'>('all');
   const [showDashboard, setShowDashboard] = useState(false);
   const [showStudyMode, setShowStudyMode] = useState(false);
+  const [showFlashcards, setShowFlashcards] = useState(false);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [showBancaDropdown, setShowBancaDropdown] = useState(false);
   const [showQuantityDropdown, setShowQuantityDropdown] = useState(false);
@@ -3173,6 +3915,11 @@ function QuizApp() {
   const [questionCount, setQuestionCount] = useState(20);
   const [selectedExamBoards, setSelectedExamBoards] = useState<string[]>(['Geral']);
   const [isBancaMindset, setIsBancaMindset] = useState(false);
+  const [hypotheticalCasesCount, setHypotheticalCasesCount] = useState(0);
+  const [isSimulado, setIsSimulado] = useState(false);
+  const [selectedSimuladoSubjects, setSelectedSimuladoSubjects] = useState<string[]>([]);
+  const [showRevisionAgenda, setShowRevisionAgenda] = useState(false);
+  const [revisionTasks, setRevisionTasks] = useState<RevisionTask[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [history, setHistory] = useState<QuizResult[]>([]);
   const [recycleBin, setRecycleBin] = useState<QuizResult[]>([]);
@@ -3244,6 +3991,7 @@ function QuizApp() {
   }, [subjects]);
 
   const [newSubjectInput, setNewSubjectInput] = useState('');
+  const [editingSubject, setEditingSubject] = useState<{ original: string, current: string } | null>(null);
   const [subjectToDelete, setSubjectToDelete] = useState<string | null>(null);
   const [quizToDelete, setQuizToDelete] = useState<string | null>(null);
 
@@ -3260,6 +4008,27 @@ function QuizApp() {
 
   const handleRemoveSubject = (subject: string) => {
     setSubjects(prev => prev.filter(s => s !== subject));
+  };
+
+  const handleEditSubject = (originalName: string, newName: string) => {
+    if (!newName.trim() || originalName === newName.trim()) {
+      setEditingSubject(null);
+      return;
+    }
+    
+    if (subjects.includes(newName.trim())) {
+      alert("Esta matéria já existe.");
+      return;
+    }
+
+    setSubjects(prev => prev.map(s => s === originalName ? newName.trim() : s).sort());
+    
+    // Also update history if needed? 
+    // Usually, history records store the subject name at the time of the quiz.
+    // If we want to keep them in sync, we'd need to update all history records.
+    // However, the user request is just about the "lista de gestão de matérias".
+    
+    setEditingSubject(null);
   };
 
   const handleDeleteSubjectHistory = async (subject: string) => {
@@ -3645,6 +4414,38 @@ function QuizApp() {
     return () => unsubscribe();
   }, [isAuthReady, user]);
 
+  // Flashcards Listener
+  useEffect(() => {
+    if (!isAuthReady || !user) {
+      setFlashcards([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'flashcards'),
+      where('uid', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const cards = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          id: doc.id,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
+          nextReviewDate: data.nextReviewDate instanceof Timestamp ? data.nextReviewDate.toDate() : (data.nextReviewDate ? new Date(data.nextReviewDate) : undefined),
+          lastReviewed: data.lastReviewed instanceof Timestamp ? data.lastReviewed.toDate() : (data.lastReviewed ? new Date(data.lastReviewed) : undefined)
+        };
+      });
+      setFlashcards(cards);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'flashcards');
+    });
+
+    return () => unsubscribe();
+  }, [isAuthReady, user]);
+
   // Check API Key
   useEffect(() => {
     const checkApiKey = async () => {
@@ -3760,6 +4561,138 @@ function QuizApp() {
     });
   };
 
+  const hasContentForSubject = (subject: string) => {
+    const normalized = subject.trim().toLowerCase();
+    if (selectedSubject.trim().toLowerCase() === normalized && pendingContent) return true;
+    return history.some(h => 
+      h.content && (
+        (h.subject && h.subject.trim().toLowerCase() === normalized) ||
+        (h.fileName && h.fileName.toLowerCase().includes(normalized)) ||
+        (h.questions && h.questions.some(q => q.subject && q.subject.trim().toLowerCase() === normalized))
+      )
+    );
+  };
+
+  const handleGenerateSimulado = async () => {
+    if (selectedSimuladoSubjects.length === 0) {
+      setError("Selecione pelo menos uma matéria para o simulado.");
+      return;
+    }
+
+    setState('loading');
+    setLoadingProgress(5);
+    setError(null);
+    setShowDashboard(false);
+
+    try {
+      const totalQuestions = questionCount;
+      const questionsPerSubject = Math.floor(totalQuestions / selectedSimuladoSubjects.length);
+      const remainder = totalQuestions % selectedSimuladoSubjects.length;
+
+      if (selectedSimuladoSubjects.length === 0) {
+        throw new Error("Selecione pelo menos uma matéria para o simulado.");
+      }
+
+      let allSimuladoQuestions: QuizQuestion[] = [];
+      const missingSubjects: string[] = [];
+      
+      // Derive format
+      const hasCebraspe = selectedExamBoards.includes('Cebraspe');
+      const hasMC = selectedExamBoards.includes('Múltipla Escolha') || 
+                  selectedExamBoards.some(b => b !== 'Cebraspe' && b !== 'Múltipla Escolha') || 
+                  selectedExamBoards.includes('Geral');
+      
+      let derivedFormat: QuizFormat = 'multiple-choice';
+      if (hasCebraspe && hasMC) derivedFormat = 'both';
+      else if (hasCebraspe) derivedFormat = 'cebraspe';
+      
+      const boardsToPass = selectedExamBoards.filter(b => b !== 'Múltipla Escolha' && b !== 'Geral');
+      const examBoardStr = boardsToPass.length > 0 ? boardsToPass.join(', ') : 'Geral';
+
+      for (let i = 0; i < selectedSimuladoSubjects.length; i++) {
+        const subject = selectedSimuladoSubjects[i];
+        const count = questionsPerSubject + (i < remainder ? 1 : 0);
+        
+        // Find content for this subject
+        // 1. Check if the currently pending content matches this subject
+        // 2. Check history for results where the subject matches or the fileName matches
+        let content = null;
+        const normalizedSubject = subject.trim().toLowerCase();
+        
+        if (selectedSubject.trim().toLowerCase() === normalizedSubject && pendingContent) {
+          content = pendingContent;
+        } else {
+          // Look for the most recent result that has content and matches the subject
+          const subjectResult = history.find(h => 
+            h.content && (
+              (h.subject && h.subject.trim().toLowerCase() === normalizedSubject) ||
+              (h.fileName && h.fileName.toLowerCase().includes(normalizedSubject)) || 
+              (h.questions && h.questions.some(q => q.subject && q.subject.trim().toLowerCase() === normalizedSubject))
+            )
+          );
+          content = subjectResult?.content;
+        }
+
+        if (!content) {
+          console.warn(`Conteúdo não encontrado para a matéria: ${subject}`);
+          missingSubjects.push(subject);
+          continue;
+        }
+
+        setLoadingProgress(10 + (i / selectedSimuladoSubjects.length) * 80);
+        
+        // Generate questions for this subject batch
+        try {
+          const generated = await generateQuiz(content, count, derivedFormat, examBoardStr, isBancaMindset, subjects, hypotheticalCasesCount);
+          
+          if (generated && generated.length > 0) {
+            const categorized = generated.map(q => ({
+              ...q,
+              subject,
+              id: `${subject.substring(0, 3)}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+            }));
+            
+            allSimuladoQuestions = [...allSimuladoQuestions, ...categorized];
+          } else {
+            console.warn(`Nenhuma questão gerada para a matéria: ${subject}`);
+          }
+        } catch (genErr) {
+          console.error(`Erro ao gerar questões para ${subject}:`, genErr);
+          // We continue with other subjects if one fails
+        }
+      }
+
+      if (allSimuladoQuestions.length === 0) {
+        if (missingSubjects.length > 0) {
+          throw new Error(`Não foi possível encontrar conteúdo para as matérias: ${missingSubjects.join(', ')}. Tente carregar um material para cada uma primeiro.`);
+        }
+        throw new Error("Não foi possível gerar questões para o simulado. Verifique se os materiais carregados possuem conteúdo suficiente ou tente novamente.");
+      }
+
+      setLoadingProgress(95);
+      setQuestions(allSimuladoQuestions);
+      setAnswers(new Array(allSimuladoQuestions.length).fill(null));
+      setQuestionTimes(new Array(allSimuladoQuestions.length).fill(0));
+      setCurrentIndex(0);
+      setTotalTime(0);
+      setQuestionTime(timeAlertThreshold);
+      setIsQuestionStarted(false);
+      setIsPaused(false);
+      setState('active');
+      setLastFileName(`Simulado: ${selectedSimuladoSubjects.join(', ')}`);
+      setLastContent(null); // Combined content is complex, we leave it null for now
+      setIsSimulado(true);
+      setShowRevisionAgenda(false);
+      setIsReviewMode(false);
+      
+      setLoadingProgress(100);
+    } catch (err: any) {
+      console.error("Erro ao gerar simulado:", err);
+      setError(err.message || "Erro ao gerar simulado.");
+      setState('idle');
+    }
+  };
+
   const startQuiz = async (content: ContentItem | ContentItem[], fileName: string) => {
     console.log("Iniciando geração de quiz...", { count: questionCount, fileName, selectedSubject });
     setState('loading');
@@ -3791,8 +4724,8 @@ function QuizApp() {
       const boardsToPass = selectedExamBoards.filter(b => b !== 'Múltipla Escolha' && b !== 'Geral');
       const examBoardStr = boardsToPass.length > 0 ? boardsToPass.join(', ') : 'Geral';
 
-      console.log("Chamando generateQuiz...", { count: questionCount, format: derivedFormat, board: examBoardStr, isBancaMindset });
-      const generatedQuestions = await generateQuiz(content, questionCount, derivedFormat, examBoardStr, isBancaMindset, subjects);
+      console.log("Chamando generateQuiz...", { count: questionCount, format: derivedFormat, board: examBoardStr, isBancaMindset, hypotheticalCasesCount });
+      const generatedQuestions = await generateQuiz(content, questionCount, derivedFormat, examBoardStr, isBancaMindset, subjects, hypotheticalCasesCount);
       
       // If a subject was selected, ensure all questions are categorized under it
       const finalQuestions = generatedQuestions.map(q => ({
@@ -3916,7 +4849,7 @@ function QuizApp() {
 
   const fetchDeepDiveForCurrentQuestion = async () => {
     const currentQ = questions[currentIndex];
-    if (!currentQ || currentQ.deepDive || !lastContent) return;
+    if (!currentQ || currentQ.deepDive) return;
 
     setIsDeepDiveLoading(true);
     setChatHistory([]); // Reset chat for new question
@@ -4312,10 +5245,117 @@ function QuizApp() {
     }
   };
 
+  const updateFlashcardSRS = async (cardId: string, isCorrect: boolean) => {
+    if (!user) return;
+    
+    const card = flashcards.find(c => c.id === cardId);
+    if (!card) return;
+
+    let interval = card.interval || 1;
+    let easeFactor = card.easeFactor || 2.5;
+    let consecutiveCorrect = card.consecutiveCorrect || 0;
+
+    if (isCorrect) {
+      consecutiveCorrect += 1;
+      if (consecutiveCorrect === 1) interval = 1;
+      else if (consecutiveCorrect === 2) interval = 6;
+      else interval = Math.round(interval * easeFactor);
+      easeFactor = Math.max(1.3, easeFactor + 0.1);
+    } else {
+      consecutiveCorrect = 0;
+      interval = 1;
+      easeFactor = Math.max(1.3, easeFactor - 0.2);
+    }
+
+    const nextReviewDate = new Date();
+    nextReviewDate.setDate(nextReviewDate.getDate() + interval);
+
+    try {
+      const cardRef = doc(db, 'flashcards', cardId);
+      await updateDoc(cardRef, {
+        interval,
+        easeFactor,
+        consecutiveCorrect,
+        nextReviewDate: Timestamp.fromDate(nextReviewDate),
+        lastReviewed: Timestamp.now()
+      });
+    } catch (error) {
+      console.error("Error updating flashcard SRS", error);
+      handleFirestoreError(error, OperationType.WRITE, `flashcards/${cardId}`);
+    }
+  };
+
+  const scheduleRevisions = async (quizId: string, subject: string, fileName: string) => {
+    const intervals = [1, 3, 7, 15, 30]; // Days for spaced repetition
+    const taskIds: string[] = [];
+    const newTasks: RevisionTask[] = [];
+    
+    if (user) {
+      try {
+        const batch = writeBatch(db);
+        const taskIds: string[] = [];
+        
+        intervals.forEach(days => {
+          const taskRef = doc(collection(db, 'revisionTasks'));
+          const id = taskRef.id;
+          const task: RevisionTask = {
+            id,
+            quizId,
+            subject,
+            fileName,
+            dueDate: addDays(new Date(), days),
+            completed: false,
+            intervalDays: days
+          };
+          
+          newTasks.push(task);
+          taskIds.push(id);
+          
+          batch.set(taskRef, {
+            ...task,
+            uid: user.uid,
+            dueDate: Timestamp.fromDate(task.dueDate)
+          });
+        });
+        
+        await batch.commit();
+        // onSnapshot will handle state update, but we can update locally for immediate feedback
+        setRevisionTasks(prev => {
+          const existingIds = new Set(prev.map(t => t.id));
+          const filteredNew = newTasks.filter(t => !existingIds.has(t.id));
+          return [...prev, ...filteredNew];
+        });
+        return taskIds;
+      } catch (err) {
+        console.error("Erro ao agendar revisões:", err);
+        return [];
+      }
+    } else {
+      const taskIds: string[] = [];
+      intervals.forEach(days => {
+        const id = `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const task: RevisionTask = {
+          id,
+          quizId,
+          subject,
+          fileName,
+          dueDate: addDays(new Date(), days),
+          completed: false,
+          intervalDays: days
+        };
+        newTasks.push(task);
+        taskIds.push(id);
+      });
+      setRevisionTasks(prev => [...prev, ...newTasks]);
+      return taskIds;
+    }
+  };
+
   const finishQuiz = async () => {
     const correct = answers.filter((ans, idx) => ans === questions[idx]?.correctAnswer).length;
+    const resultId = user ? doc(collection(db, 'results')).id : `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const result: QuizResult = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: resultId,
       date: new Date(),
       correct,
       total: questions.length,
@@ -4323,7 +5363,10 @@ function QuizApp() {
       fileName: lastFileName || 'Documento',
       questions,
       answers,
-      content: lastContent
+      content: lastContent,
+      isSimulado,
+      subject: selectedSubject,
+      revisionTasks: []
     };
 
     // Finish UI immediately
@@ -4337,16 +5380,21 @@ function QuizApp() {
         try {
           const resultRef = doc(collection(db, 'results'));
           
+          let scheduledTaskIds: string[] = [];
+          // Schedule revisions if not in review mode
+          if (!isReviewMode) {
+            scheduledTaskIds = await scheduleRevisions(resultRef.id, questions[0]?.subject || 'Geral', result.fileName);
+          }
+
           // Estimate size and omit content if it's likely too large for Firestore (1MB limit)
-          // A rough estimate: string length + some overhead
           const contentStr = JSON.stringify(lastContent || '');
           const resultToSave = {
             ...result,
             uid: user.uid,
             date: Timestamp.fromDate(result.date),
             id: resultRef.id,
-            // If content is too large (> 800KB to be safe), omit it from Firestore
-            content: contentStr.length > 800000 ? { type: 'text', content: 'Conteúdo muito grande para ser salvo no histórico.' } : lastContent
+            content: contentStr.length > 800000 ? { type: 'text', content: 'Conteúdo muito grande para ser salvo no histórico.' } : lastContent,
+            revisionTasks: scheduledTaskIds
           };
 
           await setDoc(resultRef, resultToSave);
@@ -4365,6 +5413,36 @@ function QuizApp() {
           } else {
             // If it's a new quiz, add questions to SRS
             await addToSRS(questions, answers);
+          }
+
+          // AUTO-FLASHCARDS: Generate flashcards from incorrect questions
+          const incorrectQuestions = questions.filter((q, i) => answers[i] !== q.correctAnswer);
+          if (incorrectQuestions.length > 0) {
+            try {
+              const newFlashcards = await generateFlashcardsFromIncorrectQuestions(incorrectQuestions);
+              if (newFlashcards && newFlashcards.length > 0) {
+                const batch = writeBatch(db);
+                newFlashcards.forEach(card => {
+                  const cardRef = doc(collection(db, 'flashcards'));
+                  const nextReview = new Date();
+                  nextReview.setDate(nextReview.getDate() + 1); // Initial interval: 1 day
+
+                  batch.set(cardRef, {
+                    ...card,
+                    uid: user.uid,
+                    createdAt: Timestamp.now(),
+                    interval: 1,
+                    easeFactor: 2.5,
+                    nextReviewDate: Timestamp.fromDate(nextReview),
+                    consecutiveCorrect: 0
+                  });
+                });
+                await batch.commit();
+                console.log(`${newFlashcards.length} flashcards de revisão gerados automaticamente.`);
+              }
+            } catch (flashError) {
+              console.error("Erro ao gerar flashcards automáticos:", flashError);
+            }
           }
         } catch (e) {
           console.error("Failed to save history to Firestore in background", e);
@@ -5099,13 +6177,42 @@ function QuizApp() {
                   key={subject}
                   className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-black/5 dark:border-slate-700 rounded-lg group"
                 >
-                  <span className="text-[10px] font-bold dark:text-slate-300">{subject}</span>
-                  <button 
-                    onClick={() => handleRemoveSubject(subject)}
-                    className="text-black/20 dark:text-slate-500 hover:text-rose-500 transition-colors"
-                  >
-                    <X size={12} />
-                  </button>
+                  {editingSubject?.original === subject ? (
+                    <div className="flex items-center gap-1">
+                      <input 
+                        autoFocus
+                        type="text"
+                        value={editingSubject.current}
+                        onChange={(e) => setEditingSubject({ ...editingSubject, current: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleEditSubject(subject, editingSubject.current);
+                          if (e.key === 'Escape') setEditingSubject(null);
+                        }}
+                        onBlur={() => handleEditSubject(subject, editingSubject.current)}
+                        className="bg-transparent border-none outline-none text-[10px] font-bold dark:text-slate-300 w-24"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-[10px] font-bold dark:text-slate-300">{subject}</span>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => setEditingSubject({ original: subject, current: subject })}
+                          className="text-black/20 dark:text-slate-500 hover:text-blue-500 transition-colors"
+                          title="Editar"
+                        >
+                          <Settings size={10} />
+                        </button>
+                        <button 
+                          onClick={() => handleRemoveSubject(subject)}
+                          className="text-black/20 dark:text-slate-500 hover:text-rose-500 transition-colors"
+                          title="Remover"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -5475,6 +6582,9 @@ function QuizApp() {
                   setSelectedSubjects={setSelectedSubjects}
                   onDeleteQuizzes={handleDeleteQuizzes}
                   onDeleteSubjectsHistory={handleDeleteSubjectsHistory}
+                  onEditSubject={handleEditSubject}
+                  flashcards={flashcards}
+                  onOpenFlashcards={() => setShowFlashcards(true)}
                 />
               ) : showRecycleBin ? (
                 <RecycleBin 
@@ -5485,6 +6595,14 @@ function QuizApp() {
                   onRestoreMultiple={handleRestoreQuizzes}
                   onDelete={handlePermanentlyDeleteQuiz}
                   onDeleteMultiple={handlePermanentlyDeleteQuizzes}
+                />
+              ) : showFlashcards ? (
+                <FlashcardsView
+                  key="flashcards"
+                  flashcards={flashcards}
+                  onClose={() => setShowFlashcards(false)}
+                  onUpdateSRS={updateFlashcardSRS}
+                  theme={theme}
                 />
               ) : showStudyMode ? (
                 <StudyMode 
@@ -5510,6 +6628,67 @@ function QuizApp() {
                   recycleBinCount={recycleBin.length}
                   selectedSubjects={selectedSubjects}
                   setSelectedSubjects={setSelectedSubjects}
+                />
+              ) : showRevisionAgenda ? (
+                <RevisionAgenda 
+                  tasks={revisionTasks}
+                  theme={theme}
+                  onClose={() => setShowRevisionAgenda(false)}
+                  onCompleteTask={async (taskId) => {
+                    const task = revisionTasks.find(t => t.id === taskId);
+                    if (!task) return;
+                    
+                    const updatedTasks = revisionTasks.map(t => 
+                      t.id === taskId ? { ...t, completed: !t.completed } : t
+                    );
+                    setRevisionTasks(updatedTasks);
+                    
+                    if (user) {
+                      try {
+                        const q = query(collection(db, 'revisionTasks'), where('id', '==', taskId), where('uid', '==', user.uid));
+                        const snapshot = await getDocs(q);
+                        if (!snapshot.empty) {
+                          await updateDoc(snapshot.docs[0].ref, { completed: !task.completed });
+                        }
+                      } catch (err) {
+                        console.error("Erro ao atualizar tarefa:", err);
+                      }
+                    }
+                  }}
+                  onPracticeQuiz={async (quizId) => {
+                    // Find the quiz in history or fetch from Firestore
+                    let quiz = history.find(h => h.id === quizId);
+                    if (!quiz && user) {
+                      try {
+                        const docRef = doc(db, 'results', quizId);
+                        const docSnap = await getDoc(docRef);
+                        if (docSnap.exists()) {
+                          quiz = docSnap.data() as QuizResult;
+                          // Convert Timestamp to Date
+                          if (quiz.date && (quiz.date as any).toDate) {
+                            quiz.date = (quiz.date as any).toDate();
+                          }
+                        }
+                      } catch (err) {
+                        console.error("Erro ao buscar quiz para revisão:", err);
+                      }
+                    }
+                    
+                    if (quiz) {
+                      setQuestions(quiz.questions);
+                      setAnswers(new Array(quiz.questions.length).fill(null));
+                      setCurrentIndex(0);
+                      setTotalTime(0);
+                      setQuestionTime(timeAlertThreshold);
+                      setState('active');
+                      setIsReviewMode(false); // It's a practice session, not just viewing results
+                      setShowRevisionAgenda(false);
+                      setLastFileName(quiz.fileName);
+                      setLastContent(quiz.content || null);
+                    } else {
+                      alert("Quiz não encontrado no histórico.");
+                    }
+                  }}
                 />
               ) : state === 'idle' ? (
                 <motion.div
@@ -5578,11 +6757,23 @@ function QuizApp() {
                         Modo Estudo
                       </button>
                       <button 
-                        onClick={() => { setShowDashboard(true); setShowStudyMode(false); }}
+                        onClick={() => { setShowDashboard(true); setShowStudyMode(false); setShowRevisionAgenda(false); }}
                         className={cn("flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all relative", showDashboard ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5")}
                       >
                         <BarChart2 size={16} />
                         Meu Dashboard
+                      </button>
+                      <button 
+                        onClick={() => { setShowRevisionAgenda(true); setShowDashboard(false); setShowStudyMode(false); }}
+                        className={cn("flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all relative", showRevisionAgenda ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5")}
+                      >
+                        <Calendar size={16} />
+                        Agenda de Revisão
+                        {revisionTasks.filter(t => !t.completed && isBefore(t.dueDate, addDays(new Date(), 1))).length > 0 && (
+                          <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900">
+                            {revisionTasks.filter(t => !t.completed && isBefore(t.dueDate, addDays(new Date(), 1))).length}
+                          </span>
+                        )}
                       </button>
                     </div>
 
@@ -5737,165 +6928,303 @@ function QuizApp() {
                         </AnimatePresence>
                       </div>
 
-                      {/* Própria Banca Toggle */}
+                      {/* Simulado Toggle */}
                       <button
-                        onClick={() => setIsBancaMindset(!isBancaMindset)}
+                        onClick={() => {
+                          const next = !isSimulado;
+                          setIsSimulado(next);
+                          if (!next) setSelectedSimuladoSubjects([]);
+                        }}
                         className={cn(
                           "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95",
-                          isBancaMindset
+                          isSimulado
                             ? cn(theme.border, theme.bg, theme.text, "ring-2 ring-offset-2", theme.ring)
                             : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20"
                         )}
-                        title="Ativa o modo de elaboração rigoroso, simulando a mente dos examinadores da banca."
+                        title="Modo Simulado: Cronômetro global, várias matérias e feedback apenas ao final."
                       >
-                        <Award size={18} className={isBancaMindset ? theme.icon : "text-black/20 dark:text-slate-600"} />
-                        <span>Própria Banca</span>
-                        {isBancaMindset && (
+                        <TrendingUp size={18} className={isSimulado ? theme.icon : "text-black/20 dark:text-slate-600"} />
+                        <span>Simulado</span>
+                        {isSimulado && (
                           <motion.span 
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
-                            className="flex h-2 w-2 rounded-full bg-amber-500"
+                            className="flex h-2 w-2 rounded-full bg-blue-500"
                           />
                         )}
                       </button>
+
+                      {/* Própria Banca Toggle */}
+                      <div className="flex flex-col gap-3">
+                        <button
+                          onClick={() => {
+                            const next = !isBancaMindset;
+                            setIsBancaMindset(next);
+                            if (!next) setHypotheticalCasesCount(0);
+                          }}
+                          className={cn(
+                            "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95",
+                            isBancaMindset
+                              ? cn(theme.border, theme.bg, theme.text, "ring-2 ring-offset-2", theme.ring)
+                              : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20"
+                          )}
+                          title="Ativa o modo de elaboração rigoroso, simulando a mente dos examinadores da banca."
+                        >
+                          <Award size={18} className={isBancaMindset ? theme.icon : "text-black/20 dark:text-slate-600"} />
+                          <span>Própria Banca</span>
+                          {isBancaMindset && (
+                            <motion.span 
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="flex h-2 w-2 rounded-full bg-amber-500"
+                            />
+                          )}
+                        </button>
+
+                        <AnimatePresence>
+                          {isBancaMindset && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 space-y-3"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Zap size={14} className="text-amber-500" />
+                                  <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">Casos Hipotéticos</span>
+                                </div>
+                                <span className="text-xs font-black text-amber-600 dark:text-amber-400">{hypotheticalCasesCount}</span>
+                              </div>
+                              <input 
+                                type="range"
+                                min="0"
+                                max={Math.min(questionCount, 10)}
+                                step="1"
+                                value={hypotheticalCasesCount}
+                                onChange={(e) => setHypotheticalCasesCount(parseInt(e.target.value))}
+                                className="w-full h-1.5 bg-amber-500/20 rounded-full appearance-none cursor-pointer accent-amber-500"
+                              />
+                              <p className="text-[9px] text-amber-600/60 dark:text-amber-400/60 font-medium leading-tight">
+                                Define quantas questões serão baseadas em situações práticas para aplicar a teoria.
+                              </p>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </div>
                   </div>
 
                   <div className="space-y-6">
-                    {/* Subject Selection */}
-                    <div className="max-w-xl mx-auto space-y-3">
-                      <div className="flex items-center justify-between px-1">
-                        <label className="text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">1. Nome da Matéria</label>
-                        {selectedSubject && (
-                          <button onClick={() => setSelectedSubject('')} className="text-[10px] font-bold text-rose-500 hover:underline">Limpar</button>
-                        )}
-                      </div>
-                      <div className="relative group">
-                        <div className={cn("absolute left-4 top-1/2 -translate-y-1/2 text-black/20 dark:text-slate-600 transition-colors", selectedSubject ? theme.text : "")}>
-                          <Folder size={20} />
-                        </div>
-                        <input 
-                          type="text"
-                          list="existing-subjects"
-                          value={selectedSubject}
-                          onChange={(e) => setSelectedSubject(e.target.value)}
-                          placeholder="Ex: Direito Constitucional, Português..."
-                          className={cn("w-full bg-white dark:bg-slate-900 border-2 border-black/5 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 transition-all outline-none font-bold dark:text-white", `focus:${theme.border}`, theme.ring)}
-                        />
-                        <datalist id="existing-subjects">
-                          {subjects.map(s => <option key={s} value={s} />)}
-                        </datalist>
-                      </div>
-                    </div>
-
-                    <div className="max-w-xl mx-auto space-y-3">
-                      <label className="block text-left px-1 text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">2. Selecione o Material</label>
-                      
-                      <div 
-                        onClick={() => {
-                          fileInputRef.current?.click();
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const files = e.dataTransfer.files;
-                          if (files && files.length > 0) {
-                            const event = { target: { files } } as any;
-                            handleFileUpload(event);
-                          }
-                        }}
-                        className={cn(
-                          "group relative border-2 border-dashed rounded-3xl p-8 cursor-pointer transition-all duration-300", 
-                          pendingContent && pendingFileName ? cn(theme.border, theme.bg, "border-solid") : "border-black/10 dark:border-slate-800",
-                          `hover:${theme.border}/50`, `hover:${theme.bg}/30`, `dark:hover:${theme.bgDark}`
-                        )}
+                    {/* Simulado Multi-Subject Configuration */}
+                    {isSimulado && subjects.length > 0 && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="max-w-xl mx-auto space-y-4 p-6 rounded-[2.5rem] bg-blue-500/5 border border-blue-500/20 backdrop-blur-xl shadow-xl"
                       >
-                        <input 
-                          type="file" 
-                          ref={fileInputRef} 
-                          onChange={handleFileUpload} 
-                          multiple
-                          className="hidden" 
-                          accept=".txt,.md,.pdf,.docx,image/*"
-                        />
-                        <div className="flex flex-col items-center gap-3">
-                          <div className={cn("w-12 h-12 rounded-xl shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300", pendingContent ? cn(theme.primary, theme.contrastText) : "bg-white dark:bg-slate-800")}>
-                            {pendingContent ? <Check size={24} /> : <Upload className={theme.icon} size={24} />}
+                        <div className="flex items-center gap-3 mb-2">
+                          <TrendingUp className="text-blue-500" size={20} />
+                          <h3 className="font-bold text-sm uppercase tracking-widest text-blue-600 dark:text-blue-400">Configuração do Simulado</h3>
+                        </div>
+                        <p className="text-xs text-black/40 dark:text-slate-500 leading-relaxed">
+                          Selecione as matérias que você já estudou para compor seu simulado. O sistema dividirá as {questionCount} questões proporcionalmente entre elas de forma sequencial.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {Array.from(new Set(subjects)).map(subject => {
+                            const hasContent = hasContentForSubject(subject);
+                            const isSelected = selectedSimuladoSubjects.includes(subject);
+                            
+                            return (
+                              <button
+                                key={subject}
+                                onClick={() => {
+                                  setSelectedSimuladoSubjects(prev => 
+                                    prev.includes(subject) ? prev.filter(s => s !== subject) : [...prev, subject]
+                                  );
+                                }}
+                                className={cn(
+                                  "px-4 py-3 rounded-2xl text-[11px] font-bold border-2 transition-all flex items-center justify-between text-left relative overflow-hidden",
+                                  isSelected 
+                                    ? cn(theme.border, theme.bg, theme.text) 
+                                    : "bg-white dark:bg-slate-900 border-black/5 dark:border-slate-800 text-black/40 dark:text-slate-500 hover:border-black/10",
+                                  !hasContent && !isSelected && "opacity-40 grayscale-[0.5]"
+                                )}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={cn(
+                                    "w-2 h-2 rounded-full",
+                                    hasContent ? "bg-emerald-500" : "bg-rose-500"
+                                  )} />
+                                  <span className="truncate max-w-[120px]">{subject}</span>
+                                </div>
+                                {!hasContent && (
+                                  <span className="text-[8px] uppercase tracking-tighter opacity-50">Sem Material</span>
+                                )}
+                                {isSelected && (
+                                  <Check size={14} className={isSelected ? "text-current" : "text-blue-500"} />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        
+                        {selectedSimuladoSubjects.length > 0 && (
+                          <motion.button
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            onClick={handleGenerateSimulado}
+                            className={cn(
+                              "w-full py-4 rounded-2xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3 mt-4",
+                              theme.primary,
+                              theme.primaryHover
+                            )}
+                          >
+                            <Zap size={20} />
+                            Gerar Simulado ({questionCount} questões)
+                          </motion.button>
+                        )}
+                      </motion.div>
+                    )}
+
+                    {!isSimulado && (
+                      <>
+                        {/* Subject Selection */}
+                        <div className="max-w-xl mx-auto space-y-3">
+                          <div className="flex items-center justify-between px-1">
+                            <label className="text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">1. Nome da Matéria</label>
+                            {selectedSubject && (
+                              <button onClick={() => setSelectedSubject('')} className="text-[10px] font-bold text-rose-500 hover:underline">Limpar</button>
+                            )}
                           </div>
-                          <div>
-                            <p className="font-bold text-base dark:text-slate-100">
-                              {pendingContent ? "Material Selecionado" : "Carregar Arquivos"}
-                            </p>
-                            <p className="text-xs text-black/40 dark:text-slate-500">
-                              {pendingContent ? pendingFileName : "PDF, DOCX, Imagens, TXT ou MD"}
-                            </p>
+                          <div className="relative group">
+                            <div className={cn("absolute left-4 top-1/2 -translate-y-1/2 text-black/20 dark:text-slate-600 transition-colors", selectedSubject ? theme.text : "")}>
+                              <Folder size={20} />
+                            </div>
+                            <input 
+                              type="text"
+                              list="existing-subjects"
+                              value={selectedSubject}
+                              onChange={(e) => setSelectedSubject(e.target.value)}
+                              placeholder="Ex: Direito Constitucional, Português..."
+                              className={cn("w-full bg-white dark:bg-slate-900 border-2 border-black/5 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 transition-all outline-none font-bold dark:text-white", `focus:${theme.border}`, theme.ring)}
+                            />
+                            <datalist id="existing-subjects">
+                              {Array.from(new Set(subjects)).map(s => <option key={s} value={s} />)}
+                            </datalist>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="relative flex items-center gap-4 py-2">
-                        <div className="flex-1 h-px bg-black/5 dark:bg-slate-800"></div>
-                        <span className="text-[10px] font-bold text-black/20 dark:text-slate-600 uppercase tracking-widest text-center">ou use links</span>
-                        <div className="flex-1 h-px bg-black/5 dark:bg-slate-800"></div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="relative group">
-                          <div className={cn("absolute left-4 top-4 text-black/20 dark:text-slate-600 transition-colors", urlInput ? theme.text : "")}>
-                            <LinkIcon size={18} />
-                          </div>
-                          <textarea
-                            value={urlInput}
-                            onChange={(e) => setUrlInput(e.target.value)}
-                            placeholder="Cole links da web ou YouTube..."
-                            className={cn("w-full bg-white dark:bg-slate-900 border-2 border-black/5 dark:border-slate-800 rounded-2xl py-3 pl-12 pr-4 min-h-[80px] transition-all outline-none resize-none text-sm dark:text-slate-100 dark:placeholder:text-slate-600", `focus:${theme.border}`, theme.ring)}
-                          />
-                        </div>
-                        {urlInput.trim() && (
-                          <button 
+                        <div className="max-w-xl mx-auto space-y-3">
+                          <label className="block text-left px-1 text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">2. Selecione o Material</label>
+                          
+                          <div 
                             onClick={() => {
-                              const urls = urlInput.split('\n').map(u => u.trim()).filter(u => u.startsWith('http'));
-                              if (urls.length > 0) {
-                                setPendingContent(urls);
-                                setPendingFileName(urls.length === 1 ? urls[0] : `${urls.length} links`);
-                                setUrlInput('');
+                              fileInputRef.current?.click();
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const files = e.dataTransfer.files;
+                              if (files && files.length > 0) {
+                                const event = { target: { files } } as any;
+                                handleFileUpload(event);
                               }
                             }}
-                            className={cn("w-full py-2 rounded-xl text-xs font-bold transition-all", theme.bg, theme.text, "hover:opacity-80")}
+                            className={cn(
+                              "group relative border-2 border-dashed rounded-3xl p-8 cursor-pointer transition-all duration-300", 
+                              pendingContent && pendingFileName ? cn(theme.border, theme.bg, "border-solid") : "border-black/10 dark:border-slate-800",
+                              `hover:${theme.border}/50`, `hover:${theme.bg}/30`, `dark:hover:${theme.bgDark}`
+                            )}
                           >
-                            Confirmar Links
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                            <input 
+                              type="file" 
+                              ref={fileInputRef} 
+                              onChange={handleFileUpload} 
+                              multiple
+                              className="hidden" 
+                              accept=".txt,.md,.pdf,.docx,image/*"
+                            />
+                            <div className="flex flex-col items-center gap-3">
+                              <div className={cn("w-12 h-12 rounded-xl shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300", pendingContent ? cn(theme.primary, theme.contrastText) : "bg-white dark:bg-slate-800")}>
+                                {pendingContent ? <Check size={24} /> : <Upload className={theme.icon} size={24} />}
+                              </div>
+                              <div>
+                                <p className="font-bold text-base dark:text-slate-100">
+                                  {pendingContent ? "Material Selecionado" : "Carregar Arquivos"}
+                                </p>
+                                <p className="text-xs text-black/40 dark:text-slate-500">
+                                  {pendingContent ? pendingFileName : "PDF, DOCX, Imagens, TXT ou MD"}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
 
-                    <div className="max-w-xl mx-auto pt-4">
-                      <button
-                        type="button"
-                        disabled={(!pendingContent && !urlInput.trim()) || !selectedSubject.trim()}
-                        onClick={handleCreateQuiz}
-                        className={cn(
-                          "w-full py-5 rounded-[2rem] font-black text-lg transition-all shadow-2xl flex items-center justify-center gap-3 active:scale-[0.98]",
-                          (pendingContent || urlInput.trim()) && selectedSubject.trim()
-                            ? cn(theme.primary, theme.contrastText, theme.shadow, theme.primaryHover)
-                            : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-700 cursor-not-allowed"
-                        )}
-                      >
-                        <BrainCircuit size={24} />
-                        CRIAR QUIZ AGORA
-                      </button>
-                      
-                      {!pendingContent && !urlInput.trim() && (
-                        <p className="mt-3 text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-widest">Selecione um material para habilitar</p>
-                      )}
-                      {(pendingContent || urlInput.trim()) && !selectedSubject.trim() && (
-                        <p className="mt-3 text-[10px] font-bold text-amber-500 uppercase tracking-widest">Informe a matéria para continuar</p>
-                      )}
-                    </div>
+                          <div className="relative flex items-center gap-4 py-2">
+                            <div className="flex-1 h-px bg-black/5 dark:bg-slate-800"></div>
+                            <span className="text-[10px] font-bold text-black/20 dark:text-slate-600 uppercase tracking-widest text-center">ou use links</span>
+                            <div className="flex-1 h-px bg-black/5 dark:bg-slate-800"></div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="relative group">
+                              <div className={cn("absolute left-4 top-4 text-black/20 dark:text-slate-600 transition-colors", urlInput ? theme.text : "")}>
+                                <LinkIcon size={18} />
+                              </div>
+                              <textarea
+                                value={urlInput}
+                                onChange={(e) => setUrlInput(e.target.value)}
+                                placeholder="Cole links da web ou YouTube..."
+                                className={cn("w-full bg-white dark:bg-slate-900 border-2 border-black/5 dark:border-slate-800 rounded-2xl py-3 pl-12 pr-4 min-h-[80px] transition-all outline-none resize-none text-sm dark:text-slate-100 dark:placeholder:text-slate-600", `focus:${theme.border}`, theme.ring)}
+                              />
+                            </div>
+                            {urlInput.trim() && (
+                              <button 
+                                onClick={() => {
+                                  const urls = urlInput.split('\n').map(u => u.trim()).filter(u => u.startsWith('http'));
+                                  if (urls.length > 0) {
+                                    setPendingContent(urls);
+                                    setPendingFileName(urls.length === 1 ? urls[0] : `${urls.length} links`);
+                                    setUrlInput('');
+                                  }
+                                }}
+                                className={cn("w-full py-2 rounded-xl text-xs font-bold transition-all", theme.bg, theme.text, "hover:opacity-80")}
+                              >
+                                Confirmar Links
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="max-w-xl mx-auto pt-4">
+                          <button
+                            type="button"
+                            disabled={(!pendingContent && !urlInput.trim()) || !selectedSubject.trim()}
+                            onClick={handleCreateQuiz}
+                            className={cn(
+                              "w-full py-5 rounded-[2rem] font-black text-lg transition-all shadow-2xl flex items-center justify-center gap-3 active:scale-[0.98]",
+                              (pendingContent || urlInput.trim()) && selectedSubject.trim()
+                                ? cn(theme.primary, theme.contrastText, theme.shadow, theme.primaryHover)
+                                : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-700 cursor-not-allowed"
+                            )}
+                          >
+                            <BrainCircuit size={24} />
+                            CRIAR QUIZ AGORA
+                          </button>
+                          
+                          {!pendingContent && !urlInput.trim() && (
+                            <p className="mt-3 text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-widest">Selecione um material para habilitar</p>
+                          )}
+                          {(pendingContent || urlInput.trim()) && !selectedSubject.trim() && (
+                            <p className="mt-3 text-[10px] font-bold text-amber-500 uppercase tracking-widest">Informe a matéria para continuar</p>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {error && (
@@ -6248,7 +7577,7 @@ function QuizApp() {
                                   className={cn(
                                     "group flex flex-col px-6 py-5 rounded-3xl border-2 transition-all duration-300 text-left relative overflow-hidden",
                                     !(currentAnswer !== null || isReviewMode) && "cursor-pointer",
-                                    currentAnswer === null ? cn("border-black/5 dark:border-slate-800", `hover:${theme.border}`, `dark:hover:${theme.border}`, `hover:${theme.bg}/50`, `dark:hover:${theme.bgDark}`, `hover:${theme.shadowLight}`, `dark:hover:${theme.shadowDark}`) :
+                                    (currentAnswer === null || (isSimulado && !isReviewMode)) ? cn("border-black/5 dark:border-slate-800", `hover:${theme.border}`, `dark:hover:${theme.border}`, `hover:${theme.bg}/50`, `dark:hover:${theme.bgDark}`, `hover:${theme.shadowLight}`, `dark:hover:${theme.shadowDark}`) :
                                     option === currentQuestion.correctAnswer ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-inner" :
                                     currentAnswer === option ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10" : "border-black/5 dark:border-slate-800 opacity-50"
                                   )}
@@ -6257,7 +7586,7 @@ function QuizApp() {
                                     <div className="flex items-center gap-4">
                                       <div className={cn(
                                         "w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-colors shrink-0",
-                                        currentAnswer === null ? cn(theme.bgLight, theme.bgLightDark, "text-black dark:text-white") :
+                                        (currentAnswer === null || (isSimulado && !isReviewMode)) ? cn(theme.bgLight, theme.bgLightDark, "text-black dark:text-white") :
                                         option === currentQuestion.correctAnswer ? "bg-emerald-600 text-white" :
                                         currentAnswer === option ? "bg-rose-600 text-white" : "bg-black/5 dark:bg-slate-800 dark:text-slate-600"
                                       )}>
@@ -6267,19 +7596,19 @@ function QuizApp() {
                                         "font-medium text-lg transition-colors text-black dark:text-white line-clamp-2"
                                       )}>{option}</span>
                                     </div>
-                                    {currentAnswer !== null && option === currentQuestion.correctAnswer && (
+                                    {currentAnswer !== null && !(isSimulado && !isReviewMode) && option === currentQuestion.correctAnswer && (
                                       <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
                                         <CheckCircle2 className="text-emerald-600" size={28} />
                                       </motion.div>
                                     )}
-                                    {currentAnswer === option && option !== currentQuestion.correctAnswer && (
+                                    {currentAnswer === option && !(isSimulado && !isReviewMode) && option !== currentQuestion.correctAnswer && (
                                       <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
                                         <XCircle className="text-rose-600" size={28} />
                                       </motion.div>
                                     )}
                                   </div>
 
-                                  {(currentAnswer !== null ? currentAnswer === option : (isReviewMode && option === currentQuestion.correctAnswer)) && (
+                                  {(currentAnswer !== null && !(isSimulado && !isReviewMode) ? currentAnswer === option : (isReviewMode && option === currentQuestion.correctAnswer)) && (
                                     <motion.div
                                       initial={{ opacity: 0, height: 0 }}
                                       animate={{ opacity: 1, height: 'auto' }}
@@ -6356,7 +7685,7 @@ function QuizApp() {
                                   className={cn(
                                     "group flex flex-col px-6 py-5 rounded-3xl border-2 transition-all duration-300 text-left relative overflow-hidden",
                                     !(currentAnswer !== null || isReviewMode) && "cursor-pointer",
-                                    currentAnswer === null ? cn("border-black/5 dark:border-slate-800", `hover:${theme.border}`, `dark:hover:${theme.border}`, `hover:${theme.bg}/50`, `dark:hover:${theme.bgDark}`, `hover:${theme.shadowLight}`, `dark:hover:${theme.shadowDark}`) :
+                                    (currentAnswer === null || (isSimulado && !isReviewMode)) ? cn("border-black/5 dark:border-slate-800", `hover:${theme.border}`, `dark:hover:${theme.border}`, `hover:${theme.bg}/50`, `dark:hover:${theme.bgDark}`, `hover:${theme.shadowLight}`, `dark:hover:${theme.shadowDark}`) :
                                     option === currentQuestion.correctAnswer ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-inner" :
                                     currentAnswer === option ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10" : "border-black/5 dark:border-slate-800 opacity-50"
                                   )}
@@ -6365,7 +7694,7 @@ function QuizApp() {
                                     <div className="flex items-center gap-4">
                                       <div className={cn(
                                         "w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-colors shrink-0",
-                                        currentAnswer === null ? cn(theme.bgLight, theme.bgLightDark, "text-black dark:text-white") :
+                                        (currentAnswer === null || (isSimulado && !isReviewMode)) ? cn(theme.bgLight, theme.bgLightDark, "text-black dark:text-white") :
                                         option === currentQuestion.correctAnswer ? "bg-emerald-600 text-white" :
                                         currentAnswer === option ? "bg-rose-600 text-white" : "bg-black/5 dark:bg-slate-800 dark:text-slate-600"
                                       )}>
@@ -6375,19 +7704,19 @@ function QuizApp() {
                                         "font-medium text-base md:text-lg transition-colors text-black dark:text-white line-clamp-2"
                                       )}>{option}</span>
                                     </div>
-                                    {currentAnswer !== null && option === currentQuestion.correctAnswer && (
+                                    {currentAnswer !== null && !(isSimulado && !isReviewMode) && option === currentQuestion.correctAnswer && (
                                       <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
                                         <CheckCircle2 className="text-emerald-600" size={28} />
                                       </motion.div>
                                     )}
-                                    {currentAnswer === option && option !== currentQuestion.correctAnswer && (
+                                    {currentAnswer === option && !(isSimulado && !isReviewMode) && option !== currentQuestion.correctAnswer && (
                                       <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
                                         <XCircle className="text-rose-600" size={28} />
                                       </motion.div>
                                     )}
                                   </div>
 
-                                  {(currentAnswer !== null ? currentAnswer === option : (isReviewMode && option === currentQuestion.correctAnswer)) && (
+                                  {(currentAnswer !== null && !(isSimulado && !isReviewMode) ? currentAnswer === option : (isReviewMode && option === currentQuestion.correctAnswer)) && (
                                     <motion.div
                                       initial={{ opacity: 0, height: 0 }}
                                       animate={{ opacity: 1, height: 'auto' }}

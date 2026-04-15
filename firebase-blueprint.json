@@ -58,9 +58,28 @@
         "fileName": { "type": "string", "description": "The name of the file or source used for the quiz." },
         "questions": { "type": "array", "items": { "type": "object" }, "description": "The list of questions generated for the quiz." },
         "answers": { "type": "array", "items": { "type": "string" }, "description": "The user's answers for each question." },
-        "content": { "type": "object", "description": "The source content used to generate the quiz." }
+        "content": { "type": "object", "description": "The source content used to generate the quiz." },
+        "isSimulado": { "type": "boolean", "description": "Whether the quiz was taken in simulation mode." },
+        "subject": { "type": "string", "description": "The main subject of the quiz." },
+        "revisionTasks": { "type": "array", "items": { "type": "string" }, "description": "List of revision task IDs associated with this result." }
       },
       "required": ["uid", "date", "correct", "total", "timeSpent", "fileName", "questions", "answers"]
+    },
+    "RevisionTask": {
+      "title": "Revision Task",
+      "description": "A scheduled revision task based on spaced repetition.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "quizId": { "type": "string" },
+        "subject": { "type": "string" },
+        "fileName": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "completed": { "type": "boolean" },
+        "intervalDays": { "type": "integer" }
+      },
+      "required": ["id", "uid", "quizId", "subject", "fileName", "dueDate", "completed", "intervalDays"]
     },
     "Flashcard": {
       "title": "Flashcard",
@@ -125,6 +144,10 @@
     "/mindmaps/{mapId}": {
       "schema": "MindMap",
       "description": "User AI-generated mind maps."
+    },
+    "/revisionTasks/{taskId}": {
+      "schema": "RevisionTask",
+      "description": "User scheduled revision tasks."
     }
   }
 }
