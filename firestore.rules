@@ -1,295 +1,165 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Global Safety Net
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
     // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: {uid}
-    // Fields:
-    //   - uid: string (required) - The user's unique identifier.
-    //   - displayName: string (optional) - The user's display name.
-    //   - email: string (required, email format) - The user's email address.
-    //   - photoURL: string (optional) - The user's profile photo URL.
-    //   - createdAt: timestamp (required) - The time the profile was created.
-    //   - role: string (required, enum: ['user', 'admin']) - The user's role.
-    //   - streak: int (optional) - The current consecutive days of study.
-    //   - lastActivity: timestamp (optional) - The last time the user completed a quiz.
-    //   - achievements: list (optional) - List of unlocked achievement IDs.
-    //   - totalCorrectAnswers: int (optional) - Total correct answers.
-    //   - totalQuizzesTaken: int (optional) - Total quizzes completed.
-    //
-    // Collection: results
-    // Document ID: {resultId}
-    // Fields:
-    //   - id: string (optional) - The result ID.
-    //   - uid: string (required) - The UID of the user who took the quiz.
-    //   - date: timestamp (required) - The date and time the quiz was completed.
-    //   - correct: int (required) - The number of correct answers.
-    //   - total: int (required) - The total number of questions.
-    //   - timeSpent: int (required) - The total time spent in seconds.
-    //   - fileName: string (required) - The name of the source file.
-    //   - questions: list (required) - The list of questions.
-    //   - answers: list (required) - The user's answers.
-    //   - content: any (optional) - The source content.
-    //   - isSimulado: bool (optional) - Whether it was a simulation.
-    //   - subject: string (optional) - The main subject of the quiz.
-    //   - revisionTasks: list (optional) - List of revision task IDs.
-    //   - deleted: bool (optional) - Soft delete flag.
-    //   - deletedAt: timestamp (optional) - Soft delete timestamp.
-    //
-    // Collection: revisionTasks
-    // Document ID: {taskId}
-    // Fields:
-    //   - id: string (required)
-    //   - uid: string (required)
-    //   - quizId: string (required)
-    //   - subject: string (required)
-    //   - fileName: string (required)
-    //   - dueDate: timestamp (required)
-    //   - completed: bool (required)
-    //   - intervalDays: int (required)
-    //
-    // Collection: srs
-    // Document ID: {itemId}
-    // Fields:
-    //   - uid: string (required) - The UID of the user who owns this item.
-    //   - questionId: string (required) - The original question ID.
-    //   - question: string (required) - The question text.
-    //   - options: list (optional) - The options for the question.
-    //   - correctAnswer: string (required) - The correct answer.
-    //   - explanation: string (optional) - The explanation.
-    //   - subject: string (optional) - The subject.
-    //   - interval: int (required) - The interval in days until next review.
-    //   - easeFactor: number (required) - The SM-2 ease factor.
-    //   - nextReviewDate: timestamp (required) - The date for next review.
-    //   - consecutiveCorrect: int (optional) - Number of consecutive correct answers.
-    //
-    // Collection: flashcards
-    // Document ID: {cardId}
-    // Fields:
-    //   - uid: string (required) - The user ID who owns this flashcard.
-    //   - front: string (required) - The question or concept on the front.
-    //   - back: string (required) - The answer or explanation on the back.
-    //   - subject: string (required) - The subject of the flashcard.
-    //   - createdAt: timestamp (required) - The time the flashcard was created.
-    //   - interval: int (optional) - The interval in days until next review.
-    //   - easeFactor: number (optional) - The SM-2 ease factor.
-    //   - nextReviewDate: timestamp (optional) - The date for next review.
-    //   - consecutiveCorrect: int (optional) - Number of consecutive correct answers.
-    //   - lastReviewed: timestamp (optional) - The last time the card was reviewed.
-    //
-    // Collection: mindmaps
-    // Document ID: {mapId}
-    // Fields:
-    //   - uid: string (required) - The user ID who owns this mind map.
-    //   - mermaidCode: string (required) - The Mermaid.js code for the diagram.
-    //   - subject: string (required) - The subject of the mind map.
-    //   - createdAt: timestamp (required) - The time the mind map was created.
-    //
-    // Collection: srs_registries
-    // Document ID: {uid}
-    // Fields:
-    //   - uid: string (required) - The user ID who owns this registry.
-    //   - items: map (required) - Map of SRS items.
-    //   - lastUpdated: timestamp (optional) - The last time the registry was updated.
-    //
-    // ===============================================================
-
-    // ===============================================================
-    // Helper Functions
+    // Shared Helpers
     // ===============================================================
     
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
     }
 
-    function isDocOwner() {
-      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
     }
 
     function isAdmin() {
-      return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
-         (request.auth.token.email == "adrianoconrad@gmail.com" && request.auth.token.email_verified == true));
+      return isVerified() && 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+         request.auth.token.email == "adrianoconrad@gmail.com");
     }
 
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
+    function incoming() {
+      return request.resource.data;
     }
 
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    function existing() {
+      return resource.data;
     }
+
+    // ===============================================================
+    // Entity Validation Blueprints
+    // ===============================================================
 
     function isValidUser(data) {
-      return hasRequiredFields(['uid', 'email', 'createdAt', 'role']) &&
-             hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'createdAt', 'role', 'streak', 'lastActivity', 'achievements', 'totalCorrectAnswers', 'totalQuizzesTaken', 'backgroundUrl', 'backgroundBlur', 'backgroundOpacity', 'customBackgrounds', 'themeColor', 'customThemeColor', 'subjects']) &&
+      return data.keys().hasAll(['uid', 'email', 'createdAt', 'role']) && 
+             data.keys().size() <= 20 &&
              data.uid == request.auth.uid &&
              data.email == request.auth.token.email &&
-             isValidEmail(data.email) &&
              data.role in ['user', 'admin'] &&
-             data.createdAt is timestamp &&
-             (!('streak' in data) || data.streak is int) &&
-             (!('lastActivity' in data) || data.lastActivity is timestamp) &&
-             (!('achievements' in data) || data.achievements is list) &&
-             (!('totalCorrectAnswers' in data) || data.totalCorrectAnswers is int) &&
-             (!('totalQuizzesTaken' in data) || data.totalQuizzesTaken is int) &&
-             (!('backgroundUrl' in data) || data.backgroundUrl is string) &&
-             (!('backgroundBlur' in data) || data.backgroundBlur is int) &&
-             (!('backgroundOpacity' in data) || data.backgroundOpacity is int) &&
-             (!('customBackgrounds' in data) || data.customBackgrounds is list) &&
-             (!('themeColor' in data) || data.themeColor is string) &&
-             (!('customThemeColor' in data) || data.customThemeColor is string);
+             data.createdAt is timestamp;
     }
 
-    function isValidSRSItem(data) {
-      return hasRequiredFields(['uid', 'questionId', 'question', 'correctAnswer', 'interval', 'easeFactor', 'nextReviewDate']) &&
-             hasOnlyAllowedFields(['uid', 'questionId', 'question', 'options', 'correctAnswer', 'explanation', 'subject', 'interval', 'easeFactor', 'nextReviewDate', 'consecutiveCorrect']) &&
+    function isValidStudyLog(data) {
+      return data.keys().hasAll(['uid', 'date', 'subject', 'fileNames']) && 
+             data.keys().size() == 4 &&
              data.uid == request.auth.uid &&
-             data.questionId is string &&
-             data.question is string &&
-             data.correctAnswer is string &&
-             data.interval is int &&
-             data.easeFactor is number &&
-             data.nextReviewDate is timestamp &&
-             (!('options' in data) || data.options is list) &&
-             (!('explanation' in data) || data.explanation is string) &&
-             (!('subject' in data) || data.subject is string) &&
-             (!('consecutiveCorrect' in data) || data.consecutiveCorrect is int);
+             data.date is timestamp &&
+             data.subject is string && data.subject.size() > 0 && data.subject.size() < 200 &&
+             data.fileNames is string && data.fileNames.size() < 5000;
     }
 
     function isValidResult(data) {
-      return hasRequiredFields(['uid', 'date', 'correct', 'total', 'timeSpent', 'fileName', 'questions', 'answers']) &&
-             hasOnlyAllowedFields(['id', 'uid', 'date', 'correct', 'total', 'timeSpent', 'fileName', 'questions', 'answers', 'content', 'deleted', 'deletedAt', 'isSimulado', 'subject', 'revisionTasks']) &&
+      return data.keys().hasAll(['uid', 'date', 'correct', 'total', 'timeSpent', 'fileName', 'questions', 'answers']) &&
              data.uid == request.auth.uid &&
              data.date is timestamp &&
-             data.correct is int && data.correct >= 0 &&
-             data.total is int && data.total > 0 &&
-             data.timeSpent is int && data.timeSpent >= 0 &&
+             data.correct is int && 
+             data.total is int &&
+             data.timeSpent is int &&
              data.fileName is string && data.fileName.size() < 500 &&
              data.questions is list && data.questions.size() <= 100 &&
-             data.answers is list && data.answers.size() <= 100 &&
-             (!('id' in data) || data.id is string) &&
-             (!('deleted' in data) || data.deleted is bool) &&
-             (!('deletedAt' in data) || data.deletedAt is timestamp || data.deletedAt == null) &&
-             (!('isSimulado' in data) || data.isSimulado is bool) &&
-             (!('subject' in data) || data.subject is string) &&
-             (!('revisionTasks' in data) || data.revisionTasks is list);
+             data.answers is list && data.answers.size() <= 100;
     }
 
     function isValidRevisionTask(data) {
-      return hasRequiredFields(['id', 'uid', 'quizId', 'subject', 'fileName', 'dueDate', 'completed', 'intervalDays']) &&
-             hasOnlyAllowedFields(['id', 'uid', 'quizId', 'subject', 'fileName', 'dueDate', 'completed', 'intervalDays']) &&
+      return data.keys().hasAll(['id', 'uid', 'quizId', 'subject', 'fileName', 'dueDate', 'completed', 'intervalDays']) &&
+             data.keys().size() == 8 &&
              data.uid == request.auth.uid &&
-             data.id is string &&
-             data.quizId is string &&
-             data.subject is string &&
-             data.fileName is string &&
              data.dueDate is timestamp &&
              data.completed is bool &&
              data.intervalDays is int;
     }
 
     function isValidFlashcard(data) {
-      return hasRequiredFields(['uid', 'front', 'back', 'subject', 'createdAt']) &&
-             hasOnlyAllowedFields(['id', 'uid', 'front', 'back', 'subject', 'createdAt', 'interval', 'easeFactor', 'nextReviewDate', 'consecutiveCorrect', 'lastReviewed']) &&
+      return data.keys().hasAll(['uid', 'front', 'back', 'subject', 'createdAt']) &&
              data.uid == request.auth.uid &&
-             data.front is string && data.front.size() > 0 && data.front.size() < 2000 &&
-             data.back is string && data.back.size() > 0 && data.back.size() < 5000 &&
-             data.subject is string &&
-             data.createdAt is timestamp &&
-             (!('id' in data) || data.id is string) &&
-             (!('interval' in data) || data.interval is int) &&
-             (!('easeFactor' in data) || data.easeFactor is number) &&
-             (!('nextReviewDate' in data) || data.nextReviewDate is timestamp) &&
-             (!('consecutiveCorrect' in data) || data.consecutiveCorrect is int) &&
-             (!('lastReviewed' in data) || data.lastReviewed is timestamp);
+             data.front is string && data.front.size() > 0 &&
+             data.back is string && data.back.size() > 0;
     }
 
-    function isValidMindMap(data) {
-      return hasRequiredFields(['uid', 'mermaidCode', 'subject', 'createdAt']) &&
-             hasOnlyAllowedFields(['uid', 'mermaidCode', 'subject', 'createdAt']) &&
+    function isValidSRSItem(data) {
+      return data.keys().hasAll(['uid', 'questionId', 'question', 'correctAnswer', 'interval', 'easeFactor', 'nextReviewDate']) &&
              data.uid == request.auth.uid &&
-             data.mermaidCode is string && data.mermaidCode.size() > 0 && data.mermaidCode.size() < 10000 &&
-             data.subject is string &&
-             data.createdAt is timestamp;
+             data.nextReviewDate is timestamp;
     }
 
-    function isValidSRSRegistry(data) {
-      return hasRequiredFields(['uid', 'items']) &&
-             hasOnlyAllowedFields(['uid', 'items', 'lastUpdated']) &&
-             data.uid == request.auth.uid &&
-             data.items is map &&
-             (!('lastUpdated' in data) || data.lastUpdated is timestamp);
-    }
+    // ===============================================================
+    // Collection Matches
+    // ===============================================================
 
-    // Default deny
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // Users collection
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+      allow get: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isVerified() && isValidUser(incoming()) && (incoming().role == 'user' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(incoming()) && (
+        (incoming().role == existing().role || isAdmin()) &&
+        incoming().diff(existing()).affectedKeys().hasAll([]) // Size check in isValidUser
+      );
     }
 
-    // Results collection
-    match /results/{resultId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isAuthenticated() && isValidResult(request.resource.data);
-      allow update: if isDocOwner() && isValidResult(request.resource.data);
-      allow delete: if isDocOwner() || isAdmin();
+    match /studyLogs/{logId} {
+      allow get: if isValidId(logId) && (existing().uid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isValidId(logId) && isVerified() && isValidStudyLog(incoming());
+      allow update: if isValidId(logId) && existing().uid == request.auth.uid && isValidStudyLog(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasAny(['subject', 'fileNames', 'date'])
+      );
+      allow delete: if isValidId(logId) && (existing().uid == request.auth.uid || isAdmin());
     }
 
-    // SRS collection
-    match /srs/{itemId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isAuthenticated() && isValidSRSItem(request.resource.data);
-      allow update: if isDocOwner() && isValidSRSItem(request.resource.data);
-      allow delete: if isDocOwner() || isAdmin();
-    }
-
-    // Flashcards collection
-    match /flashcards/{cardId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isAuthenticated() && isValidFlashcard(request.resource.data);
-      allow update: if isDocOwner() && isValidFlashcard(request.resource.data);
-      allow delete: if isDocOwner() || isAdmin();
-    }
-
-    // MindMaps collection
-    match /mindmaps/{mapId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isAuthenticated() && isValidMindMap(request.resource.data);
-      allow update: if isDocOwner() && isValidMindMap(request.resource.data);
-      allow delete: if isDocOwner() || isAdmin();
-    }
-
-    // Revision Tasks collection
     match /revisionTasks/{taskId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isAuthenticated() && isValidRevisionTask(request.resource.data);
-      allow update: if isDocOwner() && isValidRevisionTask(request.resource.data);
-      allow delete: if isDocOwner() || isAdmin();
+      allow get: if isValidId(taskId) && (existing().uid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isValidId(taskId) && isVerified() && isValidRevisionTask(incoming());
+      allow update: if isValidId(taskId) && existing().uid == request.auth.uid && isValidRevisionTask(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasAny(['dueDate', 'completed', 'intervalDays'])
+      );
+      allow delete: if isValidId(taskId) && (existing().uid == request.auth.uid || isAdmin());
     }
 
-    // SRS Registries collection
+    match /results/{resultId} {
+      allow get: if isValidId(resultId) && (existing().uid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isValidId(resultId) && isVerified() && isValidResult(incoming());
+      allow update: if isValidId(resultId) && existing().uid == request.auth.uid && isValidResult(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasAny(['deleted', 'deletedAt', 'subject', 'revisionTasks'])
+      );
+      allow delete: if isValidId(resultId) && (existing().uid == request.auth.uid || isAdmin());
+    }
+
+    match /flashcards/{cardId} {
+      allow get: if isValidId(cardId) && (existing().uid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isValidId(cardId) && isVerified() && isValidFlashcard(incoming());
+      allow update: if isValidId(cardId) && existing().uid == request.auth.uid && isValidFlashcard(incoming());
+      allow delete: if isValidId(cardId) && (existing().uid == request.auth.uid || isAdmin());
+    }
+
+    match /srs/{itemId} {
+      allow get: if isValidId(itemId) && (existing().uid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update: if isValidId(itemId) && isVerified() && isValidSRSItem(incoming());
+      allow delete: if isValidId(itemId) && (existing().uid == request.auth.uid || isAdmin());
+    }
+
     match /srs_registries/{uid} {
-      allow read: if isOwner(uid) || isAdmin();
-      allow create, update: if isOwner(uid) && isValidSRSRegistry(request.resource.data);
+      allow get: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid) && isVerified();
       allow delete: if isOwner(uid) || isAdmin();
     }
   }

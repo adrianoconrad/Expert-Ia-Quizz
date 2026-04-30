@@ -65,6 +65,18 @@
       },
       "required": ["uid", "date", "correct", "total", "timeSpent", "fileName", "questions", "answers"]
     },
+    "StudyLog": {
+      "title": "Study Log",
+      "description": "Manual entry for tracking study sessions and file completions.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "subject": { "type": "string" },
+        "fileNames": { "type": "string", "description": "Manual input of file names studied." }
+      },
+      "required": ["uid", "date", "subject", "fileNames"]
+    },
     "RevisionTask": {
       "title": "Revision Task",
       "description": "A scheduled revision task based on spaced repetition.",
@@ -144,6 +156,10 @@
     "/mindmaps/{mapId}": {
       "schema": "MindMap",
       "description": "User AI-generated mind maps."
+    },
+    "/studyLogs/{logId}": {
+      "schema": "StudyLog",
+      "description": "Log of manual study entries."
     },
     "/revisionTasks/{taskId}": {
       "schema": "RevisionTask",

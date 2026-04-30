@@ -152,7 +152,8 @@ export async function generateQuiz(
   examBoard?: string,
   isBancaMindset: boolean = false,
   availableSubjects: string[] = [],
-  hypotheticalCasesCount: number = 0
+  hypotheticalCasesCount: number = 0,
+  isSimulado: boolean = false
 ): Promise<QuizQuestion[]> {
   // If count is large, split into parallel batches for speed and reliability
   if (questionCount > 25) {
@@ -168,14 +169,14 @@ export async function generateQuiz(
       const batchHypothetical = Math.min(remainingHypothetical, currentBatchSize);
       remainingHypothetical -= batchHypothetical;
       
-      batchPromises.push(_generateQuizBatch(content, currentBatchSize, format, examBoard, isBancaMindset, availableSubjects, batchHypothetical));
+      batchPromises.push(_generateQuizBatch(content, currentBatchSize, format, examBoard, isBancaMindset, availableSubjects, batchHypothetical, isSimulado));
     }
     
     const results = await Promise.all(batchPromises);
     return results.flat();
   }
 
-  return _generateQuizBatch(content, questionCount, format, examBoard, isBancaMindset, availableSubjects, hypotheticalCasesCount);
+  return _generateQuizBatch(content, questionCount, format, examBoard, isBancaMindset, availableSubjects, hypotheticalCasesCount, isSimulado);
 }
 
 async function _generateQuizBatch(
@@ -185,7 +186,8 @@ async function _generateQuizBatch(
   examBoard?: string,
   isBancaMindset: boolean = false,
   availableSubjects: string[] = [],
-  hypotheticalCasesCount: number = 0
+  hypotheticalCasesCount: number = 0,
+  isSimulado: boolean = false
 ): Promise<QuizQuestion[]> {
   const ai = getAI();
   const formatInstruction = format === 'both' 
@@ -206,6 +208,16 @@ async function _generateQuizBatch(
     ? `CASOS HIPOTÉTICOS: Exatamente ${hypotheticalCasesCount} das ${questionCount} questões DEVEM ser formuladas como "Casos Hipotéticos". Nestas questões, apresente uma situação prática, um cenário ou um problema do mundo real e peça ao aluno para aplicar a teoria do material para resolver ou analisar o caso. Isso simula como as bancas testam a aplicação prática do conhecimento.`
     : '';
 
+  const simuladoInstruction = isSimulado
+    ? `MODO SIMULADO DE ALTA FIDELIDADE ATIVADO:
+       1. VOCÊ DEVE USAR O SEARCH para buscar questões REAIS que foram aplicadas em concursos nos últimos 3 anos.
+       2. NÃO INVENTE QUESTÕES. O seu objetivo é atuar como uma interface para o banco de dados das bancas ${examBoard || 'Principais (FGV, CESPE, FCC)'}.
+       3. Busque por provas reais do cargo em questão ou da matéria: ${availableSubjects.join(', ')}.
+       4. Copie o enunciado fielmente, incluindo as alternativas da banca.
+       5. Caso o search não retorne questões exatas, simule com 100% de rigor o padrão da banca escolhida, citando o ano e o concurso (ex: TRT 2024, Senado 2023).
+       6. O aluno deve sentir que está resolvendo a prova real.`
+    : '';
+
   const subjectsInstruction = availableSubjects.length > 0
     ? `CATEGORIZAÇÃO: Para cada questão, identifique a qual matéria ela pertence. Use preferencialmente uma destas: ${availableSubjects.join(', ')}. Se a questão não se encaixar em nenhuma destas, identifique a matéria correta (ex: se for sobre previdência, use 'Seguridade Social').`
     : 'CATEGORIZAÇÃO: Identifique a matéria de cada questão (ex: Português, Direito Constitucional, etc).';
@@ -215,8 +227,9 @@ async function _generateQuizBatch(
     ${boardInstruction}
     ${mindsetInstruction}
     ${hypotheticalInstruction}
+    ${simuladoInstruction}
     ${subjectsInstruction}
-    Com base no conteúdo fornecido (texto, materiais ou links), elabore exatamente ${questionCount} questões de quiz.
+    Com base no conteúdo fornecido (texto, materiais ou links) e na pesquisa por questões reais (se o Modo Simulado estiver ativado), elabore exatamente ${questionCount} questões de quiz.
     
     REGRAS:
     1. ${formatInstruction}
@@ -226,14 +239,18 @@ async function _generateQuizBatch(
        - O enunciado da questão.
        - A resposta correta.
        - Uma pequena dica (hint) instigante para fazer o aluno refletir antes de responder (sem dar a resposta diretamente).
-       - Uma explicação curta e direta.
-       - 2 a 3 links de materiais de estudo relacionados (pode ser links para Wikipedia, YouTube, ou sites educacionais confiáveis).
+       - Uma explicação curta e direta baseada no embasamento legal ou jurisprudencial.
+       - 2 a 3 links de materiais de estudo relacionados.
     4. O formato de saída DEVE ser um JSON válido seguindo o schema fornecido.
     5. Idioma: Português (Brasil).
   `;
 
   let contentParts: any[] = [];
   let tools: any[] = [];
+
+  if (isSimulado) {
+    tools.push({ googleSearch: {} });
+  }
 
   const items = Array.isArray(content) ? content : [content];
 

@@ -3,15 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { auth, db, loginWithGoogle, logout, onAuthStateChanged, collection, query, where, orderBy, onSnapshot, setDoc, doc, Timestamp, handleFirestoreError, OperationType, getDoc, getDocs, deleteDoc, writeBatch, updateDoc } from './firebase';
+import { auth, db, loginWithGoogle, logout, onAuthStateChanged, collection, query, where, orderBy, onSnapshot, setDoc, doc, Timestamp, handleFirestoreError, OperationType, getDoc, getDocs, deleteDoc, writeBatch, updateDoc, limit } from './firebase';
 import { User } from 'firebase/auth';
 import { 
   Upload, 
   CheckCircle2, 
   XCircle, 
   X,
+  FileDown,
   Sparkles,
   ArrowRight, 
   RotateCcw, 
@@ -31,6 +32,7 @@ import {
   ChevronUp,
   Trash2,
   FileQuestion,
+  Brain,
   Flame,
   Pause,
   Play,
@@ -65,7 +67,11 @@ import {
   TrendingDown,
   Minus,
   AlertTriangle,
-  Lightbulb
+  Lightbulb,
+  Filter,
+  Table,
+  Globe,
+  WifiOff
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -109,9 +115,16 @@ import { cn } from './lib/utils';
 import Logo from './components/Logo';
 
 const normalizeSubject = (s: string) => {
-  if (!s) return 'Geral';
-  const clean = s.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
-  return clean.trim().replace(/\s+/g, ' ').toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  if (!s) return '';
+  // Try to keep it as simple as possible but handle common prefixes
+  let normalized = s.replace(/\.[^/.]+$/, ""); // Remove extension
+  
+  // Only remove prefixes if they look like "Aula 01 - " or "01. "
+  if (/^Aula\s+\d+/i.test(normalized) || /^\d+\s*[\.\-\:]\s*/.test(normalized)) {
+    normalized = normalized.replace(/^\d+[\s\.\-\:]*/, '').replace(/^Aula\s+\d+[\s\.\-\:]*/i, '');
+  }
+  
+  return normalized.trim() || s;
 };
 
 const formatTime = (seconds: number) => {
@@ -130,6 +143,16 @@ declare global {
 }
 
 type QuizState = 'idle' | 'loading' | 'active' | 'finished';
+
+interface StudyLog {
+  id: string;
+  uid: string;
+  date: Date;
+  subject: string;
+  fileNames: string;
+  isAutomatic?: boolean;
+}
+
 type ThemeColor = 'emerald' | 'navy' | 'brown' | 'slate' | 'yellow' | 'amber' | 'moss' | 'rose' | 'violet' | 'cyan' | 'orange' | 'fuchsia' | 'indigo' | 'black' | 'custom';
 
 const THEME_CONFIG = {
@@ -833,6 +856,8 @@ interface QuizResult {
   deleted?: boolean;
   deletedAt?: Date;
   isSimulado?: boolean;
+  isRedoing?: boolean;
+  isReview?: boolean;
   subject?: string;
   revisionTasks?: string[]; // IDs of RevisionTask
 }
@@ -934,6 +959,240 @@ const MultiDateCalendar = ({
   );
 };
 
+const NEURO_INSIGHTS = [
+  {
+    author: "Andrew Huberman",
+    role: "Neurocientista de Stanford",
+    content: "A visualização de um ponto fixo por 30-60 segundos antes de estudar aumenta a liberação de norepinefrina, preparando o cérebro para o foco profundo.",
+    tip: "Dica Active: Antes de começar, olhe para um ponto na parede e respire fundo. Seu cérebro vai 'entrar no modo' foco.",
+    practicalExample: "Imagine que você vai começar a estudar Matemática. Antes de abrir o livro, foque no canto da mesa ou em um ponto na parede. Não desvie o olhar por 45 segundos. Sinta sua mente 'afunilando' para uma tarefa única.",
+    scientificBasis: "Isso ativa o sistema de alerta do tronco encefálico (Locus Coeruleus), que dispara noradrenalina para o córtex pré-frontal, aumentando a acuidade visual e mental."
+  },
+  {
+    author: "Carol Dweck",
+    role: "Psicóloga de Stanford",
+    content: "O 'Growth Mindset' (Mentalidade de Crescimento) é a crença de que a inteligência pode ser desenvolvida através do esforço e da prática.",
+    tip: "Dica Active: Viu um erro no quiz? Diga: 'Ainda não aprendi isso', em vez de 'Eu não sei isso'.",
+    practicalExample: "Ao errar uma questão difícil, em vez de fechar o app frustrado, anote o conceito que você errou em um post-it e diga em voz alta: 'Meu cérebro está criando novas conexões agora para resolver isso na próxima'.",
+    scientificBasis: "A mentalidade de crescimento reduz a resposta de ansiedade do cérebro ao erro (ERN - Error-Related Negativity), permitindo que você aprenda com a falha em vez de ser paralisado por ela."
+  },
+  {
+    author: "Barbara Oakley",
+    role: "Autora de 'Learning How to Learn'",
+    content: "O cérebro tem dois modos: focado e difuso. Alternar entre eles é essencial para resolver problemas complexos.",
+    tip: "Dica Active: Use a técnica Pomodoro. 25 min de foco total e 5 min de descanso para o modo difuso processar os dados.",
+    practicalExample: "Se estiver travado em um problema de lógica, pare tudo. Vá lavar louça ou caminhar por 5 minutos sem pensar em nada. Frequentemente, a solução surgirá 'do nada' enquanto você não está focado.",
+    scientificBasis: "O 'Modo Difuso' permite que o cérebro faça conexões distantes em regiões neurais que não estão ativas durante o foco intenso, facilitando o 'insight' e a criatividade."
+  },
+  {
+    author: "Santiago Ramón y Cajal",
+    role: "Pai da Neurociência Moderna",
+    content: "Todo homem pode ser, se o desejar, escultor de seu próprio cérebro.",
+    tip: "Dica Active: Cada questão respondida é um golpe de cinzel na escultura do seu conhecimento.",
+    practicalExample: "Pense em cada sessão de 30 minutos como uma sessão de academia para neurônios. Se você estuda consistentemente, você está fisicamente alterando a fiação da sua cabeça para ser mais inteligente naquela matéria.",
+    scientificBasis: "Neuroplasticidade: o ato de aprender e praticar causa alterações estruturais nas sinapses (LTP - Long Term Potentiation), tornando as vias neurais mais rápidas e eficientes."
+  },
+  {
+    author: "Eric Kandel",
+    role: "Prêmio Nobel de Medicina",
+    content: "A aprendizagem muda a estrutura física do cérebro. Cada novo fato fortalece conexões sinápticas existentes.",
+    tip: "Dica Active: Ao revisar, você está literalmente 'engrossando' as estradas de informação no seu cérebro.",
+    practicalExample: "Ao fazer um quiz sobre um assunto que você já viu semana passada, você está pavimentando uma estrada de terra e transformando-a em uma rodovia de alta velocidade na sua memória.",
+    scientificBasis: "A síntese de novas proteínas nos neurônios é necessária para converter a memória de curto prazo (lábil) em memória de longo prazo (estável)."
+  },
+  {
+    author: "Matthew Walker",
+    role: "Especialista em Sono",
+    content: "O sono é o filtro que consolida as memórias. É à noite que o cérebro decide o que manter do estudo do dia.",
+    tip: "Dica Active: Nunca sacrifique o sono por horas extras de estudo. Seu cérebro precisa da noite para 'salvar o arquivo'.",
+    practicalExample: "Se você estudou muito um tópico difícil hoje, durma pelo menos 7-8 horas. No dia seguinte, você descobrirá que entende o assunto muito melhor do que quando foi dormir.",
+    scientificBasis: "Durante o sono REM e NREM, o hipocampo 'reproduz' as informações aprendidas durante o dia para o neocórtex, fixando o conhecimento de forma permanente."
+  },
+  {
+    author: "James Clear",
+    role: "Autor de Hábitos Atômicos",
+    content: "A consistência supera a intensidade. Melhor estudar 15 minutos todo dia do que 5 horas em um único dia.",
+    tip: "Dica Active: Mantenha sua 'streak' ativa aqui na plataforma. Pequenos passos diários levam a grandes destinos.",
+    practicalExample: "Em um dia corrido, não pule o estudo. Faça apenas um quiz de 5 minutos. O objetivo não é o conteúdo, mas manter o hábito vivo no seu sistema nervoso.",
+    scientificBasis: "Hábitos são caminhos neurais automatizados nos gânglios da base. Repetições pequenas e frequentes exigem menos força de vontade do córtex pré-frontal ao longo do tempo."
+  },
+  {
+    author: "Stanislas Dehaene",
+    role: "Neurocientista Cognitivo",
+    content: "A atenção é o funil do aprendizado. Sem foco seletivo, o cérebro descarta a informação como ruído.",
+    tip: "Dica Active: Silencie o celular. Um único bip pode custar 20 minutos para você retomar o estado de 'flow'.",
+    practicalExample: "Ao entrar no app para estudar, coloque o celular em outro cômodo. O simples fato de saber que o celular está perto (mesmo desligado) consome recursos de atenção do seu cérebro.",
+    scientificBasis: "A 'Carga Cognitiva' é limitada. Distrações competem pelo espaço na memória de trabalho, impedindo que o conteúdo novo seja processado profundamente."
+  },
+  {
+    author: "Andrew Huberman",
+    role: "Neurocientista de Stanford",
+    content: "Celebrar pequenas vitórias libera dopamina, um combustível químico que reduz a sensação de fadiga mental.",
+    tip: "Dica Active: Terminou uma aula difícil? Comemore! Isso sinaliza ao cérebro que o esforço vale a pena.",
+    practicalExample: "Ao acertar uma sequência de questões, de um pequeno 'soco no ar' ou diga 'isso!'. Esse pequeno gesto físico dispara dopamina, que te dará energia para a próxima rodada.",
+    scientificBasis: "A dopamina não é apenas sobre prazer, é sobre motivação e busca. Ela 'limpa' a adenosina (que causa sono/fadiga) e mantém você em alerta."
+  },
+  {
+    author: "Barbara Oakley",
+    role: "Especialista em Aprendizagem",
+    content: "O 'Recall Ativo' - tentar lembrar da informação sem olhar - é a técnica de estudo mais eficiente que existe.",
+    tip: "Dica Active: Após ler um material, feche os olhos e tente explicar o que aprendeu em voz alta.",
+    practicalExample: "Depois de gerar um quiz e terminar, não vá direto para o próximo. Tente escrever em um papel 3 coisas principais que você aprendeu sem consultar nada.",
+    scientificBasis: "O ato de 'puxar' a informação da memória fortalece o traço mnemônico muito mais do que a simples releitura (que gera uma falsa ilusão de competência)."
+  },
+  {
+    author: "David Eagleman",
+    role: "Neurocientista e Escritor",
+    content: "O cérebro é uma rede dinâmica que se reconfigura baseando-se no que você foca.",
+    tip: "Dica Active: Direcione sua curiosidade. Perguntar 'por quê?' abre portas sinápticas que a simples leitura fecha.",
+    practicalExample: "Sempre que ler um conceito novo, pergunte ao chat da Experte IA: 'Como isso se aplica na vida real?'. A curiosidade prepara o hipocampo (centro da memória) para absorver dados.",
+    scientificBasis: "A curiosidade ativa o sistema de recompensa dopaminérgico antes mesmo do aprendizado ocorrer, tornando a memorização quase automática."
+  },
+  {
+    author: "Antonio Damasio",
+    role: "Neurocientista",
+    content: "Sentimentos de satisfação com o progresso são essenciais para manter a motivação de longo prazo.",
+    tip: "Dica Active: Olhe seu gráfico de desempenho hoje. Veja como você evoluiu desde o primeiro dia.",
+    practicalExample: "Uma vez por semana, abra seu Dashboard e compare seus acertos atuais com os da primeira semana. O cérebro precisa de evidências visuais de progresso para continuar investindo energia.",
+    scientificBasis: "O sistema límbico e o córtex pré-frontal trabalham juntos. Emoções positivas sobre o desempenho sinalizam que a tarefa é segura e valiosa, mantendo o engajamento."
+  },
+  {
+    author: "Andrew Huberman",
+    role: "Neurocientista de Stanford",
+    content: "A luz solar nos olhos logo pela manhã regula o ciclo circadiano, melhorando o foco e a claridade mental durante todo o dia de estudo.",
+    tip: "Dica Active: Tente estudar perto de uma janela ou saia 5 min ao sol antes de começar a primeira sessão.",
+    practicalExample: "Assim que acordar, abra a janela. A luz natural (mesmo em dias nublados) ativa o 'temporizador' do seu cérebro, garantindo que você tenha foco ao meio-dia e sono à noite.",
+    scientificBasis: "A luz de alta intensidade ativa as células ganglionares da retina, que enviam sinais ao Núcleo Supraquiasmático (NSQ) para suprimir a melatonina e elevar o cortisol matinal."
+  },
+  {
+    author: "Carol Dweck",
+    role: "Pesquisadora de Mindset",
+    content: "Elogiar o processo (esforço, estratégia) em vez do talento inato é o que constrói a resiliência acadêmica.",
+    tip: "Dica Active: Hoje, comemore o fato de que você se sentou para estudar, independentemente da nota que tirou.",
+    practicalExample: "Em vez de pensar 'Eu sou inteligente em História', pense 'Eu usei uma ótima estratégia de mapas mentais em História hoje'. Isso coloca o poder de melhoria nas suas mãos.",
+    scientificBasis: "O foco no processo mantém os níveis de motivação estáveis mesmo diante de tarefas mais difíceis, evitando o medo de falhar que atinge quem se acha 'naturalmente talentoso'."
+  },
+  {
+    author: "Richard Feynman",
+    role: "Físico e Educador",
+    content: "Se você não consegue explicar algo de forma simples, você não entendeu o suficiente.",
+    tip: "Dica Active: Tente explicar o conteúdo de hoje para uma criança imaginária. Se travar, volte e estude esse ponto.",
+    practicalExample: "Depois de terminar um tópico complexo, grave um áudio de 1 minuto para si mesmo explicando o que entendeu como se estivesse ensinando um amigo. Se você se enrolar nas palavras, você achou um buraco no seu conhecimento.",
+    scientificBasis: "A 'Técnica Feynman' exige a simplificação e re-codificação simbólica do conhecimento, o que força o cérebro a sair da decoreba e entrar na compreensão profunda."
+  }
+];
+
+const DailyStimulusCard = ({ theme }: { theme: any }) => {
+  const insight = React.useMemo(() => {
+    const today = new Date();
+    const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000);
+    return NEURO_INSIGHTS[dayOfYear % NEURO_INSIGHTS.length];
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="relative overflow-hidden group bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-700 p-6 sm:p-10 rounded-[2.5rem] sm:rounded-[3rem] shadow-2xl border border-white/20"
+    >
+      {/* Decorative Orbs */}
+      <div className="absolute -top-24 -right-24 w-80 h-80 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-all duration-700 pointer-events-none" />
+      <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
+      
+      <div className="relative flex flex-col gap-10">
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center justify-between border-b border-white/10 pb-8">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl text-white shadow-xl">
+              <Zap size={24} fill="currentColor" />
+            </div>
+            <div>
+              <span className="text-white/60 text-[10px] sm:text-xs font-black uppercase tracking-[0.3em] block mb-1">Cisterna de Sabedoria</span>
+              <h3 className="text-white text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2">
+                Neuro-Insight <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              </h3>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4 bg-white/10 backdrop-blur-xl px-5 py-3 rounded-2xl border border-white/10">
+            <div className="w-12 h-12 rounded-full bg-indigo-500/30 flex items-center justify-center text-white border border-white/20 shadow-inner">
+              <Brain size={24} />
+            </div>
+            <div>
+              <p className="text-white font-black text-sm sm:text-base leading-none mb-1">{insight.author}</p>
+              <p className="text-white/50 text-[10px] font-bold uppercase tracking-[0.1em]">{insight.role}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Content Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+          <div className="lg:col-span-12 space-y-6">
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="relative"
+            >
+              <span className="absolute -left-6 -top-4 text-7xl text-white/10 font-serif leading-none">“</span>
+              <h4 className="text-white text-xl sm:text-2xl lg:text-3xl font-bold leading-relaxed italic z-10 relative">
+                {insight.content}
+              </h4>
+            </motion.div>
+          </div>
+
+          {/* Practical Guidance Grid */}
+          <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-6">
+             {/* Practical Example */}
+             <motion.div 
+               whileHover={{ y: -5 }}
+               className="bg-white/10 backdrop-blur-xl p-8 rounded-[2rem] border border-white/10 space-y-4 hover:border-white/30 transition-all"
+             >
+                <div className="flex items-center gap-3 text-emerald-400">
+                  <Play size={20} fill="currentColor" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Exemplo Prático</span>
+                </div>
+                <p className="text-white/90 text-sm sm:text-base font-medium leading-relaxed">
+                  {insight.practicalExample}
+                </p>
+             </motion.div>
+
+             {/* Scientific Basis */}
+             <motion.div 
+               whileHover={{ y: -5 }}
+               className="bg-indigo-900/40 backdrop-blur-xl p-8 rounded-[2rem] border border-indigo-500/30 space-y-4 hover:border-indigo-400/50 transition-all"
+             >
+                <div className="flex items-center gap-3 text-indigo-400">
+                  <BrainCircuit size={20} />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Orientação Científica</span>
+                </div>
+                <p className="text-indigo-50/80 text-sm sm:text-base font-medium leading-relaxed italic">
+                  {insight.scientificBasis}
+                </p>
+             </motion.div>
+          </div>
+
+          <div className="lg:col-span-12">
+            <div className="bg-gradient-to-r from-amber-500/20 to-transparent p-6 rounded-2xl border-l-4 border-amber-400">
+              <div className="flex items-center gap-3 text-amber-400 mb-2">
+                <Lightbulb size={20} className="animate-bounce" />
+                <span className="text-[10px] font-black uppercase tracking-widest italic">Pulo do Gato (Dica Active)</span>
+              </div>
+              <p className="text-white text-sm sm:text-base font-bold">
+                {insight.tip}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Background Icon */}
+      <div className="absolute top-1/2 right-4 -translate-y-1/2 opacity-[0.05] text-white pointer-events-none">
+        <Sparkles size={300} />
+      </div>
+    </motion.div>
+  );
+};
+
 const Dashboard = ({ 
   history, 
   theme, 
@@ -960,7 +1219,8 @@ const Dashboard = ({
   onDeleteSubjectsHistory,
   onEditSubject,
   flashcards,
-  onOpenFlashcards
+  onOpenFlashcards,
+  onOpenStudySchedule
 }: { 
   history: QuizResult[], 
   theme: any, 
@@ -987,7 +1247,8 @@ const Dashboard = ({
   onDeleteSubjectsHistory: (subjects: string[]) => void,
   onEditSubject: (original: string, newName: string) => void,
   flashcards: any[],
-  onOpenFlashcards: () => void
+  onOpenFlashcards: () => void,
+  onOpenStudySchedule: () => void
 }) => {
   const [activeFolder, setActiveFolder] = React.useState<string | null>(null);
   const [editingSubject, setEditingSubject] = React.useState<{ original: string, current: string } | null>(null);
@@ -1228,7 +1489,7 @@ const Dashboard = ({
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 max-w-7xl mx-auto"
+      className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 max-w-[96%] mx-auto"
     >
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 sm:p-8 rounded-[2.5rem] border border-white/20 dark:border-slate-800/50 shadow-2xl">
@@ -1445,9 +1706,11 @@ const Dashboard = ({
               })}
             </div>
           </div>
+          
+          <DailyStimulusCard theme={theme} />
 
-              {/* Main Grid (Subject Performance) */}
-              <div className="space-y-8">
+          {/* Main Grid (Subject Performance) */}
+          <div className="space-y-8">
                 <div className="flex flex-col">
                   <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-[0.3em] uppercase mb-1">MÉTRICAS</span>
                   <h3 className="text-2xl font-black dark:text-white flex items-center gap-3">
@@ -1754,6 +2017,47 @@ const Dashboard = ({
               <p className="mt-3 text-[11px] font-medium opacity-90 leading-tight">
                 {userProfile?.streak > 0 ? "Continue assim! Você está no caminho certo." : "Comece sua jornada hoje!"}
               </p>
+            </div>
+          </motion.div>
+
+          {/* Study Schedule Card */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={() => onOpenStudySchedule()}
+            className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[180px] transition-all cursor-pointer hover:border-emerald-500/30 hover:shadow-md"
+          >
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                  <Clock size={18} className="text-emerald-500" />
+                </div>
+                <h3 className="text-base font-bold dark:text-white">Cronograma de Estudos</h3>
+              </div>
+              <p className="text-[11px] text-black/60 dark:text-slate-400 mb-4 leading-tight">
+                Acompanhe seu histórico de matérias e materiais estudados automaticamente.
+              </p>
+            </div>
+            
+            <div className="flex items-center justify-between mt-auto">
+              <div>
+                <span className="text-xl font-black dark:text-white">
+                  {new Set(history.map(h => `${h.subject}-${h.fileName}`)).size}
+                </span>
+                <span className="text-[9px] font-bold text-black/40 dark:text-slate-500 ml-2">Materiais</span>
+              </div>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenStudySchedule();
+                }}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95 shadow-lg shadow-emerald-500/20",
+                  theme.primary, theme.contrastText
+                )}
+              >
+                Ver Tudo
+              </button>
             </div>
           </motion.div>
 
@@ -2183,20 +2487,61 @@ const SubjectPerformanceBarChart = ({ subjectStats, theme }: { subjectStats: any
   );
 };
 
+const TaskDeleteButton = ({ taskId, onDelete, onDeletedFromModal }: { taskId: string, onDelete: (id: string) => void, onDeletedFromModal: () => void }) => {
+  const [isConfirming, setIsConfirming] = useState(false);
+  
+  useEffect(() => {
+    if (isConfirming) {
+      const timer = setTimeout(() => setIsConfirming(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isConfirming]);
+
+  if (isConfirming) {
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(taskId);
+          onDeletedFromModal();
+        }}
+        className="px-3 py-1.5 rounded-xl bg-rose-500 text-white text-[10px] font-bold shadow-lg shadow-rose-500/20 active:scale-95 transition-all animate-pulse"
+      >
+        Confirmar?
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        setIsConfirming(true);
+      }}
+      className="p-2 rounded-xl text-black/20 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+    >
+      <Trash2 size={16} />
+    </button>
+  );
+};
+
 const RevisionAgenda = ({ 
   tasks, 
   theme, 
   onClose, 
   onCompleteTask,
+  onDeleteTask,
   onPracticeQuiz
 }: { 
   tasks: RevisionTask[], 
   theme: any, 
   onClose: () => void,
   onCompleteTask: (taskId: string) => void,
-  onPracticeQuiz: (quizId: string) => void
+  onDeleteTask: (taskId: string) => void,
+  onPracticeQuiz: (quizId: string, taskId: string) => void
 }) => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   
   const tasksByDate = React.useMemo(() => {
     const grouped: { [key: string]: RevisionTask[] } = {};
@@ -2209,13 +2554,29 @@ const RevisionAgenda = ({
   }, [tasks]);
 
   const currentDayTasks = tasksByDate[format(selectedDate, 'yyyy-MM-dd')] || [];
+  
+  const currentTasksInModal = React.useMemo(() => {
+    if (!selectedSubject) return [];
+    return currentDayTasks.filter(t => (t.subject || 'Geral') === selectedSubject);
+  }, [currentDayTasks, selectedSubject]);
+  
+  const groupedTasksBySubject = React.useMemo(() => {
+    const grouped: { [subject: string]: RevisionTask[] } = {};
+    currentDayTasks.forEach(task => {
+      const subject = task.subject || 'Geral';
+      if (!grouped[subject]) grouped[subject] = [];
+      grouped[subject].push(task);
+    });
+    return Object.entries(grouped).map(([subject, tasks]) => ({ subject, tasks }));
+  }, [currentDayTasks]);
+
   const pendingTasksCount = tasks.filter(t => !t.completed && isBefore(t.dueDate, addDays(new Date(), 1))).length;
 
   return (
     <motion.div 
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto"
+      className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-[96%] mx-auto"
     >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2.5rem] border border-white/20 dark:border-slate-800/50 shadow-2xl">
         <div className="flex items-center gap-4">
@@ -2251,8 +2612,8 @@ const RevisionAgenda = ({
           <div className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 dark:border-slate-800/50 shadow-xl">
              <div className="flex items-center justify-between mb-6">
                 <h3 className="font-bold dark:text-white flex items-center gap-2">
-                  <Calendar size={18} className={theme.text} />
-                  Calendário
+                   <Calendar size={18} className={theme.text} />
+                   Calendário
                 </h3>
                 <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-widest uppercase">Selecione o Dia</span>
              </div>
@@ -2311,7 +2672,7 @@ const RevisionAgenda = ({
           </div>
         </div>
 
-        {/* Tasks List */}
+        {/* Tasks List grouped by subject */}
         <div className="lg:col-span-8 space-y-6">
           <div className="flex items-center justify-between px-4">
             <h3 className="text-xl font-bold dark:text-white flex items-center gap-3">
@@ -2319,67 +2680,79 @@ const RevisionAgenda = ({
               Revisões para {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
             </h3>
             <span className="px-3 py-1 bg-black/5 dark:bg-white/5 rounded-full text-[10px] font-black text-black/40 dark:text-slate-500 uppercase tracking-widest">
-              {currentDayTasks.length} Tarefas
+              {groupedTasksBySubject.length} Matérias
             </span>
           </div>
 
-          {currentDayTasks.length > 0 ? (
+          {groupedTasksBySubject.length > 0 ? (
             <div className="grid grid-cols-1 gap-4">
-              {currentDayTasks.map(task => (
-                <motion.div
-                  key={task.id}
-                  layoutId={task.id}
-                  className={cn(
-                    "group flex items-center justify-between p-5 rounded-[2rem] border transition-all",
-                    task.completed 
-                      ? "bg-emerald-500/5 border-emerald-500/20 opacity-60" 
-                      : "bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl border-white/20 dark:border-slate-800/50 shadow-lg hover:border-white/40 dark:hover:border-slate-700"
-                  )}
-                >
-                  <div className="flex items-center gap-5">
-                    <button 
-                      onClick={() => onCompleteTask(task.id)}
-                      className={cn(
-                        "w-8 h-8 rounded-2xl border-2 flex items-center justify-center transition-all",
-                        task.completed 
-                          ? "bg-emerald-500 border-emerald-500 text-white" 
-                          : "border-black/10 dark:border-white/10 hover:border-emerald-500/50"
-                      )}
-                    >
-                      {task.completed && <Check size={18} />}
-                    </button>
-                    
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="px-2 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-md text-[9px] font-black uppercase tracking-wider">
-                          {task.subject}
-                        </span>
-                        <span className="text-[10px] font-bold text-black/20 dark:text-slate-600 italic">
-                          Revisão de {task.intervalDays} dias
-                        </span>
+              {groupedTasksBySubject.map((group, groupIdx) => {
+                const allCompleted = group.tasks.every(t => t.completed);
+                const completedCount = group.tasks.filter(t => t.completed).length;
+                
+                return (
+                  <motion.div
+                    key={`${group.subject}-${groupIdx}`}
+                    layout
+                    onClick={() => setSelectedSubject(group.subject)}
+                    className={cn(
+                      "group flex items-center justify-between p-6 rounded-[2.5rem] border transition-all cursor-pointer",
+                      allCompleted 
+                        ? "bg-emerald-500/5 border-emerald-500/20 opacity-80" 
+                        : "bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl border-white/20 dark:border-slate-800/50 shadow-lg hover:border-emerald-500/30 hover:shadow-emerald-500/5"
+                    )}
+                  >
+                    <div className="flex items-center gap-6">
+                      <div className={cn(
+                        "w-12 h-12 rounded-3xl flex items-center justify-center transition-all shadow-lg",
+                        allCompleted ? "bg-emerald-500/10 text-emerald-500" : "bg-blue-500/10 text-blue-500"
+                      )}>
+                        {allCompleted ? <CheckCircle2 size={24} /> : <BookOpen size={24} />}
                       </div>
-                      <h4 className={cn("text-base font-bold dark:text-white", task.completed && "line-through opacity-50")}>
-                        {task.fileName}
-                      </h4>
+                      
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider",
+                            allCompleted ? "bg-emerald-500/10 text-emerald-600" : "bg-blue-500/10 text-blue-600"
+                          )}>
+                            {allCompleted ? 'Revisão Concluída' : 'Revisão Pendente'}
+                          </span>
+                          <span className="text-[10px] font-bold text-black/20 dark:text-slate-600 italic">
+                            {completedCount}/{group.tasks.length} sessões
+                          </span>
+                        </div>
+                        <h4 className="text-lg font-bold dark:text-white group-hover:text-emerald-500 transition-colors">
+                          {group.subject}
+                        </h4>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {group.tasks.slice(0, 2).map((t, tid) => (
+                             <span key={tid} className="text-[10px] text-black/40 dark:text-slate-500 bg-black/5 dark:bg-white/5 px-2 py-1 rounded-lg truncate max-w-[150px]">
+                               {t.fileName}
+                             </span>
+                          ))}
+                          {group.tasks.length > 2 && (
+                             <span className="text-[10px] text-emerald-600 font-bold bg-emerald-500/10 px-2 py-1 rounded-lg">
+                               +{group.tasks.length - 2} mais
+                             </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-3">
-                    {!task.completed && (
+                    <div className="flex items-center gap-3">
                       <button
-                        onClick={() => onPracticeQuiz(task.quizId)}
                         className={cn(
-                          "flex items-center gap-2 px-5 py-2 rounded-xl font-bold text-xs shadow-lg active:scale-95 transition-all",
+                          "px-6 py-2.5 rounded-xl font-bold text-xs shadow-lg active:scale-95 transition-all group-hover:scale-105",
                           theme.primary, theme.contrastText
                         )}
                       >
-                        <RotateCcw size={14} />
-                        Iniciar Revisão
+                        Abrir Sessões
                       </button>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 bg-white/20 dark:bg-slate-900/20 rounded-[3rem] border-2 border-dashed border-black/5 dark:border-white/5">
@@ -2390,6 +2763,1218 @@ const RevisionAgenda = ({
               <p className="text-[10px] text-black/20 dark:text-slate-600 mt-1 uppercase tracking-widest font-black">Aproveite para descansar ou estudar novos conteúdos!</p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Details Modal */}
+      <AnimatePresence>
+        {selectedSubject && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedSubject(null)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl overflow-hidden border border-white/20 dark:border-slate-800"
+            >
+              <div className="p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={cn("p-4 rounded-3xl shadow-lg", theme.primary, theme.contrastText)}>
+                      <BookOpen size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold dark:text-white">{selectedSubject}</h3>
+                      <p className="text-xs font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">Sessões de Revisão para hoje</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedSubject(null)}
+                    className="p-3 bg-black/5 dark:bg-white/5 rounded-2xl hover:bg-black/10 dark:hover:bg-white/10 transition-all"
+                  >
+                    <X size={20} className="dark:text-white" />
+                  </button>
+                </div>
+
+                <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+                  {currentTasksInModal.map(task => (
+                    <motion.div
+                      key={task.id}
+                      className={cn(
+                        "flex items-center justify-between p-5 rounded-2xl border transition-all",
+                        task.completed 
+                          ? "bg-emerald-500/5 border-emerald-500/20" 
+                          : "bg-black/5 dark:bg-white/5 border-transparent"
+                      )}
+                    >
+                      <div className="flex items-center gap-4 min-w-0">
+                        <button 
+                          onClick={() => onCompleteTask(task.id)}
+                          className={cn(
+                            "w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all shrink-0",
+                            task.completed 
+                              ? "bg-emerald-500 border-emerald-500 text-white" 
+                              : "border-black/10 dark:border-white/10 hover:border-emerald-500/50"
+                          )}
+                        >
+                          {task.completed && <Check size={18} />}
+                        </button>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">Revisão de {task.intervalDays} dias</p>
+                          <h4 className={cn("text-sm font-bold dark:text-white truncate", task.completed && "line-through opacity-50")}>
+                            {task.fileName}
+                          </h4>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <TaskDeleteButton 
+                          taskId={task.id} 
+                          onDelete={onDeleteTask} 
+                          onDeletedFromModal={() => {
+                            if (currentTasksInModal.length === 1) {
+                              setSelectedSubject(null);
+                            }
+                          }}
+                        />
+                        {!task.completed && (
+                          <button
+                            onClick={() => {
+                              onPracticeQuiz(task.quizId, task.id);
+                              setSelectedSubject(null);
+                            }}
+                            className={cn(
+                              "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs shadow-md transition-all active:scale-95",
+                              theme.primary, theme.contrastText
+                            )}
+                          >
+                            <RotateCcw size={14} />
+                            Praticar
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl">
+                   <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold leading-relaxed text-center">
+                     Ao completar todas as sessões desta matéria, você reforça consideravelmente a fixação dos temas em sua memória de longo prazo.
+                   </p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
+const StudySchedule = ({
+  history,
+  theme,
+  onClose,
+  onPracticeSubject,
+  onViewResult,
+  onRedoQuiz
+}: {
+  history: QuizResult[],
+  theme: any,
+  onClose: () => void,
+  onPracticeSubject: (subject: string, fileName: string) => void,
+  onViewResult: (res: QuizResult) => void,
+  onRedoQuiz: (res: QuizResult) => void
+}) => {
+  const [selectedItemDetails, setSelectedItemDetails] = React.useState<{
+    subject: string,
+    fileNames: string[],
+    results: QuizResult[],
+    totalCorrect: number,
+    totalQuestions: number
+  } | null>(null);
+
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [itemsPerPage, setItemsPerPage] = React.useState(20);
+
+  // Filters
+  const [filterSubject, setFilterSubject] = React.useState('all');
+  const [filterFileName, setFilterFileName] = React.useState('');
+  const [filterDateStart, setFilterDateStart] = React.useState('');
+  const [filterDateEnd, setFilterDateEnd] = React.useState('');
+
+  const studyItems = React.useMemo(() => {
+    const groups: { 
+      subject: string, 
+      count: number, 
+      avgPerformance: number,
+      results: QuizResult[],
+      totalCorrect: number,
+      totalQuestions: number,
+      date: Date,
+      dateKey: string
+    }[] = [];
+    
+    // Filter history first
+    const filteredHistory = history.filter(res => {
+      let subject = res.subject;
+      if (!subject || subject === 'Geral' || subject === 'Não Identificada' || subject === 'Sem Matéria') {
+        subject = normalizeSubject(res.fileName);
+      }
+      if (!subject) subject = 'Geral';
+
+      const fileName = res.fileName || 'Documento';
+      const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
+
+      // Subject Filter
+      if (filterSubject !== 'all' && !subject.toLowerCase().includes(filterSubject.toLowerCase())) return false;
+
+      // File Name Filter
+      if (filterFileName && !fileName.toLowerCase().includes(filterFileName.toLowerCase())) return false;
+
+      // Date Filters
+      if (filterDateStart) {
+        const [year, month, day] = filterDateStart.split('-').map(Number);
+        const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+        if (date < start) return false;
+      }
+      if (filterDateEnd) {
+        const [year, month, day] = filterDateEnd.split('-').map(Number);
+        const end = new Date(year, month - 1, day, 23, 59, 59, 999);
+        if (date > end) return false;
+      }
+
+      return true;
+    });
+
+    const groupMap = new Map<string, typeof groups[0]>();
+
+    filteredHistory.forEach(res => {
+      let subjectRaw = res.subject;
+      if (!subjectRaw || subjectRaw === 'Geral' || subjectRaw === 'Não Identificada' || subjectRaw === 'Sem Matéria') {
+        subjectRaw = normalizeSubject(res.fileName);
+      }
+      if (!subjectRaw) subjectRaw = 'Geral';
+
+      const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
+      const dateKey = format(date, 'yyyy-MM-dd');
+      
+      // Smart Subject Normalization: Group things that look like the same subject
+      let normalizedSubj = subjectRaw.toUpperCase().trim();
+      const mappings = [
+        { keywords: ['PORTUGUÊS', 'PORTUGUES', 'GRAMÁTICA', 'REDAÇÃO', 'LÍNGUA PORTUGUESA', 'PORQUÊS', 'MORFOLOGIA', 'VERBOS', 'SINTAXE', 'ORTOGRAFIA'], result: 'PORTUGUÊS' },
+        { keywords: ['MATEMÁTICA', 'MATEMATICA', 'RACIOCÍNIO LÓGICO', 'RLM', 'ÁLGEBRA', 'GEOMETRIA'], result: 'MATEMÁTICA / RLM' },
+        { keywords: ['CONSTITUCIONAL', 'DIREITO CONSTITUCIONAL', 'ART. 5', 'PODER EXECUTIVO', 'PODER JUDICIÁRIO'], result: 'DIREITO CONSTITUCIONAL' },
+        { keywords: ['ADMINISTRATIVO', 'DIREITO ADMINISTRATIVO', 'ATOS ADMINISTRATIVOS', 'LICITAÇÃO'], result: 'DIREITO ADMINISTRATIVO' },
+        { keywords: ['PENAL', 'DIREITO PENAL', 'PROCESSO PENAL'], result: 'DIREITO PENAL' },
+        { keywords: ['INFORMÁTICA', 'INFORMATICA', 'WINDOWS', 'HARDWARE', 'EXCEL', 'WORD'], result: 'INFORMÁTICA' },
+        { keywords: ['SEGURIDADE SOCIAL', 'PREVIDENCIÁRIO', 'LOAS', 'INSS'], result: 'SEGURIDADE SOCIAL' },
+        { keywords: ['SIMULADO GERAL', 'TODAS AS MATÉRIAS', 'SIMULADO'], result: 'SIMULADO GERAL' }
+      ];
+
+      for (const mapping of mappings) {
+        if (mapping.keywords.some(k => normalizedSubj.includes(k))) {
+          normalizedSubj = mapping.result;
+          break;
+        }
+      }
+      
+      const key = `${dateKey}-${normalizedSubj}`;
+      const performance = res.total > 0 ? (res.correct / res.total) * 100 : 0;
+
+      const existing = groupMap.get(key);
+      if (existing) {
+        existing.count++;
+        existing.totalCorrect += res.correct;
+        existing.totalQuestions += res.total;
+        existing.results.push(res);
+        existing.avgPerformance = existing.totalQuestions > 0 ? (existing.totalCorrect / existing.totalQuestions) * 100 : 0;
+      } else {
+        groupMap.set(key, {
+            subject: normalizedSubj,
+            count: 1,
+            avgPerformance: performance,
+            results: [res],
+            totalCorrect: res.correct,
+            totalQuestions: res.total,
+            date,
+            dateKey
+        });
+      }
+    });
+
+    return Array.from(groupMap.values()).sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [history, filterSubject, filterFileName, filterDateStart, filterDateEnd]);
+
+  const uniqueSubjects = React.useMemo(() => {
+    const s = new Set<string>();
+    history.forEach(res => {
+      let sub = res.subject;
+      if (!sub || sub === 'Geral' || sub === 'Não Identificada' || sub === 'Sem Matéria') {
+        sub = normalizeSubject(res.fileName);
+      }
+      if (sub) s.add(sub);
+      else s.add('Não Identificada');
+    });
+    return Array.from(s).sort();
+  }, [history]);
+
+  const totalPages = Math.ceil(studyItems.length / itemsPerPage);
+  const paginatedItems = studyItems.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const hasActiveFilters = filterSubject !== 'all' || filterFileName !== '' || filterDateStart !== '' || filterDateEnd !== '';
+
+  const clearFilters = () => {
+    setFilterSubject('all');
+    setFilterFileName('');
+    setFilterDateStart('');
+    setFilterDateEnd('');
+  };
+
+  // Reset to page 1 when itemsPerPage or filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [itemsPerPage, filterSubject, filterFileName, filterDateStart, filterDateEnd]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-[96%] mx-auto relative"
+    >
+      {/* Performance Details Modal */}
+      <AnimatePresence>
+        {selectedItemDetails && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white dark:bg-slate-900 rounded-[2rem] border border-black/10 dark:border-slate-800 shadow-2xl w-full max-w-[98vw] overflow-hidden max-h-[98vh] flex flex-col"
+            >
+              <div className={cn("px-6 py-4 flex items-center justify-between shrink-0", theme.bg, theme.text)}>
+                <div className="flex items-center gap-3">
+                  <BarChart2 size={20} />
+                  <h3 className="font-bold">Detalhes de Desempenho</h3>
+                </div>
+                <button onClick={() => setSelectedItemDetails(null)} className="p-1 hover:bg-white/10 rounded-lg transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="p-6 bg-black/5 dark:bg-white/5 rounded-[1.5rem]">
+                    <p className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest mb-2">Matéria / Conteúdo</p>
+                    <p className="text-lg font-bold dark:text-white flex items-center gap-3">
+                       <Folder className={theme.text} size={22} />
+                       {selectedItemDetails.subject}
+                    </p>
+                  </div>
+                  <div className="p-6 bg-emerald-500/10 rounded-[1.5rem]">
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2">Data da Atividade</p>
+                    <p className="text-lg font-bold dark:text-white flex items-center gap-3 text-emerald-600">
+                       <Calendar size={22} />
+                       {format(selectedItemDetails.results[0].date instanceof Date ? selectedItemDetails.results[0].date : (selectedItemDetails.results[0].date as any).toDate(), "dd/MM/yyyy")}
+                    </p>
+                  </div>
+                  <div className="p-6 bg-blue-500/10 rounded-[1.5rem] flex flex-col justify-center">
+                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-2">Média de Acertos</p>
+                    <div className="flex items-end justify-between gap-4">
+                      <p className="text-4xl font-black text-blue-600">
+                        {Math.round((selectedItemDetails.totalCorrect / selectedItemDetails.totalQuestions) * 100)}%
+                      </p>
+                      <div className="flex flex-col items-end border-l border-blue-500/20 pl-4">
+                        <div className="flex gap-3">
+                          <div className="text-center">
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase">Certas</p>
+                            <p className="text-sm font-bold text-emerald-600">{selectedItemDetails.totalCorrect}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[10px] font-bold text-rose-600 uppercase">Erradas</p>
+                            <p className="text-sm font-bold text-rose-600">{selectedItemDetails.totalQuestions - selectedItemDetails.totalCorrect}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[10px] font-bold text-blue-600 uppercase">Total</p>
+                            <p className="text-sm font-bold text-blue-600">{selectedItemDetails.totalQuestions}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest px-1">Sessões deste Dia</p>
+                  <div className="grid gap-3">
+                    {selectedItemDetails.results.sort((a, b) => {
+                      const da = a.date instanceof Date ? a.date : (a.date as any).toDate();
+                      const db = b.date instanceof Date ? b.date : (b.date as any).toDate();
+                      return db.getTime() - da.getTime();
+                    }).map((res, i) => {
+                      const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
+                      const performance = Math.round((res.correct / res.total) * 100);
+                      return (
+                        <div key={i} className="flex items-center justify-between p-4 bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 rounded-2xl group hover:border-emerald-500/30 transition-all">
+                          <div className="flex flex-col min-w-0 flex-1 mr-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold dark:text-white shrink-0">{format(date, "HH:mm")}</span>
+                              <span className="text-xs font-medium text-black/40 dark:text-slate-500 truncate">{res.fileName}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] font-bold text-emerald-500">{res.correct} acertos</span>
+                              <span className="text-[10px] font-bold text-rose-500">{res.total - res.correct} erros</span>
+                              <span className="text-[10px] font-bold text-black/40 dark:text-slate-500">Total: {res.total}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className={cn("text-sm font-black w-12 text-right", 
+                              performance >= 70 ? "text-emerald-500" : 
+                              performance >= 50 ? "text-amber-500" : "text-rose-500"
+                            )}>
+                              {performance}%
+                            </span>
+                            
+                            <div className="flex items-center gap-1">
+                              <button 
+                                onClick={() => {
+                                  onViewResult(res);
+                                  setSelectedItemDetails(null);
+                                }}
+                                className={cn("p-2 rounded-lg", theme.bg, theme.text)}
+                                title="Ver Resultado"
+                              >
+                                <ArrowUpRight size={14} />
+                              </button>
+                              
+                              <button 
+                                onClick={() => {
+                                  onRedoQuiz(res);
+                                  setSelectedItemDetails(null);
+                                }}
+                                className="p-2 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                                title="Refazer Mesmo Quiz"
+                              >
+                                <RotateCcw size={14} />
+                              </button>
+  
+                              <button 
+                                onClick={() => {
+                                  onPracticeSubject(res.subject || selectedItemDetails.subject, res.fileName);
+                                  setSelectedItemDetails(null);
+                                }}
+                                className="p-2 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+                                title="Gerar Novo Quiz deste Material"
+                              >
+                                <Zap size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Header Spreadsheet Style */}
+      <div className="bg-white dark:bg-slate-900 border border-black/10 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+        <div className={cn("px-6 py-4 border-b border-black/10 dark:border-slate-800 flex items-center justify-between", theme.bg, theme.text)}>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-lg">
+              <Table size={20} />
+            </div>
+            <h2 className="text-lg font-bold tracking-tight">Cronograma de Estudos (Planilha de Controle)</h2>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Filters Bar */}
+        <div className="p-4 bg-black/[0.01] dark:bg-white/[0.01] border-b border-black/10 dark:border-slate-800 flex flex-col gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Subject Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest ml-1">Filtrar por Matéria</label>
+              <div className="relative">
+                <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30 dark:text-slate-500" />
+                <select
+                  value={filterSubject}
+                  onChange={(e) => setFilterSubject(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-black/10 dark:border-slate-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all appearance-none"
+                >
+                  <option value="all">Todas as Matérias</option>
+                  {uniqueSubjects.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* File Name Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest ml-1">Buscar Arquivo</label>
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30 dark:text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Nome do arquivo..."
+                  value={filterFileName}
+                  onChange={(e) => setFilterFileName(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-black/10 dark:border-slate-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Date Start Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest ml-1">De (Data)</label>
+              <div className="relative">
+                <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30 dark:text-slate-500" />
+                <input
+                  type="date"
+                  value={filterDateStart}
+                  onChange={(e) => setFilterDateStart(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-black/10 dark:border-slate-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Date End Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest ml-1">Até (Data)</label>
+              <div className="relative">
+                <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30 dark:text-slate-500" />
+                <input
+                  type="date"
+                  value={filterDateEnd}
+                  onChange={(e) => setFilterDateEnd(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-black/10 dark:border-slate-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                />
+              </div>
+            </div>
+          </div>
+
+          {hasActiveFilters && (
+            <div className="flex justify-end">
+              <button
+                onClick={clearFilters}
+                className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all uppercase tracking-widest"
+              >
+                <RotateCcw size={12} />
+                Limpar Filtros
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[800px]">
+            <thead>
+              <tr className="bg-black/[0.02] dark:bg-white/[0.02] border-b border-black/10 dark:border-slate-800">
+                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider border-r border-black/5 dark:border-white/5">Pasta / Matéria</th>
+                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider border-r border-black/5 dark:border-white/5 text-center">Última Atividade</th>
+                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider border-r border-black/5 dark:border-white/5 text-center">Desempenho Médio</th>
+                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider border-r border-black/5 dark:border-white/5 text-center">Sessões</th>
+                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black/5 dark:divide-white/5">
+              {(() => {
+                const rows: React.ReactNode[] = [];
+                let currentMonthStr = '';
+                let currentDateStr = '';
+
+                paginatedItems.forEach((item, idx) => {
+                  const dateStr = format(item.date, "dd/MM/yyyy");
+                  const monthStr = format(item.date, "MMMM yyyy", { locale: ptBR });
+
+                  if (monthStr !== currentMonthStr) {
+                    rows.push(
+                      <tr key={`month-${monthStr}`} className="bg-black/[0.05] dark:bg-white/5">
+                        <td colSpan={5} className="px-6 py-2 border-b border-black/10 dark:border-white/10">
+                          <span className="text-[11px] font-black uppercase tracking-[0.2em] text-black/60 dark:text-slate-400">
+                            {monthStr}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                    currentMonthStr = monthStr;
+                  }
+
+                  if (dateStr !== currentDateStr) {
+                    rows.push(
+                      <tr key={`date-${dateStr}`} className="bg-black/[0.02] dark:bg-white/[0.02]">
+                        <td colSpan={5} className="px-6 py-2 border-b border-black/5 dark:border-white/5">
+                          <div className="flex items-center gap-2">
+                             <Calendar size={12} className="text-black/30 dark:text-slate-500" />
+                             <span className="text-[10px] font-black uppercase tracking-widest text-black/40 dark:text-slate-500">
+                               {dateStr}
+                             </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                    currentDateStr = dateStr;
+                  }
+
+                  rows.push(
+                    <tr 
+                      key={`item-${idx}`} 
+                      className="hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors group cursor-pointer"
+                      onClick={() => setSelectedItemDetails({
+                        subject: item.subject,
+                        fileNames: Array.from(new Set(item.results.map(r => r.fileName))),
+                        results: item.results,
+                        totalCorrect: item.totalCorrect,
+                        totalQuestions: item.totalQuestions
+                      })}
+                    >
+                      <td className="px-6 py-5 border-r border-black/5 dark:border-white/5 pl-12">
+                        <div className="flex items-center gap-4">
+                          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-transform group-hover:scale-110", 
+                            item.subject === 'SIMULADO GERAL' || item.subject === 'GERAL' ? 'bg-slate-100 text-slate-400' : cn(theme.bgLight, theme.text)
+                          )}>
+                            <Folder size={20} />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold dark:text-white group-hover:text-emerald-500 transition-colors uppercase tracking-tight">
+                              {item.subject}
+                            </span>
+                            <span className="text-[10px] font-medium text-black/30 dark:text-slate-500">
+                              {Array.from(new Set(item.results.map(r => r.fileName))).length} materiais diferentes
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 border-r border-black/5 dark:border-white/5 text-center">
+                        <span className="text-xs font-medium text-black/60 dark:text-slate-400">
+                          {format(item.date, "HH:mm")}
+                        </span>
+                      </td>
+                      <td className="px-6 py-5 border-r border-black/5 dark:border-white/5 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={cn("text-sm font-black", 
+                            item.avgPerformance >= 70 ? "text-emerald-500" : 
+                            item.avgPerformance >= 50 ? "text-amber-500" : "text-rose-500"
+                          )}>
+                            {Math.round(item.avgPerformance)}%
+                          </span>
+                          <div className="w-16 h-1 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+                            <div 
+                              className={cn("h-full transition-all duration-1000", 
+                                item.avgPerformance >= 70 ? "bg-emerald-500" : 
+                                item.avgPerformance >= 50 ? "bg-amber-500" : "bg-rose-500"
+                              )}
+                              style={{ width: `${item.avgPerformance}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 border-r border-black/5 dark:border-white/5 text-center">
+                        <span className="px-2 py-1 bg-black/5 dark:bg-white/5 rounded-md text-[10px] font-bold text-black/40 dark:text-slate-500">
+                          {item.count} sessões
+                        </span>
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onPracticeSubject(item.subject, item.results[0].fileName);
+                          }}
+                          className={cn(
+                            "p-2 rounded-lg transition-all active:scale-90 hover:shadow-md",
+                            theme.primary, theme.contrastText
+                          )}
+                          title="Gerar Novo Quiz desta Matéria"
+                        >
+                          <Zap size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                });
+
+                return rows;
+              })()}
+              {studyItems.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-20 text-center">
+                    <div className="flex flex-col items-center gap-4 opacity-20">
+                      <Table size={48} />
+                      <p className="text-sm font-bold uppercase tracking-widest">Nenhum registro encontrado</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        
+        {/* Spreadsheet Footer */}
+        <div className="px-6 py-3 bg-black/[0.02] dark:bg-white/[0.02] border-t border-black/10 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-6 text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">
+            <span>Total de Materiais: {studyItems.length}</span>
+            <span>Média Geral: {studyItems.length > 0 ? Math.round(studyItems.reduce((acc, curr) => acc + curr.avgPerformance, 0) / studyItems.length) : 0}%</span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Items per page selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">Linhas:</span>
+              <select 
+                value={itemsPerPage}
+                onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                className="bg-transparent border border-black/10 dark:border-white/10 rounded-md text-[10px] font-bold dark:text-slate-400 outline-none px-1 py-0.5"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-20 transition-all"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <div className="flex items-center gap-1 px-2">
+                  <span className="text-[10px] font-bold text-black/60 dark:text-slate-300">{currentPage}</span>
+                  <span className="text-[10px] font-bold text-black/20 dark:text-slate-600">/</span>
+                  <span className="text-[10px] font-bold text-black/40 dark:text-slate-500">{totalPages}</span>
+                </div>
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-20 transition-all"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const StudyLogSpreadsheet = ({
+  logs,
+  history,
+  subjects,
+  theme,
+  onClose,
+  onAddLog,
+  onUpdateLog,
+  onDeleteLog
+}: {
+  logs: StudyLog[],
+  history: QuizResult[],
+  subjects: string[],
+  theme: any,
+  onClose: () => void,
+  onAddLog: (subject: string, fileNames: string) => void,
+  onUpdateLog: (id: string, updates: Partial<StudyLog>) => void,
+  onDeleteLog: (id: string) => void
+}) => {
+  const [newEntry, setNewEntry] = useState({ subject: '', fileNames: '' });
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Filter States
+  const [filterDate, setFilterDate] = useState('');
+  const [filterSubject, setFilterSubject] = useState('');
+  const [filterFile, setFilterFile] = useState('');
+
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Calculate stats per subject from history for a specific date
+  const getSubjectStats = useCallback((subjectName: string, targetDate: Date, fileNameFilter?: string) => {
+    let correct = 0;
+    let total = 0;
+    
+    // Normalize subject name for comparison
+    const normalizedTarget = subjectName.toUpperCase().trim();
+    
+    history.forEach(res => {
+      // EXCLUSÃO: No Controle Pessoal (Estatísticas), apenas quizzes novos de arquivos.
+      // Filtramos simulados, redos (refeitos) e revisões de flashcards/erros.
+      if (res.isSimulado || res.isRedoing || res.isReview) return;
+
+      const resDate = res.date instanceof Date ? res.date : (res.date as any).toDate();
+      
+      // Filter by the specific date
+      if (!isSameDay(resDate, targetDate)) return;
+
+      // Find if this quiz belongs to the subject
+      const hasSubject = res.questions.some(q => {
+        const qSub = normalizeSubject(q.subject || res.fileName || res.subject || "").toUpperCase().trim();
+        return qSub === normalizedTarget || normalizedTarget.includes(qSub) || qSub.includes(normalizedTarget);
+      });
+
+      // Special handling for 'GERAL' or when we have a specific file name filter
+      const isGeral = normalizedTarget === "GERAL";
+      const resSubjectNormalized = (res.subject || "").toUpperCase().trim();
+      const matchesSubject = hasSubject || 
+                            normalizeSubject(res.fileName).toUpperCase().trim() === normalizedTarget ||
+                            resSubjectNormalized === normalizedTarget ||
+                            resSubjectNormalized.includes(normalizedTarget) ||
+                            normalizedTarget.includes(resSubjectNormalized);
+
+      // If fileNameFilter is provided, we check if this specific quiz matches that filter
+      let matchesFile = false;
+      if (fileNameFilter) {
+        const normalizedFilter = fileNameFilter.toUpperCase().trim();
+        const normalizedFile = res.fileName.toUpperCase().trim();
+        
+        // Match if the filter includes the filename, or vice-versa, or if normalized subjects match
+        matchesFile = normalizedFilter.includes(normalizedFile) || 
+                      normalizedFile.includes(normalizedFilter) ||
+                      normalizeSubject(res.fileName).toUpperCase().trim() === normalizeSubject(fileNameFilter).toUpperCase().trim();
+      }
+
+      // We count if:
+      // 1. It matches the file name specifically (highest priority for simulated results)
+      // 2. OR it matches the subject AND we don't have a conflicting file filter
+      if ((fileNameFilter && matchesFile) || (!fileNameFilter && matchesSubject) || (isGeral && fileNameFilter && matchesFile)) {
+        res.questions.forEach((q, idx) => {
+          // Se filtramos por arquivo E deu match no arquivo, contamos todas as questões desse quiz.
+          // Isso garante que os dados apareçam no Controle Pessoal conforme o registro do usuário.
+          const matchesByFileContext = fileNameFilter && matchesFile;
+          
+          const qSub = normalizeSubject(q.subject || res.fileName || res.subject || '').toUpperCase().trim();
+          const matchesThisSubject = qSub === normalizedTarget || 
+                                    normalizedTarget.includes(qSub) || 
+                                    qSub.includes(normalizedTarget) || 
+                                    isGeral;
+          
+          if (matchesThisSubject || matchesByFileContext) {
+            total += 1;
+            if (res.answers[idx] === q.correctAnswer) correct += 1;
+          }
+        });
+      }
+    });
+
+    const incorrect = total - correct;
+    return { correct, incorrect, total };
+  }, [history]);
+
+  // Filtered Logs
+  const filteredLogs = useMemo(() => {
+    return logs.filter(log => {
+      const dateMatch = !filterDate || format(log.date, 'yyyy-MM-dd') === filterDate;
+      const subjectMatch = !filterSubject || log.subject === filterSubject;
+      const fileMatch = !filterFile || log.fileNames.toLowerCase().includes(filterFile.toLowerCase());
+      
+      if (!(dateMatch && subjectMatch && fileMatch)) return false;
+
+      // OCULTAR REGISTROS AUTOMÁTICOS SEM ESTATÍSTICAS
+      // Isso remove simulados e revisões que foram gerados automaticamente mas 
+      // cujos dados são excluídos do cálculo de desempenho do Controle Pessoal.
+      const stats = getSubjectStats(log.subject, log.date, log.fileNames);
+      
+      // Se for um log automático (novo) e não tem questões válidas, oculta.
+      if (log.isAutomatic && stats.total === 0) return false;
+      
+      // Para logs antigos (sem a flag isAutomatic), se o total é 0, 
+      // também ocultamos se existirem resultados "excluídos" (simulados) no histórico para este dia/matéria/arquivo.
+      if (log.isAutomatic === undefined && stats.total === 0) {
+        const hasExcludedMatch = history.some(res => {
+          if (!(res.isSimulado || res.isRedoing || res.isReview)) return false;
+          const resDate = res.date instanceof Date ? res.date : (res.date as any).toDate();
+          if (!isSameDay(resDate, log.date)) return false;
+          
+          const normalizedTarget = log.subject.toUpperCase().trim();
+          const resSubjectNormalized = (res.subject || "").toUpperCase().trim();
+          const matchesSubject = normalizeSubject(res.fileName).toUpperCase().trim() === normalizedTarget ||
+                                resSubjectNormalized === normalizedTarget;
+          
+          return matchesSubject;
+        });
+        if (hasExcludedMatch) return false;
+      }
+
+      return true;
+    }).sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [logs, filterDate, filterSubject, filterFile, getSubjectStats, history]);
+
+  // Paginated Logs
+  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+  const paginatedLogs = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredLogs.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredLogs, currentPage, itemsPerPage]);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterDate, filterSubject, filterFile, itemsPerPage]);
+
+  const clearFilters = () => {
+    setFilterDate('');
+    setFilterSubject('');
+    setFilterFile('');
+  };
+
+  const downloadCSV = () => {
+    if (logs.length === 0) return;
+    
+    const headers = ['Data', 'Matéria', 'Arquivo/Títulos', 'Certas', 'Erradas', 'Total'];
+    const rows = logs.map(log => {
+      const stats = getSubjectStats(log.subject, log.date, log.fileNames);
+      return [
+        format(log.date, 'dd/MM/yyyy'),
+        log.subject,
+        `"${log.fileNames.replace(/"/g, '""')}"`,
+        stats.correct,
+        stats.incorrect,
+        stats.total
+      ];
+    });
+    
+    const csvContent = [headers, ...rows].map(e => e.join(';')).join('\n');
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `registro-estudos-${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-full mx-auto relative min-h-[80vh]"
+    >
+      <div className="relative w-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-3xl rounded-[3rem] shadow-2xl border border-white/50 dark:border-white/10 overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="px-8 py-6 border-b border-black/5 dark:border-white/5 flex items-center justify-between bg-white/40 dark:bg-white/5 backdrop-blur-md">
+          <div className="flex items-center gap-4">
+            <div className={cn("p-4 rounded-3xl text-white shadow-xl", theme.primary)}>
+              <Table size={32} />
+            </div>
+            <div>
+              <h2 className="text-3xl font-black dark:text-white tracking-tight italic">Controle Pessoal de Estudos</h2>
+              <p className="text-xs font-bold text-black/30 dark:text-slate-500 uppercase tracking-widest mt-1">Planilha de Desempenho e Registros</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={downloadCSV}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl transition-all active:scale-95 text-[10px] font-black uppercase tracking-widest border border-emerald-500/20"
+            >
+              <FileDown size={14} />
+              Exportar CSV
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Bar */}
+        <div className="px-8 py-4 bg-black/5 dark:bg-white/5 flex flex-wrap items-center gap-4 border-b border-black/5 dark:border-white/5">
+          <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-800/50 px-3 py-2 rounded-xl border border-black/5 dark:border-white/10 flex-1 min-w-[150px]">
+             <Calendar size={14} className="text-black/40 dark:text-slate-500" />
+             <input 
+               type="date"
+               value={filterDate}
+               onChange={(e) => setFilterDate(e.target.value)}
+               className="bg-transparent text-[10px] font-bold dark:text-white outline-none w-full cursor-pointer"
+             />
+          </div>
+
+          <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-800/50 px-3 py-2 rounded-xl border border-black/5 dark:border-white/10 flex-1 min-w-[200px]">
+             <BookOpen size={14} className="text-black/40 dark:text-slate-500" />
+             <select 
+               value={filterSubject}
+               onChange={(e) => setFilterSubject(e.target.value)}
+               className="bg-transparent text-[10px] font-bold dark:text-white outline-none w-full cursor-pointer"
+             >
+               <option value="">Todas as Matérias</option>
+               {subjects.map(s => (
+                 <option key={s} value={s} className="bg-white dark:bg-slate-900">{s}</option>
+               ))}
+             </select>
+          </div>
+
+          <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-800/50 px-3 py-2 rounded-xl border border-black/5 dark:border-white/10 flex-1 min-w-[250px]">
+             <Search size={14} className="text-black/40 dark:text-slate-500" />
+             <input 
+               type="text"
+               placeholder="Filtrar por nome do arquivo..."
+               value={filterFile}
+               onChange={(e) => setFilterFile(e.target.value)}
+               className="bg-transparent text-[10px] font-bold dark:text-white outline-none w-full"
+             />
+          </div>
+
+          <button 
+            onClick={clearFilters}
+            className="flex items-center gap-2 px-4 py-2 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black/60 dark:text-slate-300 rounded-xl transition-all active:scale-95 text-[10px] font-black uppercase tracking-widest disabled:opacity-30"
+            disabled={!filterDate && !filterSubject && !filterFile}
+          >
+            <RotateCcw size={14} />
+            Limpar Filtros
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-8">
+          <div className="bg-white/40 dark:bg-black/20 rounded-[2.5rem] border border-white/40 dark:border-white/5 shadow-inner overflow-hidden backdrop-blur-sm">
+            <table className="w-full text-left border-collapse table-fixed">
+              <thead>
+                <tr className="bg-black/5 dark:bg-white/5">
+                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 text-center w-[120px]">Data</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 w-[160px]">Matéria</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 w-auto">Nome do Arquivo / Títulos</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 text-center w-[300px]">Questões Resolvidas (Resultado do Dia)</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 text-center w-[150px] px-4">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/5 dark:divide-white/5">
+                {/* New Entry Row - Only show when no filters are active on subject/file search to keep it clean */}
+                {(!filterSubject && !filterFile && !filterDate) && (
+                  <tr className="bg-emerald-500/10 dark:bg-emerald-500/20">
+                    <td className="px-6 py-4 italic text-xs text-black/50 dark:text-slate-300 font-bold text-center">
+                      {format(new Date(), 'dd/MM/yyyy')}
+                    </td>
+                    <td className="px-6 py-4">
+                      <select 
+                        value={newEntry.subject}
+                        onChange={(e) => setNewEntry({ ...newEntry, subject: e.target.value })}
+                        className="w-full bg-white/80 dark:bg-slate-900/80 border border-black/10 dark:border-white/10 rounded-xl px-4 py-2 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50 backdrop-blur-sm"
+                      >
+                        <option value="">Selecione a Matéria...</option>
+                        {subjects.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-6 py-4">
+                      <textarea 
+                        placeholder="Nomes dos arquivos, aulas, capítulos..."
+                        value={newEntry.fileNames}
+                        onChange={(e) => setNewEntry({ ...newEntry, fileNames: e.target.value })}
+                        className="w-full bg-white/80 dark:bg-slate-900/80 border border-black/10 dark:border-white/10 rounded-xl px-4 py-2 text-sm font-medium dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50 min-h-[60px] resize-none backdrop-blur-sm shadow-sm"
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      {newEntry.subject && (
+                        <div className="flex justify-center gap-4">
+                          {(() => {
+                             const stats = getSubjectStats(newEntry.subject, new Date(), newEntry.fileNames);
+                             return (
+                               <>
+                                 <div className="flex flex-col items-center">
+                                   <span className="text-sm font-black text-emerald-600">{stats.correct}</span>
+                                   <span className="text-[7px] font-black text-black/40 dark:text-slate-500 uppercase">Certas</span>
+                                 </div>
+                                 <div className="flex flex-col items-center">
+                                   <span className="text-sm font-black text-rose-600">{stats.incorrect}</span>
+                                   <span className="text-[7px] font-black text-black/40 dark:text-slate-500 uppercase">Erradas</span>
+                                 </div>
+                                 <div className="flex flex-col items-center">
+                                   <span className="text-sm font-black text-blue-600">{stats.total}</span>
+                                   <span className="text-[7px] font-black text-black/40 dark:text-slate-500 uppercase">Total</span>
+                                 </div>
+                               </>
+                             );
+                          })()}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center px-4">
+                      <button 
+                        onClick={() => {
+                          if (newEntry.subject && newEntry.fileNames) {
+                            onAddLog(newEntry.subject, newEntry.fileNames);
+                            setNewEntry({ subject: '', fileNames: '' });
+                          }
+                        }}
+                        disabled={!newEntry.subject || !newEntry.fileNames}
+                        className={cn(
+                          "p-4 rounded-2xl text-white transition-all active:scale-95 disabled:opacity-30 disabled:grayscale shadow-xl",
+                          theme.primary
+                        )}
+                      >
+                        <Plus size={24} />
+                      </button>
+                    </td>
+                  </tr>
+                )}
+
+                {/* Existing Logs */}
+                {paginatedLogs.map(log => {
+                  const stats = getSubjectStats(log.subject, log.date, log.fileNames);
+                  const isEditing = editingId === log.id;
+                  
+                  return (
+                    <tr key={log.id} className="group hover:bg-white/20 dark:hover:bg-white/[0.05] transition-colors border-b border-black/5 dark:border-white/5">
+                      <td className="px-6 py-8 text-xs font-bold text-black/70 dark:text-slate-300 text-center">
+                        {format(log.date, 'dd/MM/yyyy')}
+                      </td>
+                      <td className="px-6 py-8">
+                        {isEditing ? (
+                          <select 
+                            value={log.subject}
+                            onChange={(e) => onUpdateLog(log.id, { subject: e.target.value })}
+                            className="w-full bg-white/90 dark:bg-slate-900/90 border border-blue-500/50 rounded-xl px-4 py-2 text-sm font-bold dark:text-white outline-none shadow-lg"
+                          >
+                            {subjects.map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-sm font-black dark:text-white uppercase tracking-tight break-words">{log.subject}</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-8">
+                        {isEditing ? (
+                          <textarea 
+                            value={log.fileNames}
+                            onChange={(e) => onUpdateLog(log.id, { fileNames: e.target.value })}
+                            className="w-full bg-white/90 dark:bg-slate-900/90 border border-blue-500/50 rounded-xl px-4 py-3 text-sm font-medium dark:text-white outline-none min-h-[100px] resize-none shadow-2xl relative z-10"
+                            autoFocus
+                          />
+                        ) : (
+                          <p className="text-sm font-medium text-black/70 dark:text-slate-300 whitespace-pre-wrap leading-relaxed break-words">{log.fileNames}</p>
+                        )}
+                      </td>
+                      <td className="px-6 py-8">
+                        <div className="flex justify-center items-center gap-4">
+                           <div className="flex flex-col items-center">
+                             <span className="text-xl font-black text-emerald-500">{stats.correct}</span>
+                             <span className="text-[9px] font-black text-black/40 dark:text-slate-500 uppercase tracking-tighter">Certas</span>
+                           </div>
+                           <div className="w-[1px] h-10 bg-black/10 dark:bg-white/10" />
+                           <div className="flex flex-col items-center">
+                             <span className="text-xl font-black text-rose-500">{stats.incorrect}</span>
+                             <span className="text-[9px] font-black text-black/40 dark:text-slate-500 uppercase tracking-tighter">Erradas</span>
+                           </div>
+                           <div className="w-[1px] h-10 bg-black/10 dark:bg-white/10" />
+                           <div className="flex flex-col items-center">
+                             <span className="text-xl font-black text-blue-500">{stats.total}</span>
+                             <span className="text-[9px] font-black text-black/40 dark:text-slate-500 uppercase tracking-tighter">Total</span>
+                           </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-8">
+                        <div className="flex items-center justify-center gap-3">
+                          <button 
+                            onClick={() => setEditingId(isEditing ? null : log.id)}
+                            className={cn(
+                              "p-3 rounded-xl transition-all active:scale-95 shadow-lg backdrop-blur-md border border-white/20",
+                              isEditing ? theme.primary + " text-white" : "bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 hover:bg-blue-500 hover:text-white"
+                            )}
+                          >
+                            {isEditing ? <Check size={18} /> : <FileText size={18} />}
+                          </button>
+                          <button 
+                            onClick={() => onDeleteLog(log.id)}
+                            className="p-3 rounded-xl bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all active:scale-95 shadow-lg backdrop-blur-md border border-white/20"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {filteredLogs.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-20 text-center">
+                      <div className="flex flex-col items-center gap-4 opacity-20">
+                        <Table size={60} />
+                        <p className="text-lg font-black tracking-widest uppercase">Nenhum registro encontrado</p>
+                        <p className="text-xs font-bold -mt-2">Tente ajustar seus filtros ou adicione um novo registro.</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Footer info & Pagination */}
+        <div className="px-8 py-4 bg-black/5 dark:bg-white/5 border-t border-black/5 dark:border-white/5">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-6 justify-center sm:justify-start">
+               <div className="flex items-center gap-2">
+                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                 <span className="text-[10px] font-black text-black/40 dark:text-slate-500 uppercase tracking-widest">Encontrados: {filteredLogs.length}</span>
+               </div>
+               <div className="flex items-center gap-2">
+                 <div className="w-2 h-2 rounded-full bg-blue-500" />
+                 <span className="text-[10px] font-black text-black/40 dark:text-slate-500 uppercase tracking-widest">Total Matérias: {new Set(logs.map(l => l.subject)).size}</span>
+               </div>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 0 && (
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 bg-white/30 dark:bg-white/5 px-3 py-1 rounded-xl border border-black/5 dark:border-white/10">
+                  <span className="text-[10px] font-black text-black/40 dark:text-slate-500 uppercase">Linhas:</span>
+                  <select 
+                    value={itemsPerPage}
+                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                    className="bg-transparent text-[10px] font-black dark:text-white outline-none cursor-pointer"
+                  >
+                    {[5, 10, 20, 50].map(val => (
+                      <option key={val} value={val} className="bg-white dark:bg-slate-900">{val}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 bg-white/30 dark:bg-white/5 rounded-xl hover:bg-white/50 dark:hover:bg-white/10 transition-all disabled:opacity-20 disabled:cursor-not-allowed border border-black/5 dark:border-white/10"
+                  >
+                    <ChevronLeft size={16} className="dark:text-white" />
+                  </button>
+                  <span className="text-[10px] font-black dark:text-white tracking-widest min-w-[60px] text-center">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 bg-white/30 dark:bg-white/5 rounded-xl hover:bg-white/50 dark:hover:bg-white/10 transition-all disabled:opacity-20 disabled:cursor-not-allowed border border-black/5 dark:border-white/10"
+                  >
+                    <ChevronRight size={16} className="dark:text-white" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>
@@ -2567,7 +4152,7 @@ const StudyMode = ({
   history: QuizResult[], 
   theme: any, 
   onClose: () => void,
-  onPracticeIncorrect: (questions: QuizQuestion[], fileName: string) => void,
+  onPracticeIncorrect: (questions: QuizQuestion[], fileName: string, subject?: string) => void,
   dateFilter: string[],
   setDateFilter: (val: string[]) => void,
   subjectFilter: string,
@@ -2733,7 +4318,7 @@ const StudyMode = ({
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 max-w-7xl mx-auto"
+      className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 max-w-[96%] mx-auto"
     >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm">
         <div className="flex items-center gap-3 sm:gap-4">
@@ -2872,7 +4457,7 @@ const StudyMode = ({
                     .flatMap(res => res.questions.filter((q, idx) => res.answers[idx] !== q.correctAnswer));
                   
                   if (selectedQuestions.length > 0) {
-                    onPracticeIncorrect(selectedQuestions, `Revisão: ${activeFolder} (Seleção)`);
+                    onPracticeIncorrect(selectedQuestions, `Revisão: ${activeFolder} (Seleção)`, activeFolder || undefined);
                     clearSelection();
                   }
                 }}
@@ -2979,7 +4564,7 @@ const StudyMode = ({
                       disabled={subjectStats.find(s => s.name === activeFolder)?.incorrectCount === 0}
                       onClick={() => {
                         const s = subjectStats.find(s => s.name === activeFolder);
-                        if (s) onPracticeIncorrect(s.questions, `Revisão: ${s.name}`);
+                        if (s) onPracticeIncorrect(s.questions, `Revisão: ${s.name}`, s.name);
                       }}
                       className={cn(
                         "px-6 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 shadow-lg",
@@ -3077,7 +4662,7 @@ const StudyMode = ({
                                   <button 
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      onPracticeIncorrect(res.questions, res.fileName);
+                                      onPracticeIncorrect(res.questions, res.fileName, res.subject);
                                     }}
                                     className={cn(
                                       "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95 flex items-center gap-1.5",
@@ -3091,7 +4676,7 @@ const StudyMode = ({
                                     <button 
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        onPracticeIncorrect(incorrectInThisQuiz, `Erros: ${res.fileName}`);
+                                        onPracticeIncorrect(incorrectInThisQuiz, `Erros: ${res.fileName}`, res.subject);
                                       }}
                                       className="px-3 py-1.5 rounded-lg font-bold text-[10px] bg-rose-500 text-white transition-all active:scale-95 flex items-center gap-1.5 shadow-lg shadow-rose-500/20"
                                     >
@@ -3474,18 +5059,31 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 border border-red-100 dark:border-red-900/30 text-center space-y-6">
             <div className="w-20 h-20 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto">
-              <AlertCircle className="text-red-500" size={40} />
+              {this.state.errorInfo?.includes('Quota Exceeded') ? (
+                <Clock className="text-amber-500" size={40} />
+              ) : (
+                <AlertCircle className="text-red-500" size={40} />
+              )}
             </div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-bold dark:text-white">Ops! Algo deu errado</h1>
+              <h1 className="text-2xl font-bold dark:text-white">
+                {this.state.errorInfo?.includes('Quota Exceeded') ? "Limite de Uso Atingido" : "Ops! Algo deu errado"}
+              </h1>
               <p className="text-slate-500 dark:text-slate-400">
-                {isFirestoreError 
-                  ? "Ocorreu um erro de permissão ou acesso ao banco de dados." 
-                  : "Ocorreu um erro inesperado na aplicação."}
+                {this.state.errorInfo?.includes('Quota Exceeded') 
+                  ? "O limite diário gratuito do banco de dados foi atingido. O acesso será restaurado automaticamente amanhã." 
+                  : isFirestoreError 
+                    ? "Ocorreu um erro de permissão ou acesso ao banco de dados." 
+                    : "Ocorreu um erro inesperado na aplicação."}
               </p>
+              {this.state.errorInfo?.includes('Quota Exceeded') && (
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-4 leading-relaxed">
+                  Para mais informações sobre as cotas do plano gratuito (Spark), visite a <a href="https://firebase.google.com/pricing#cloud-firestore" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-500">página de preços do Firebase</a>.
+                </p>
+              )}
             </div>
             
-            {this.state.errorInfo && (
+            {this.state.errorInfo && !this.state.errorInfo.includes('Quota Exceeded') && (
               <div className="p-4 bg-slate-50 dark:bg-black/20 rounded-xl text-left overflow-auto max-h-40">
                 <code className="text-xs text-red-600 dark:text-red-400 break-all">
                   {isFirestoreError ? `Erro no Firestore (${firestoreError.operationType}): ${firestoreError.error}` : this.state.errorInfo}
@@ -3497,7 +5095,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
               onClick={() => window.location.reload()}
               className="w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold hover:opacity-90 transition-opacity"
             >
-              Recarregar Aplicativo
+              Tentar Novamente
             </button>
           </div>
         </div>
@@ -3695,6 +5293,7 @@ function QuizApp() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isReviewMode, setIsReviewMode] = useState(false);
+  const [isRedoing, setIsRedoing] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [isQuestionStarted, setIsQuestionStarted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -3776,30 +5375,6 @@ function QuizApp() {
     }
   };
 
-  // Fetch revision tasks
-  useEffect(() => {
-    if (!user) {
-      setRevisionTasks([]);
-      return;
-    }
-
-    const q = query(collection(db, 'revisionTasks'), where('uid', '==', user.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const tasks = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          ...data,
-          dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : new Date(data.dueDate)
-        } as RevisionTask;
-      });
-      setRevisionTasks(tasks);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'revisionTasks');
-    });
-
-    return () => unsubscribe();
-  }, [user]);
-
   // Sync background and theme settings with Firestore
   useEffect(() => {
     if (userProfile) {
@@ -3871,14 +5446,30 @@ function QuizApp() {
       
       if (estimatedSize < 800000) { // 800KB safety margin
         setDoc(userRef, settingsToSave, { merge: true })
-          .catch(e => console.error("Error updating background in Firestore", e));
+          .catch(e => {
+            if (e.message?.includes('Quota Exceeded')) {
+              setFirestoreQuotaExceeded(true);
+            } else if (e.code === 'unavailable' || e.message?.includes('unavailable')) {
+              setFirestoreUnavailable(true);
+            } else {
+              console.error("Error updating background in Firestore", e);
+            }
+          });
       } else {
         console.warn("Background settings too large to save to Firestore. Try removing some custom backgrounds.");
         setDoc(userRef, {
           backgroundUrl: backgroundUrl.length > 100000 ? 'none' : backgroundUrl,
           backgroundBlur,
           backgroundOpacity
-        }, { merge: true }).catch(e => console.error("Error updating minimal background in Firestore", e));
+        }, { merge: true }).catch(e => {
+          if (e.message?.includes('Quota Exceeded')) {
+            setFirestoreQuotaExceeded(true);
+          } else if (e.code === 'unavailable' || e.message?.includes('unavailable')) {
+            setFirestoreUnavailable(true);
+          } else {
+            console.error("Error updating minimal background in Firestore", e);
+          }
+        });
       }
     }, 2000); // 2 second debounce
 
@@ -3911,6 +5502,108 @@ function QuizApp() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Helper to switch modules
+  const switchModule = (module: 'quiz' | 'study' | 'dashboard' | 'revision' | 'schedule' | 'personal') => {
+    // Reset all view states
+    setShowDashboard(module === 'dashboard');
+    setShowStudyMode(module === 'study');
+    setShowRevisionAgenda(module === 'revision');
+    setShowStudySchedule(module === 'schedule');
+    setShowPersonalControl(module === 'personal');
+    
+    // Also reset sub-views
+    setShowFlashcards(false);
+    setShowRecycleBin(false);
+    setActiveResultId(null);
+    
+    // Ensure we are in idle state if switching modules
+    if (state !== 'idle') setState('idle');
+    
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const GlobalNav = () => {
+    const isModuleQuiz = (state === 'active' || state === 'finished') || (!showDashboard && !showStudyMode && !showStudySchedule && !showRevisionAgenda && !showPersonalControl && !showFlashcards && !showRecycleBin);
+    
+    return (
+      <div className="flex justify-center mb-8 px-4 sticky top-0 z-[40] pt-2">
+        <div className="flex flex-wrap justify-center gap-2 p-1.5 bg-white/80 dark:bg-slate-900/80 rounded-2xl w-fit shadow-xl backdrop-blur-xl border border-black/5 dark:border-white/10">
+          <button 
+            type="button"
+            onClick={() => switchModule('quiz')}
+            className={cn(
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap", 
+              isModuleQuiz ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+            )}
+          >
+            <BrainCircuit size={16} />
+            Modo Quiz
+          </button>
+          <button 
+            type="button"
+            onClick={() => switchModule('study')}
+            className={cn(
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap", 
+              showStudyMode ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+            )}
+          >
+            <BookOpen size={16} />
+            Modo Estudo
+          </button>
+          <button 
+            type="button"
+            onClick={() => switchModule('dashboard')}
+            className={cn(
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap", 
+              showDashboard ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+            )}
+          >
+            <BarChart2 size={16} />
+            Meu Dashboard
+          </button>
+          <button 
+            type="button"
+            onClick={() => switchModule('revision')}
+            className={cn(
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap", 
+              showRevisionAgenda ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+            )}
+          >
+            <Calendar size={16} />
+            Agenda de Revisão
+            {revisionTasks.filter(t => !t.completed && isBefore(t.dueDate, addDays(new Date(), 1))).length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900">
+                {revisionTasks.filter(t => !t.completed && isBefore(t.dueDate, addDays(new Date(), 1))).length}
+              </span>
+            )}
+          </button>
+          <button 
+            type="button"
+            onClick={() => switchModule('schedule')}
+            className={cn(
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap", 
+              showStudySchedule ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+            )}
+          >
+            <Clock size={16} />
+            Cronograma
+          </button>
+          <button 
+            type="button"
+            onClick={() => switchModule('personal')}
+            className={cn(
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap", 
+              showPersonalControl ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+            )}
+          >
+            <Table size={16} />
+            Controle Pessoal
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // Settings
   const [questionCount, setQuestionCount] = useState(20);
   const [selectedExamBoards, setSelectedExamBoards] = useState<string[]>(['Geral']);
@@ -3919,6 +5612,10 @@ function QuizApp() {
   const [isSimulado, setIsSimulado] = useState(false);
   const [selectedSimuladoSubjects, setSelectedSimuladoSubjects] = useState<string[]>([]);
   const [showRevisionAgenda, setShowRevisionAgenda] = useState(false);
+  const [activeRevisionTaskId, setActiveRevisionTaskId] = useState<string | null>(null);
+  const [showStudySchedule, setShowStudySchedule] = useState(false);
+  const [showPersonalControl, setShowPersonalControl] = useState(false);
+  const [studyLogs, setStudyLogs] = useState<StudyLog[]>([]);
   const [revisionTasks, setRevisionTasks] = useState<RevisionTask[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [history, setHistory] = useState<QuizResult[]>([]);
@@ -4058,21 +5755,115 @@ function QuizApp() {
     }
   };
 
+  const [firestoreQuotaExceeded, setFirestoreQuotaExceeded] = useState(false);
+  const [firestoreUnavailable, setFirestoreUnavailable] = useState(false);
+
+  const handleAddStudyLog = async (subject: string, fileNames: string, isAutomatic: boolean = false) => {
+    if (!user || firestoreQuotaExceeded) return;
+    try {
+      // Check for existing log for the same subject and files on the same day
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const q = query(
+        collection(db, 'studyLogs'),
+        where('uid', '==', user.uid),
+        where('subject', '==', subject),
+        where('fileNames', '==', fileNames),
+        where('date', '>=', Timestamp.fromDate(today)),
+        where('date', '<', Timestamp.fromDate(tomorrow))
+      );
+      
+      const existing = await getDocs(q);
+      if (!existing.empty) {
+        // Se já existe um log automático e este também é automático, não faz nada.
+        // Se já existe um log manual, não sobrescreve com automático.
+        return;
+      }
+
+      const newLogRef = doc(collection(db, 'studyLogs'));
+      await setDoc(newLogRef, {
+        uid: user.uid,
+        date: Timestamp.now(),
+        subject,
+        fileNames,
+        isAutomatic
+      });
+    } catch (error: any) {
+      const msg = error.message || String(error);
+      const code = error.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        handleFirestoreError(error, OperationType.CREATE, 'studyLogs');
+      }
+    }
+  };
+
+  const handleUpdateStudyLog = async (id: string, updates: Partial<StudyLog>) => {
+    if (firestoreQuotaExceeded) return;
+    try {
+      const docRef = doc(db, 'studyLogs', id);
+      const fsUpdates: any = { ...updates };
+      if (updates.date) fsUpdates.date = Timestamp.fromDate(updates.date);
+      await updateDoc(docRef, fsUpdates);
+    } catch (error: any) {
+      const msg = error.message || String(error);
+      const code = error.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        handleFirestoreError(error, OperationType.UPDATE, `studyLogs/${id}`);
+      }
+    }
+  };
+
+  const handleDeleteStudyLog = async (id: string) => {
+    if (firestoreQuotaExceeded) return;
+    try {
+      await deleteDoc(doc(db, 'studyLogs', id));
+    } catch (error: any) {
+      const msg = error.message || String(error);
+      const code = error.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        handleFirestoreError(error, OperationType.DELETE, `studyLogs/${id}`);
+      }
+    }
+  };
+
   const handleDeleteQuiz = async (id: string) => {
-    if (!user) return;
+    if (!user || firestoreQuotaExceeded) return;
     try {
       await updateDoc(doc(db, 'results', id), { 
         deleted: true, 
         deletedAt: Timestamp.now() 
       });
       setQuizToDelete(null);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `results/${id}`);
+    } catch (error: any) {
+      const msg = error.message || String(error);
+      const code = error.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        handleFirestoreError(error, OperationType.UPDATE, `results/${id}`);
+      }
     }
   };
 
   const handleDeleteQuizzes = async (ids: string[]) => {
-    if (!user || ids.length === 0) return;
+    if (!user || ids.length === 0 || firestoreQuotaExceeded) return;
     try {
       const batch = writeBatch(db);
       ids.forEach(id => {
@@ -4082,8 +5873,16 @@ function QuizApp() {
         });
       });
       await batch.commit();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'results/multiple');
+    } catch (error: any) {
+      const msg = error.message || String(error);
+      const code = error.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        handleFirestoreError(error, OperationType.UPDATE, 'results/multiple');
+      }
     }
   };
 
@@ -4255,7 +6054,15 @@ function QuizApp() {
       const timer = setTimeout(() => {
         const userRef = doc(db, 'users', user.uid);
         setDoc(userRef, { themeColor }, { merge: true })
-          .catch(e => console.error("Error updating themeColor in Firestore", e));
+          .catch(e => {
+            if (e.message?.includes('Quota Exceeded')) {
+              setFirestoreQuotaExceeded(true);
+            } else if (e.code === 'unavailable' || e.message?.includes('unavailable')) {
+              setFirestoreUnavailable(true);
+            } else {
+              console.error("Error updating themeColor in Firestore", e);
+            }
+          });
       }, 2000);
       return () => clearTimeout(timer);
     }
@@ -4310,8 +6117,18 @@ function QuizApp() {
               role: 'user'
             });
           }
-        } catch (error) {
-          console.error("Error updating user profile", error);
+          setFirestoreQuotaExceeded(false);
+          setFirestoreUnavailable(false);
+        } catch (error: any) {
+          if (error.message?.includes('Quota Exceeded') || error.code === 'resource-exhausted') {
+            setFirestoreQuotaExceeded(true);
+            console.warn("Firestore Quota Exceeded during auth setup");
+          } else if (error.code === 'unavailable' || error.message?.includes('unavailable')) {
+            setFirestoreUnavailable(true);
+            console.warn("Firestore Unavailable during auth setup");
+          } else {
+            console.error("Error updating user profile", error);
+          }
         }
       }
     });
@@ -4328,7 +6145,8 @@ function QuizApp() {
     const q = query(
       collection(db, 'results'),
       where('uid', '==', user.uid),
-      orderBy('date', 'desc')
+      orderBy('date', 'desc'),
+      limit(500)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -4343,8 +6161,18 @@ function QuizApp() {
       });
       setHistory(results.filter(r => r.deleted !== true));
       setRecycleBin(results.filter(r => r.deleted === true));
+      setFirestoreQuotaExceeded(false);
+      setFirestoreUnavailable(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'results');
+      const msg = error instanceof Error ? error.message : String(error);
+      const code = (error as any)?.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        handleFirestoreError(error, OperationType.LIST, 'results');
+      }
     });
 
     return () => unsubscribe();
@@ -4362,8 +6190,18 @@ function QuizApp() {
       if (doc.exists()) {
         setUserProfile(doc.data());
       }
+      setFirestoreQuotaExceeded(false);
+      setFirestoreUnavailable(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+      const msg = error instanceof Error ? error.message : String(error);
+      const code = (error as any)?.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+      }
     });
 
     return () => unsubscribe();
@@ -4405,10 +6243,24 @@ function QuizApp() {
             }));
             setSrsItems(legacyItems);
           }
-        }).catch(e => console.error("Error loading legacy SRS", e));
+        }).catch(e => {
+          if (!(e instanceof Error && e.message.includes('Quota Exceeded'))) {
+            console.error("Error loading legacy SRS", e);
+          }
+        });
       }
+      setFirestoreQuotaExceeded(false);
+      setFirestoreUnavailable(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'srs_registries');
+      const msg = error instanceof Error ? error.message : String(error);
+      const code = (error as any)?.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        handleFirestoreError(error, OperationType.GET, 'srs_registries');
+      }
     });
 
     return () => unsubscribe();
@@ -4424,7 +6276,8 @@ function QuizApp() {
     const q = query(
       collection(db, 'flashcards'),
       where('uid', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(300)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -4439,8 +6292,98 @@ function QuizApp() {
         };
       });
       setFlashcards(cards);
+      setFirestoreQuotaExceeded(false);
+      setFirestoreUnavailable(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'flashcards');
+      const msg = error instanceof Error ? error.message : String(error);
+      const code = (error as any)?.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        handleFirestoreError(error, OperationType.LIST, 'flashcards');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [isAuthReady, user]);
+
+  // Study Logs Listener
+  useEffect(() => {
+    if (!isAuthReady || !user) {
+      setStudyLogs([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'studyLogs'),
+      where('uid', '==', user.uid),
+      orderBy('date', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const logs = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          id: doc.id,
+          date: data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date)
+        } as StudyLog;
+      });
+      setStudyLogs(logs);
+      setFirestoreQuotaExceeded(false);
+      setFirestoreUnavailable(false);
+    }, (error) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      const code = (error as any)?.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        handleFirestoreError(error, OperationType.LIST, 'studyLogs');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [isAuthReady, user]);
+
+  // Revision Tasks Listener
+  useEffect(() => {
+    if (!isAuthReady || !user) {
+      setRevisionTasks([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'revisionTasks'),
+      where('uid', '==', user.uid),
+      orderBy('dueDate', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const tasks = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          id: doc.id,
+          dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : new Date(data.dueDate)
+        } as RevisionTask;
+      });
+      setRevisionTasks(tasks);
+      setFirestoreQuotaExceeded(false);
+      setFirestoreUnavailable(false);
+    }, (error) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      const code = (error as any)?.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        handleFirestoreError(error, OperationType.LIST, 'revisionTasks');
+      }
     });
 
     return () => unsubscribe();
@@ -4537,10 +6480,17 @@ function QuizApp() {
       }
 
       const cleanFileNames = fileNames.map(name => name.replace(/^\d+[\s\.\-\:]*/, '').trim());
-      const combinedFileName = cleanFileNames.join(', ');
+      const combinedFileName = fileNames.join(', ');
 
       setPendingContent(contents);
       setPendingFileName(combinedFileName);
+      
+      // Guess subject if empty
+      if (!selectedSubject) {
+        const guessed = normalizeSubject(cleanFileNames[0]);
+        setSelectedSubject(guessed);
+      }
+
       // Don't call startQuiz immediately
       setState('idle');
     } catch (err: any) {
@@ -4579,6 +6529,7 @@ function QuizApp() {
       return;
     }
 
+    setIsRedoing(false);
     setState('loading');
     setLoadingProgress(5);
     setError(null);
@@ -4643,7 +6594,7 @@ function QuizApp() {
         
         // Generate questions for this subject batch
         try {
-          const generated = await generateQuiz(content, count, derivedFormat, examBoardStr, isBancaMindset, subjects, hypotheticalCasesCount);
+          const generated = await generateQuiz(content, count, derivedFormat, examBoardStr, isBancaMindset, subjects, hypotheticalCasesCount, true);
           
           if (generated && generated.length > 0) {
             const categorized = generated.map(q => ({
@@ -4695,18 +6646,12 @@ function QuizApp() {
 
   const startQuiz = async (content: ContentItem | ContentItem[], fileName: string) => {
     console.log("Iniciando geração de quiz...", { count: questionCount, fileName, selectedSubject });
+    setIsRedoing(false);
     setState('loading');
     setError(null);
     setShowDashboard(false);
     setLastContent(content);
-    const cleanName = selectedSubject || fileName
-      .replace(/^\d+[\s\.\-\:]*/, '')
-      .replace(/\d+\s*arquivos\s*\(/i, '')
-      .replace(/\s*arquivos\s*/i, '')
-      .replace(/\(|\)/g, '')
-      .replace(/\.\.\.$/, '')
-      .trim();
-    setLastFileName(cleanName);
+    setLastFileName(fileName);
     setActiveResultId(null);
     try {
       setLoadingProgress(10);
@@ -4724,8 +6669,8 @@ function QuizApp() {
       const boardsToPass = selectedExamBoards.filter(b => b !== 'Múltipla Escolha' && b !== 'Geral');
       const examBoardStr = boardsToPass.length > 0 ? boardsToPass.join(', ') : 'Geral';
 
-      console.log("Chamando generateQuiz...", { count: questionCount, format: derivedFormat, board: examBoardStr, isBancaMindset, hypotheticalCasesCount });
-      const generatedQuestions = await generateQuiz(content, questionCount, derivedFormat, examBoardStr, isBancaMindset, subjects, hypotheticalCasesCount);
+      console.log("Chamando generateQuiz...", { count: questionCount, format: derivedFormat, board: examBoardStr, isBancaMindset, hypotheticalCasesCount, isSimulado });
+      const generatedQuestions = await generateQuiz(content, questionCount, derivedFormat, examBoardStr, isBancaMindset, subjects, hypotheticalCasesCount, isSimulado);
       
       // If a subject was selected, ensure all questions are categorized under it
       const finalQuestions = generatedQuestions.map(q => ({
@@ -4757,10 +6702,9 @@ function QuizApp() {
       setIsDeepDiveExpanded(false);
       setIsReviewMode(false);
       
-      // Clear pending content
+      // Clear pending content only, keep selectedSubject so it can be saved in finishQuiz
       setPendingContent(null);
       setPendingFileName('');
-      setSelectedSubject('');
     } catch (err: any) {
       console.error("Erro ao gerar quiz:", err);
       if (err.message?.includes("Requested entity was not found")) {
@@ -4793,7 +6737,14 @@ function QuizApp() {
       return;
     }
     if (!selectedSubject.trim()) {
-      setError("Por favor, informe o nome da matéria para organizar seu quiz.");
+      setError("O campo 'Matéria' é obrigatório. Por favor, digite o nome da matéria para continuar.");
+      // Scroll to the subject input to highlight it
+      const input = document.querySelector('input[list="existing-subjects"]');
+      if (input) {
+        input.classList.add('ring-2', 'ring-rose-500');
+        setTimeout(() => input.classList.remove('ring-2', 'ring-rose-500'), 3000);
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
     startQuiz(contentToUse, nameToUse);
@@ -4885,6 +6836,13 @@ function QuizApp() {
       // Pass the history BEFORE the current message, as chatWithProfessor adds the current message
       const response = await chatWithProfessor(questions[currentIndex], chatHistory, userMsg);
       setChatHistory(current => [...current, { role: 'model' as const, text: response }]);
+      
+      // Force scroll after response
+      setTimeout(() => {
+        if (chatEndRef.current) {
+          chatEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+      }, 100);
     } catch (err) {
       console.error("Chat error:", err);
       setChatHistory(current => [...current, { role: 'model' as const, text: "Desculpe, tive um problema ao processar sua pergunta. Tente novamente." }]);
@@ -5148,9 +7106,17 @@ function QuizApp() {
       if (hasNewItems) {
         await setDoc(registryRef, { uid: user.uid, items, lastUpdated: Timestamp.now() }, { merge: true });
       }
-    } catch (error) {
-      console.error("Error adding to SRS registry", error);
-      handleFirestoreError(error, OperationType.WRITE, `srs_registries/${user.uid}`);
+    } catch (error: any) {
+      const msg = error.message || String(error);
+      const code = error.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        console.error("Error adding to SRS registry", error);
+        handleFirestoreError(error, OperationType.WRITE, `srs_registries/${user.uid}`);
+      }
     }
   };
 
@@ -5239,9 +7205,17 @@ function QuizApp() {
         });
         await batch.commit();
       }
-    } catch (error) {
-      console.error("Error updating SRS registry after review", error);
-      handleFirestoreError(error, OperationType.WRITE, `srs_registries/${user.uid}`);
+    } catch (error: any) {
+      const msg = error.message || String(error);
+      const code = error.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        console.error("Error updating SRS registry after review", error);
+        handleFirestoreError(error, OperationType.WRITE, `srs_registries/${user.uid}`);
+      }
     }
   };
 
@@ -5279,9 +7253,17 @@ function QuizApp() {
         nextReviewDate: Timestamp.fromDate(nextReviewDate),
         lastReviewed: Timestamp.now()
       });
-    } catch (error) {
-      console.error("Error updating flashcard SRS", error);
-      handleFirestoreError(error, OperationType.WRITE, `flashcards/${cardId}`);
+    } catch (error: any) {
+      const msg = error.message || String(error);
+      const code = error.code;
+      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+        setFirestoreUnavailable(true);
+      } else {
+        console.error("Error updating flashcard SRS", error);
+        handleFirestoreError(error, OperationType.WRITE, `flashcards/${cardId}`);
+      }
     }
   };
 
@@ -5293,7 +7275,6 @@ function QuizApp() {
     if (user) {
       try {
         const batch = writeBatch(db);
-        const taskIds: string[] = [];
         
         intervals.forEach(days => {
           const taskRef = doc(collection(db, 'revisionTasks'));
@@ -5365,6 +7346,8 @@ function QuizApp() {
       answers,
       content: lastContent,
       isSimulado,
+      isRedoing,
+      isReview: isReviewMode,
       subject: selectedSubject,
       revisionTasks: []
     };
@@ -5374,16 +7357,50 @@ function QuizApp() {
     setShowDeepDive(false);
     setIsDeepDiveExpanded(false);
 
-    if (user) {
+    if (activeRevisionTaskId) {
+      // Find and complete the task automatically
+      const taskToComplete = revisionTasks.find(t => t.id === activeRevisionTaskId);
+      if (taskToComplete && !taskToComplete.completed) {
+        const updatedTasks = revisionTasks.map(t => 
+          t.id === activeRevisionTaskId ? { ...t, completed: true } : t
+        );
+        setRevisionTasks(updatedTasks);
+        
+        if (user) {
+          const docRef = doc(db, 'revisionTasks', activeRevisionTaskId);
+          updateDoc(docRef, { completed: true }).catch(err => 
+            console.error("Erro ao completar tarefa automática:", err)
+          );
+        }
+      }
+    }
+
+    if (user && !firestoreQuotaExceeded && !firestoreUnavailable) {
       // Save to Firestore in background
       (async () => {
         try {
-          const resultRef = doc(collection(db, 'results'));
+          const batch = writeBatch(db);
+          const resultRef = doc(db, 'results', resultId);
           
           let scheduledTaskIds: string[] = [];
           // Schedule revisions if not in review mode
           if (!isReviewMode) {
-            scheduledTaskIds = await scheduleRevisions(resultRef.id, questions[0]?.subject || 'Geral', result.fileName);
+            const intervals = [1, 3, 7, 15, 30];
+            intervals.forEach(days => {
+              const taskRef = doc(collection(db, 'revisionTasks'));
+              const id = taskRef.id;
+              scheduledTaskIds.push(id);
+              batch.set(taskRef, {
+                id,
+                quizId: resultId,
+                uid: user.uid,
+                subject: normalizeSubject(questions[0]?.subject || selectedSubject || 'Geral'),
+                fileName: result.fileName,
+                dueDate: Timestamp.fromDate(addDays(new Date(), days)),
+                completed: false,
+                intervalDays: days
+              });
+            });
           }
 
           // Estimate size and omit content if it's likely too large for Firestore (1MB limit)
@@ -5392,78 +7409,84 @@ function QuizApp() {
             ...result,
             uid: user.uid,
             date: Timestamp.fromDate(result.date),
-            id: resultRef.id,
-            content: contentStr.length > 800000 ? { type: 'text', content: 'Conteúdo muito grande para ser salvo no histórico.' } : lastContent,
+            id: resultId,
+            content: contentStr.length > 800000 ? 'Conteúdo muito grande para ser salvo no histórico.' : lastContent,
             revisionTasks: scheduledTaskIds
           };
 
-          await setDoc(resultRef, resultToSave);
+          batch.set(resultRef, resultToSave);
           
-          // Update stats and SRS
-          await updateStreakAndStats(correct, questions.length);
-          
+          // Update stats
+          const userRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userRef);
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            const now = new Date();
+            const lastActivity = data.lastActivity ? (data.lastActivity instanceof Timestamp ? data.lastActivity.toDate() : new Date(data.lastActivity)) : null;
+            
+            let newStreak = data.streak || 0;
+            if (lastActivity) {
+              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const lastDay = new Date(lastActivity.getFullYear(), lastActivity.getMonth(), lastActivity.getDate());
+              const diffDays = Math.floor((today.getTime() - lastDay.getTime()) / (1000 * 60 * 60 * 24));
+              
+              if (diffDays === 1) newStreak += 1;
+              else if (diffDays > 1) newStreak = 1;
+            } else {
+              newStreak = 1;
+            }
+
+            batch.update(userRef, {
+              streak: newStreak,
+              lastActivity: Timestamp.fromDate(now),
+              totalCorrectAnswers: (data.totalCorrectAnswers || 0) + correct,
+              totalQuizzesTaken: (data.totalQuizzesTaken || 0) + 1
+            });
+          }
+
+          await batch.commit();
+
+          // Auto Study Log - Registra apenas estudos de ARQUIVOS (não simulados, revisões ou refações)
+          if (!isSimulado && !isReviewMode && !isRedoing) {
+            handleAddStudyLog(selectedSubject || 'Geral', result.fileName, true);
+          }
+
+          // SRS
           if (isReviewMode) {
-            // If we are in review mode, update existing SRS items
-            const reviewResults = questions.map((q, i) => ({
-              id: q.id,
-              userAnswer: answers[i],
-              correctAnswer: q.correctAnswer
-            }));
+            const reviewResults = questions.map((q, i) => ({ id: q.id, userAnswer: answers[i], correctAnswer: q.correctAnswer }));
             await updateSRSAfterReview(reviewResults);
           } else {
-            // If it's a new quiz, add questions to SRS
             await addToSRS(questions, answers);
           }
-
-          // AUTO-FLASHCARDS: Generate flashcards from incorrect questions
-          const incorrectQuestions = questions.filter((q, i) => answers[i] !== q.correctAnswer);
-          if (incorrectQuestions.length > 0) {
-            try {
-              const newFlashcards = await generateFlashcardsFromIncorrectQuestions(incorrectQuestions);
-              if (newFlashcards && newFlashcards.length > 0) {
-                const batch = writeBatch(db);
-                newFlashcards.forEach(card => {
-                  const cardRef = doc(collection(db, 'flashcards'));
-                  const nextReview = new Date();
-                  nextReview.setDate(nextReview.getDate() + 1); // Initial interval: 1 day
-
-                  batch.set(cardRef, {
-                    ...card,
-                    uid: user.uid,
-                    createdAt: Timestamp.now(),
-                    interval: 1,
-                    easeFactor: 2.5,
-                    nextReviewDate: Timestamp.fromDate(nextReview),
-                    consecutiveCorrect: 0
-                  });
-                });
-                await batch.commit();
-                console.log(`${newFlashcards.length} flashcards de revisão gerados automaticamente.`);
-              }
-            } catch (flashError) {
-              console.error("Erro ao gerar flashcards automáticos:", flashError);
-            }
-          }
-        } catch (e) {
-          console.error("Failed to save history to Firestore in background", e);
-          if (e instanceof Error) {
-            try {
-              const errInfo = JSON.parse(e.message);
-              setError(errInfo.error);
-            } catch {
-              setError("Erro ao salvar histórico no banco de dados.");
-            }
+        } catch (e: any) {
+          console.error("Failed to save history to Firestore", e);
+          // If Firestore fails, ensure local state is updated so user sees the result
+          setHistory(prev => {
+            if (prev.some(h => h.id === resultId)) return prev;
+            return [result, ...prev];
+          });
+          if (e.message?.includes('Quota Exceeded') || e.message?.includes('resource-exhausted')) {
+            setFirestoreQuotaExceeded(true);
+          } else if (e.code === 'unavailable' || e.message?.includes('unavailable')) {
+            setFirestoreUnavailable(true);
           }
         }
       })();
     } else {
-      // Fallback to local history if not logged in
-      setHistory(prev => [result, ...prev]);
+      // Not logged in, quota exceeded or offline - always update locally
+      setHistory(prev => {
+        if (prev.some(h => h.id === resultId)) return prev;
+        return [result, ...prev];
+      });
     }
   };
 
   const resetQuiz = () => {
+    if (activeRevisionTaskId) {
+      setShowRevisionAgenda(true);
+    }
     setState('idle');
+    setSelectedSubject('');
     setQuestions([]);
     setCurrentIndex(0);
     setAnswers([]);
@@ -5473,6 +7496,7 @@ function QuizApp() {
     setShowDeepDive(false);
     setIsDeepDiveExpanded(false);
     setIsReviewMode(false);
+    setActiveRevisionTaskId(null);
   };
 
   const downloadResults = async () => {
@@ -5623,6 +7647,7 @@ function QuizApp() {
   };
 
   const redoQuiz = () => {
+    setIsRedoing(true);
     setAnswers(new Array(questions.length).fill(null));
     setQuestionTimes(new Array(questions.length).fill(0));
     setCurrentIndex(0);
@@ -5651,7 +7676,8 @@ function QuizApp() {
     setShowDeepDive(false);
   };
 
-  const practiceIncorrect = (incorrectQuestions: QuizQuestion[], fileName: string) => {
+  const practiceIncorrect = (incorrectQuestions: QuizQuestion[], fileName: string, subject?: string) => {
+    setIsRedoing(true);
     const sanitizedQuestions = incorrectQuestions.map(q => ({
       ...q,
       options: q.options || [],
@@ -5673,7 +7699,8 @@ function QuizApp() {
     setShowStudyMode(false);
     setShowDashboard(false);
     setLastFileName(fileName);
-    setLastContent(null); // We don't have the content for a mixed review
+    setSelectedSubject(subject || '');
+    // Keep lastContent if it exists, otherwise it remains null
   };
 
   const retryIncorrectOnly = () => {
@@ -5753,20 +7780,55 @@ function QuizApp() {
     setShowDeepDive(false);
     setSidebarOpen(false);
     setLastContent(res.content || null);
-    const cleanName = res.fileName
-      .replace(/^\d+[\s\.\-\:]*/, '')
-      .replace(/\d+\s*arquivos\s*\(/i, '')
-      .replace(/\s*arquivos\s*/i, '')
-      .replace(/\(|\)/g, '')
-      .replace(/\.\.\.$/, '')
-      .trim();
-    setLastFileName(cleanName);
+    setLastFileName(res.fileName);
     setActiveResultId(res.id);
+  };
+
+  const handleRedoHistoricalQuiz = (res: QuizResult) => {
+    setIsRedoing(true);
+    const sanitizedQuestions = res.questions.map(q => ({
+      ...q,
+      options: q.options || [],
+      explanation: q.explanation || '',
+      hint: q.hint || '',
+      id: q.id || Math.random().toString(36).substr(2, 9)
+    }));
+    setQuestions(sanitizedQuestions);
+    setAnswers(new Array(sanitizedQuestions.length).fill(null));
+    setQuestionTimes(new Array(sanitizedQuestions.length).fill(0));
+    setCurrentIndex(0);
+    setTotalTime(0);
+    setQuestionTime(timeAlertThreshold);
+    setIsQuestionStarted(false);
+    setIsReviewMode(false);
+    setState('active');
+    setShowDeepDive(false);
+    setSidebarOpen(false);
+    setLastContent(res.content || null);
+    setLastFileName(res.fileName);
+    setShowDashboard(false);
+    setShowStudySchedule(false);
+    setShowRevisionAgenda(false);
+    setActiveResultId(undefined);
   };
 
   const generateAnother = () => {
     if (lastContent) {
+      // Check if it's the "too large" placeholder
+      const isPlaceholder = typeof lastContent === 'string' && lastContent.includes('muito grande');
+      if (isPlaceholder) {
+        setError("O conteúdo original deste material é muito grande para ser recuperado do histórico. Por favor, carregue o arquivo novamente para gerar um novo quiz.");
+        return;
+      }
       startQuiz(lastContent, lastFileName);
+    } else {
+      // Try to find content in history as a fallback
+      const historicalResult = history.find(h => h.fileName === lastFileName && h.content);
+      if (historicalResult && historicalResult.content) {
+        startQuiz(historicalResult.content, lastFileName);
+      } else {
+        setError("Não foi possível recuperar o conteúdo original para gerar um novo quiz. Tente carregar o arquivo novamente.");
+      }
     }
   };
 
@@ -5877,6 +7939,44 @@ function QuizApp() {
           }}
         />
       )}
+
+      {/* Quota Exceeded / Connectivity Global Banners */}
+      <AnimatePresence>
+        {firestoreQuotaExceeded && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="fixed top-0 left-0 right-0 z-[100] bg-rose-600 text-white py-2 px-4 text-center text-sm font-medium shadow-lg backdrop-blur-md flex items-center justify-center gap-3"
+          >
+            <AlertCircle size={16} className="animate-pulse" />
+            <span>Limite de uso diário do Firebase atingido (Quota Exceeded). Novos registros podem não ser salvos até amanhã.</span>
+            <button 
+              onClick={() => setFirestoreQuotaExceeded(false)}
+              className="ml-4 hover:opacity-70 transition-opacity"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+        {firestoreUnavailable && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="fixed top-0 left-0 right-0 z-[100] bg-amber-600 text-white py-2 px-4 text-center text-sm font-medium shadow-lg backdrop-blur-md flex items-center justify-center gap-3"
+          >
+            <WifiOff size={16} className="animate-pulse" />
+            <span>Modo Offline: Não foi possível conectar ao servidor. O Experte IA está usando dados salvos no seu dispositivo.</span>
+            <button 
+              onClick={() => setFirestoreUnavailable(false)}
+              className="ml-4 hover:opacity-70 transition-opacity"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Sidebar Overlay for Mobile */}
       <AnimatePresence>
@@ -6427,9 +8527,9 @@ function QuizApp() {
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-4">
                           <div className="p-1.5 bg-amber-500/10 rounded-lg">
-                            <Trophy size={12} className="text-amber-500" />
+                            <Trophy size={14} className="text-amber-500" />
                           </div>
                           <span className="text-xs font-bold dark:text-slate-300">{res.correct} / {res.total}</span>
                         </div>
@@ -6552,9 +8652,62 @@ function QuizApp() {
             )}
           </div>
         </header>
+        
+        {/* Quota Exceeded / Connectivity Global Banners */}
+        <AnimatePresence>
+          {firestoreQuotaExceeded && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-rose-600 text-white overflow-hidden"
+            >
+              <div className="max-w-[96%] mx-auto px-6 py-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle size={18} className="shrink-0" />
+                  <p className="text-sm font-bold tracking-tight">
+                    Limite de uso do banco de dados atingido (Quota Exceeded). Seu progresso será salvo localmente até amanhã.
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setFirestoreQuotaExceeded(false)}
+                  className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </motion.div>
+          )}
+          {firestoreUnavailable && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-amber-600 text-white overflow-hidden"
+            >
+              <div className="max-w-[96%] mx-auto px-6 py-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <WifiOff size={18} className="shrink-0" />
+                  <p className="text-sm font-bold tracking-tight">
+                    Você está em Modo Offline. Alguns recursos podem ficar indisponíveis até a conexão ser restaurada.
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setFirestoreUnavailable(false)}
+                  className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-full mx-auto px-2 py-2">
+          {/* Persistent Navigation */}
+          <GlobalNav />
+          <div className="max-w-full mx-auto px-2 py-6">
+            
             <AnimatePresence mode="wait">
               {showDashboard ? (
                 <Dashboard 
@@ -6585,6 +8738,10 @@ function QuizApp() {
                   onEditSubject={handleEditSubject}
                   flashcards={flashcards}
                   onOpenFlashcards={() => setShowFlashcards(true)}
+                  onOpenStudySchedule={() => {
+                    setShowStudySchedule(true);
+                    setShowDashboard(false);
+                  }}
                 />
               ) : showRecycleBin ? (
                 <RecycleBin 
@@ -6638,24 +8795,43 @@ function QuizApp() {
                     const task = revisionTasks.find(t => t.id === taskId);
                     if (!task) return;
                     
+                    const newStatus = !task.completed;
+                    
+                    // Update local state immediately for snappy UI
                     const updatedTasks = revisionTasks.map(t => 
-                      t.id === taskId ? { ...t, completed: !t.completed } : t
+                      t.id === taskId ? { ...t, completed: newStatus } : t
                     );
                     setRevisionTasks(updatedTasks);
                     
                     if (user) {
                       try {
-                        const q = query(collection(db, 'revisionTasks'), where('id', '==', taskId), where('uid', '==', user.uid));
-                        const snapshot = await getDocs(q);
-                        if (!snapshot.empty) {
-                          await updateDoc(snapshot.docs[0].ref, { completed: !task.completed });
-                        }
+                        const docRef = doc(db, 'revisionTasks', taskId);
+                        await updateDoc(docRef, { completed: newStatus });
                       } catch (err) {
                         console.error("Erro ao atualizar tarefa:", err);
+                        // Revert local state if it fails
+                        setRevisionTasks(revisionTasks);
                       }
                     }
                   }}
-                  onPracticeQuiz={async (quizId) => {
+                  onDeleteTask={async (taskId) => {
+                    if (user) {
+                      try {
+                        const docRef = doc(db, 'revisionTasks', taskId);
+                        await deleteDoc(docRef);
+                        setRevisionTasks(prev => prev.filter(t => t.id !== taskId));
+                      } catch (err) {
+                        console.error("Erro ao excluir tarefa:", err);
+                      }
+                    } else {
+                      setRevisionTasks(prev => prev.filter(t => t.id !== taskId));
+                    }
+                  }}
+                  onPracticeQuiz={async (quizId, taskId) => {
+                    // Mark which task we are practicing
+                    setActiveRevisionTaskId(taskId);
+                    setIsReviewMode(true); // Mark as review mode for better tracking
+                    
                     // Find the quiz in history or fetch from Firestore
                     let quiz = history.find(h => h.id === quizId);
                     if (!quiz && user) {
@@ -6689,6 +8865,48 @@ function QuizApp() {
                       alert("Quiz não encontrado no histórico.");
                     }
                   }}
+                />
+              ) : showStudySchedule ? (
+                <StudySchedule
+                  history={history}
+                  theme={theme}
+                  onClose={() => setShowStudySchedule(false)}
+                  onViewResult={handleHistoryClick}
+                  onRedoQuiz={handleRedoHistoricalQuiz}
+                  onPracticeSubject={(subject, fileName) => {
+                    setSelectedSubject(subject);
+                    // Try to find the content for this subject/file in history
+                    const result = history.find(h => (h.subject === subject || normalizeSubject(h.fileName) === subject) && h.fileName === fileName && h.content);
+                    
+                    setShowStudySchedule(false);
+                    setShowDashboard(false);
+                    setShowStudyMode(false);
+                    setShowRevisionAgenda(false);
+                    setSidebarOpen(false);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                    if (result && result.content) {
+                      // Check if it's the placeholder
+                      if (typeof result.content === 'string' && result.content.includes('muito grande')) {
+                        setError("O conteúdo original deste material é muito grande para ser recuperado do histórico. Por favor, carregue o arquivo novamente.");
+                        return;
+                      }
+                      startQuiz(result.content, result.fileName);
+                    } else {
+                      setError("O conteúdo original deste material não pôde ser recuperado do histórico.");
+                    }
+                  }}
+                />
+              ) : showPersonalControl ? (
+                <StudyLogSpreadsheet
+                  logs={studyLogs}
+                  history={history}
+                  subjects={subjects}
+                  theme={theme}
+                  onClose={() => setShowPersonalControl(false)}
+                  onAddLog={handleAddStudyLog}
+                  onUpdateLog={handleUpdateStudyLog}
+                  onDeleteLog={handleDeleteStudyLog}
                 />
               ) : state === 'idle' ? (
                 <motion.div
@@ -6741,44 +8959,8 @@ function QuizApp() {
                   </div>
 
                   <div className="flex flex-col items-center gap-6 mb-8">
-                    <div className="flex justify-center gap-2 p-1 bg-black/5 dark:bg-white/5 rounded-2xl w-fit shadow-sm">
-                      <button 
-                        onClick={() => { setShowDashboard(false); setShowStudyMode(false); }}
-                        className={cn("flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all", !showDashboard && !showStudyMode ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5")}
-                      >
-                        <BrainCircuit size={16} />
-                        Modo Quiz
-                      </button>
-                      <button 
-                        onClick={() => { setShowStudyMode(true); setShowDashboard(false); }}
-                        className={cn("flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all relative", showStudyMode ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5")}
-                      >
-                        <BookOpen size={16} />
-                        Modo Estudo
-                      </button>
-                      <button 
-                        onClick={() => { setShowDashboard(true); setShowStudyMode(false); setShowRevisionAgenda(false); }}
-                        className={cn("flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all relative", showDashboard ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5")}
-                      >
-                        <BarChart2 size={16} />
-                        Meu Dashboard
-                      </button>
-                      <button 
-                        onClick={() => { setShowRevisionAgenda(true); setShowDashboard(false); setShowStudyMode(false); }}
-                        className={cn("flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all relative", showRevisionAgenda ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5")}
-                      >
-                        <Calendar size={16} />
-                        Agenda de Revisão
-                        {revisionTasks.filter(t => !t.completed && isBefore(t.dueDate, addDays(new Date(), 1))).length > 0 && (
-                          <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900">
-                            {revisionTasks.filter(t => !t.completed && isBefore(t.dueDate, addDays(new Date(), 1))).length}
-                          </span>
-                        )}
-                      </button>
-                    </div>
-
                     {/* Compact Quiz Settings Bar */}
-                    <div className="flex flex-wrap justify-center gap-3 mb-4">
+                    <div className="flex flex-wrap justify-center items-start gap-3 mb-4">
                       {/* Banca Dropdown */}
                       <div className="relative">
                         <button 
@@ -6946,72 +9128,79 @@ function QuizApp() {
                         <TrendingUp size={18} className={isSimulado ? theme.icon : "text-black/20 dark:text-slate-600"} />
                         <span>Simulado</span>
                         {isSimulado && (
-                          <motion.span 
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            className="flex h-2 w-2 rounded-full bg-blue-500"
-                          />
-                        )}
-                      </button>
-
-                      {/* Própria Banca Toggle */}
-                      <div className="flex flex-col gap-3">
-                        <button
-                          onClick={() => {
-                            const next = !isBancaMindset;
-                            setIsBancaMindset(next);
-                            if (!next) setHypotheticalCasesCount(0);
-                          }}
-                          className={cn(
-                            "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95",
-                            isBancaMindset
-                              ? cn(theme.border, theme.bg, theme.text, "ring-2 ring-offset-2", theme.ring)
-                              : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20"
-                          )}
-                          title="Ativa o modo de elaboração rigoroso, simulando a mente dos examinadores da banca."
-                        >
-                          <Award size={18} className={isBancaMindset ? theme.icon : "text-black/20 dark:text-slate-600"} />
-                          <span>Própria Banca</span>
-                          {isBancaMindset && (
+                          <div className="flex items-center gap-2 ml-auto">
+                            <span className="text-[10px] text-blue-500 font-black animate-pulse">SEARCH ON</span>
                             <motion.span 
                               initial={{ scale: 0 }}
                               animate={{ scale: 1 }}
-                              className="flex h-2 w-2 rounded-full bg-amber-500"
+                              className="flex h-2 w-2 rounded-full bg-blue-500"
                             />
-                          )}
-                        </button>
+                          </div>
+                        )}
+                      </button>
+                      {isSimulado && (
+                        <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-1 ml-1 flex items-center gap-1">
+                          <Globe size={10} /> BUSCANDO QUESTÕES REAIS DA BANCA
+                        </p>
+                      )}
 
-                        <AnimatePresence>
-                          {isBancaMindset && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 space-y-3"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <Zap size={14} className="text-amber-500" />
-                                  <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">Casos Hipotéticos</span>
-                                </div>
-                                <span className="text-xs font-black text-amber-600 dark:text-amber-400">{hypotheticalCasesCount}</span>
-                              </div>
-                              <input 
-                                type="range"
-                                min="0"
-                                max={Math.min(questionCount, 10)}
-                                step="1"
-                                value={hypotheticalCasesCount}
-                                onChange={(e) => setHypotheticalCasesCount(parseInt(e.target.value))}
-                                className="w-full h-1.5 bg-amber-500/20 rounded-full appearance-none cursor-pointer accent-amber-500"
+                        <div className="relative">
+                          <button
+                            onClick={() => {
+                              const next = !isBancaMindset;
+                              setIsBancaMindset(next);
+                              if (!next) setHypotheticalCasesCount(0);
+                            }}
+                            className={cn(
+                              "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95 whitespace-nowrap",
+                              isBancaMindset
+                                ? cn(theme.border, theme.bg, theme.text, "ring-2 ring-offset-2", theme.ring)
+                                : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20"
+                            )}
+                            title="Ativa o modo de elaboração rigoroso, simulando a mente dos examinadores da banca."
+                          >
+                            <Award size={18} className={isBancaMindset ? theme.icon : "text-black/20 dark:text-slate-600"} />
+                            <span>Própria Banca</span>
+                            {isBancaMindset && (
+                              <motion.span 
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                className="flex h-2 w-2 rounded-full bg-amber-500"
                               />
-                              <p className="text-[9px] text-amber-600/60 dark:text-amber-400/60 font-medium leading-tight">
-                                Define quantas questões serão baseadas em situações práticas para aplicar a teoria.
-                              </p>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
+                            )}
+                          </button>
+
+                          <AnimatePresence>
+                            {isBancaMindset && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                className="absolute top-full left-0 mt-3 w-64 bg-white dark:bg-slate-900 rounded-3xl border border-amber-500/20 shadow-2xl z-50 p-6 space-y-4 backdrop-blur-xl"
+                              >
+                                <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-3">
+                                  <div className="flex items-center gap-2">
+                                    <Zap size={14} className="text-amber-500" />
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">Casos Hipotéticos</span>
+                                  </div>
+                                  <span className="text-xs font-black text-amber-600 dark:text-amber-400">{hypotheticalCasesCount}</span>
+                                </div>
+                                <input 
+                                  type="range"
+                                  min="0"
+                                  max={Math.min(questionCount, 10)}
+                                  step="1"
+                                  value={hypotheticalCasesCount}
+                                  onChange={(e) => setHypotheticalCasesCount(parseInt(e.target.value))}
+                                  className="w-full h-1.5 bg-amber-500/20 rounded-full appearance-none cursor-pointer accent-amber-500"
+                                />
+                                <p className="text-[9px] text-amber-600/60 dark:text-amber-400/60 font-medium leading-tight italic">
+                                  Define quantas questões serão baseadas em situações práticas para aplicar a teoria.
+                                </p>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                     </div>
                   </div>
 
@@ -7030,7 +9219,7 @@ function QuizApp() {
                         <p className="text-xs text-black/40 dark:text-slate-500 leading-relaxed">
                           Selecione as matérias que você já estudou para compor seu simulado. O sistema dividirá as {questionCount} questões proporcionalmente entre elas de forma sequencial.
                         </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                           {Array.from(new Set(subjects)).map(subject => {
                             const hasContent = hasContentForSubject(subject);
                             const isSelected = selectedSimuladoSubjects.includes(subject);
@@ -7092,27 +9281,38 @@ function QuizApp() {
                         {/* Subject Selection */}
                         <div className="max-w-xl mx-auto space-y-3">
                           <div className="flex items-center justify-between px-1">
-                            <label className="text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">1. Nome da Matéria</label>
+                            <label className="text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">
+                              1. Nome da Matéria <span className="text-rose-500">*</span>
+                            </label>
                             {selectedSubject && (
                               <button onClick={() => setSelectedSubject('')} className="text-[10px] font-bold text-rose-500 hover:underline">Limpar</button>
                             )}
                           </div>
-                          <div className="relative group">
-                            <div className={cn("absolute left-4 top-1/2 -translate-y-1/2 text-black/20 dark:text-slate-600 transition-colors", selectedSubject ? theme.text : "")}>
-                              <Folder size={20} />
-                            </div>
-                            <input 
-                              type="text"
-                              list="existing-subjects"
-                              value={selectedSubject}
-                              onChange={(e) => setSelectedSubject(e.target.value)}
-                              placeholder="Ex: Direito Constitucional, Português..."
-                              className={cn("w-full bg-white dark:bg-slate-900 border-2 border-black/5 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 transition-all outline-none font-bold dark:text-white", `focus:${theme.border}`, theme.ring)}
-                            />
-                            <datalist id="existing-subjects">
-                              {Array.from(new Set(subjects)).map(s => <option key={s} value={s} />)}
-                            </datalist>
-                          </div>
+                  <div className="relative group">
+                    <motion.div 
+                      initial={false}
+                      animate={selectedSubject ? { scale: [1, 1.02, 1], opacity: 1 } : { scale: 1, opacity: 0.5 }}
+                      className={cn("absolute left-4 top-1/2 -translate-y-1/2 text-black/20 dark:text-slate-600 transition-colors", selectedSubject ? theme.text : "")}
+                    >
+                      <Folder size={20} />
+                    </motion.div>
+                    <input 
+                      type="text"
+                      list="existing-subjects"
+                      value={selectedSubject}
+                      onChange={(e) => setSelectedSubject(e.target.value)}
+                      placeholder="Ex: Direito Constitucional, Português..."
+                      className={cn(
+                        "w-full bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-2 rounded-2xl py-4 pl-12 pr-4 transition-all outline-none font-bold dark:text-white", 
+                        selectedSubject ? "border-emerald-500/30" : "border-black/5 dark:border-slate-800",
+                        `focus:${theme.border}`, 
+                        theme.ring
+                      )}
+                    />
+                    <datalist id="existing-subjects">
+                      {Array.from(new Set(subjects)).map(s => <option key={s} value={s} />)}
+                    </datalist>
+                  </div>
                         </div>
 
                         <div className="max-w-xl mx-auto space-y-3">
@@ -7320,12 +9520,19 @@ function QuizApp() {
                         <p className="text-xs font-medium uppercase tracking-wider text-black/40 dark:text-slate-500">Status</p>
                         <p className="text-sm dark:text-slate-300">
                           {loadingStatus || (
-                            loadingProgress < 20 ? "Iniciando análise de conteúdo..." :
-                            loadingProgress < 40 ? "Mapeando conceitos fundamentais..." :
-                            loadingProgress < 60 ? "Estruturando questões estratégicas..." :
-                            loadingProgress < 80 ? "Refinando alternativas e explicações..." :
-                            loadingProgress < 95 ? "Finalizando detalhes técnicos..." :
-                            "Quase pronto! Organizando sua sessão..."
+                            isSimulado ? (
+                              loadingProgress < 20 ? "Iniciando modo simulado oficial..." :
+                              loadingProgress < 50 ? "Buscando questões reais nas fontes das bancas..." :
+                              loadingProgress < 80 ? "Verificando autenticidade e gabaritos oficiais..." :
+                              "Organizando seu caderno de prova..."
+                            ) : (
+                              loadingProgress < 20 ? "Iniciando análise de conteúdo..." :
+                              loadingProgress < 40 ? "Mapeando conceitos fundamentais..." :
+                              loadingProgress < 60 ? "Estruturando questões estratégicas..." :
+                              loadingProgress < 80 ? "Refinando alternativas e explicações..." :
+                              loadingProgress < 95 ? "Finalizando detalhes técnicos..." :
+                              "Quase pronto! Organizando sua sessão..."
+                            )
                           )}
                         </p>
                       </div>
@@ -7360,6 +9567,18 @@ function QuizApp() {
                       showDeepDive && "lg:col-span-5"
                     )}>
                       <div className="bg-white dark:bg-slate-900 rounded-t-2xl rounded-b-[32px] shadow-xl shadow-black/5 border border-black/5 dark:border-slate-800 relative overflow-hidden flex flex-col h-[calc(100vh-80px)] sm:min-h-[750px] min-h-[500px]">
+                        {isSimulado && (
+                          <div className="bg-slate-100 dark:bg-slate-800/50 px-6 py-2 flex items-center justify-between border-b border-black/5 dark:border-white/5">
+                            <div className="flex items-center gap-3">
+                              <div className="bg-black text-white dark:bg-white dark:text-black text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-tighter">CADERNO OFICIAL</div>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Simulado de Alta Fidelidade</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Globe size={12} className="text-emerald-500 animate-pulse" />
+                              <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter">Grounding Ativo: Questões Reais</span>
+                            </div>
+                          </div>
+                        )}
                         {/* Timeline Progress */}
                         <div className="px-4 py-3 bg-black/[0.02] dark:bg-white/[0.02] border-b border-black/5 dark:border-slate-800">
                           <div className="flex items-center gap-1.5 h-14">
@@ -7478,10 +9697,10 @@ function QuizApp() {
                                   {formatTime(questionTime)}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                                <span className="text-[8px] sm:text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Total</span>
-                                <div className={cn("flex items-center gap-1 sm:gap-1.5 font-mono font-bold text-base sm:text-lg", theme.text, theme.textDark)}>
-                                  <Timer size={14} />
+                              <div className="flex items-center gap-3 sm:gap-5 shrink-0 ml-4">
+                                <span className="text-[10px] sm:text-[12px] font-bold text-black/40 dark:text-slate-600 uppercase tracking-[0.2em]">Total</span>
+                                <div className={cn("flex items-center gap-2 sm:gap-3 font-mono font-bold text-base sm:text-lg pl-3 border-l border-black/10 dark:border-white/10", theme.text, theme.textDark)}>
+                                  <Timer size={16} />
                                   {formatTime(totalTime)}
                                 </div>
                               </div>
@@ -7844,7 +10063,7 @@ function QuizApp() {
                         )}
                       >
                         <div className={cn(
-                          "transition-all duration-500 flex flex-col overflow-hidden shadow-[0_0_150px_rgba(0,0,0,0.6)] font-arial",
+                          "flex flex-col overflow-hidden shadow-[0_0_150px_rgba(0,0,0,0.6)] font-arial",
                           isDeepDiveExpanded 
                             ? "fixed inset-0 z-[99999] bg-white dark:bg-slate-950 w-screen h-screen" 
                             : cn("sticky top-24 h-[75vh] sm:rounded-[48px] rounded-3xl sm:border-8 border-4 border-black/10 dark:border-white/10", theme.bg)
@@ -7896,9 +10115,9 @@ function QuizApp() {
                           
                           {/* Main Content Area - Scrollable and Flexible */}
                           <div className={cn(
-                            "flex-1 overflow-y-auto custom-scrollbar bg-transparent",
+                            "flex-1 overflow-y-auto custom-scrollbar bg-transparent scroll-smooth",
                             isDeepDiveExpanded ? "p-12 md:p-24" : "p-10"
-                          )}>
+                          )} id="deep-dive-scroll-container">
                             <div className={cn(
                               "space-y-20 pb-40",
                               isDeepDiveExpanded && "max-w-5xl mx-auto w-full"
@@ -7982,8 +10201,8 @@ function QuizApp() {
                                   )}
 
                                 {chatHistory.length > 0 && (
-                                  <div className="space-y-8 pt-12 border-t-4 border-black/5 dark:border-white/5">
-                                    <div className="flex items-center justify-between mb-8">
+                                  <div className="space-y-8 pt-6 border-t-4 border-black/5 dark:border-white/5">
+                                    <div className="flex items-center justify-between mb-4">
                                       <p className="text-xs uppercase tracking-[0.3em] text-black/40 dark:text-white/40 font-normal">Interação com o Professor</p>
                                       {isChatLoading && (
                                         <div className="flex items-center gap-3 text-blue-500 animate-pulse">
@@ -8058,7 +10277,7 @@ function QuizApp() {
                           {/* Footer - Rigidly Anchored Input Area */}
                           {currentQuestion.deepDive && (
                             <div className={cn(
-                              "p-3 border-t-2 border-black/5 dark:border-white/5 z-[100000] shadow-[0_-10px_20px_rgba(0,0,0,0.05)]",
+                              "p-3 border-t-2 border-black/5 dark:border-white/5 z-[100000] shadow-[0_-10px_20px_rgba(0,0,0,0.05)] flex-shrink-0",
                               isDeepDiveExpanded ? "bg-white dark:bg-slate-900" : "bg-black/5 dark:bg-white/5"
                             )}>
                               <div className={cn(isDeepDiveExpanded && "max-w-4xl mx-auto w-full")}>
@@ -8152,6 +10371,53 @@ function QuizApp() {
                       </motion.div>
                     </div>
 
+                    {isSimulado && (
+                      <div className="bg-[#F5F5F0] dark:bg-slate-800 rounded-[32px] p-8 space-y-6">
+                        <div className="flex items-center gap-3 border-b border-black/5 dark:border-slate-700 pb-4">
+                          <TrendingUp size={20} className="text-blue-500" />
+                          <h3 className="font-bold text-sm uppercase tracking-widest text-blue-600 dark:text-blue-400">Desempenho por Matéria</h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {Array.from(new Set(questions.map(q => q.subject || 'Geral'))).map(subj => {
+                            const subjQuestions = questions.filter(q => (q.subject || 'Geral') === subj);
+                            const subjCorrect = answers.filter((ans, idx) => 
+                              (questions[idx]?.subject || 'Geral') === subj && 
+                              ans === questions[idx]?.correctAnswer
+                            ).length;
+                            const subjTotal = subjQuestions.length;
+                            const subjAccuracy = Math.round((subjCorrect / subjTotal) * 100);
+                            
+                            return (
+                              <div key={subj} className="bg-white dark:bg-slate-900/50 p-5 rounded-2xl border border-black/5 dark:border-slate-800">
+                                <div className="flex justify-between items-start mb-3">
+                                  <span className="font-bold text-xs uppercase tracking-tight text-black/60 dark:text-slate-300 truncate max-w-[150px]">{subj}</span>
+                                  <span className={cn(
+                                    "text-[10px] font-black px-2 py-0.5 rounded-full",
+                                    subjAccuracy >= 80 ? "bg-emerald-500/10 text-emerald-600" :
+                                    subjAccuracy >= 50 ? "bg-amber-500/10 text-amber-600" :
+                                    "bg-rose-500/10 text-rose-600"
+                                  )}>
+                                    {subjAccuracy}%
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                  <div className="flex-1 h-2 bg-black/5 dark:bg-slate-800 rounded-full overflow-hidden">
+                                    <div 
+                                      className={cn("h-full", subjAccuracy >= 80 ? "bg-emerald-500" : subjAccuracy >= 50 ? "bg-amber-500" : "bg-rose-500")}
+                                      style={{ width: `${subjAccuracy}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-bold text-black/40 dark:text-slate-500 whitespace-nowrap">
+                                    {subjCorrect} / {subjTotal}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     <QuizSummary questions={questions} answers={answers} theme={theme} />
 
                     <div className="flex flex-wrap items-center justify-center gap-4">
@@ -8166,7 +10432,7 @@ function QuizApp() {
                         className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400 hover:bg-black/10 dark:hover:bg-white/10 transition-all active:scale-95"
                       >
                         <ChevronLeft size={20} />
-                        Voltar
+                        {activeRevisionTaskId ? 'Agenda de Revisão' : 'Voltar'}
                       </button>
                       <button
                         onClick={redoQuiz}
@@ -8198,13 +10464,15 @@ function QuizApp() {
                         <AlertCircle size={20} />
                         Rever Erros
                       </button>
-                      <button
-                        onClick={generateAnother}
-                        className={cn("flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold border-2 transition-all", theme.border, theme.text, theme.textDark, `hover:${theme.bg}`, `dark:hover:${theme.bgDark}`)}
-                      >
-                        <BrainCircuit size={20} />
-                        Novo do Mesmo Material
-                      </button>
+                      {!isSimulado && (
+                        <button
+                          onClick={generateAnother}
+                          className={cn("flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold border-2 transition-all", theme.border, theme.text, theme.textDark, `hover:${theme.bg}`, `dark:hover:${theme.bgDark}`)}
+                        >
+                          <BrainCircuit size={20} />
+                          Novo do Mesmo Material
+                        </button>
+                      )}
                       <button
                         onClick={downloadResults}
                         disabled={isGeneratingPDF}
@@ -8217,7 +10485,7 @@ function QuizApp() {
                         onClick={resetQuiz}
                         className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold text-black/40 dark:text-slate-500 hover:text-black dark:hover:text-slate-300 transition-all"
                       >
-                        Sair
+                        {activeRevisionTaskId ? 'Voltar para Agenda' : 'Sair'}
                       </button>
                     </div>
                   </div>
@@ -8229,6 +10497,10 @@ function QuizApp() {
               isOpen={showExitQuizConfirmation}
               onClose={() => setShowExitQuizConfirmation(false)}
               onConfirm={() => {
+                if (activeRevisionTaskId) {
+                  setShowRevisionAgenda(true);
+                  setActiveRevisionTaskId(null);
+                }
                 setState('idle');
                 setShowExitQuizConfirmation(false);
               }}
