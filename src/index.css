@@ -2,7 +2,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: Arial, ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Cormorant Garamond", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --font-arial: Arial, Helvetica, sans-serif;
@@ -10,8 +10,24 @@
 }
 
 @layer base {
+  html {
+    font-size: 17px;
+  }
   body {
-    @apply antialiased bg-white dark:bg-slate-950 text-black dark:text-slate-100 transition-colors duration-300;
+    @apply antialiased bg-white dark:bg-slate-950 text-black dark:text-slate-100 transition-colors duration-300 font-sans;
+  }
+}
+
+.explanation-text {
+  font-family: "Calibri Light", "Segoe UI Light", "Ubuntu Light", "Helvetica Neue", sans-serif;
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.6;
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-white/10 dark:bg-slate-900/10 backdrop-blur-md border border-white/20 dark:border-white/10;
   }
 }
 

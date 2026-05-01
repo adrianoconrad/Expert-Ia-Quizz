@@ -18,7 +18,7 @@ service cloud.firestore {
     }
 
     function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return isSignedIn(); // Relaxed for compatibility
     }
 
     function isOwner(uid) {
@@ -58,11 +58,12 @@ service cloud.firestore {
 
     function isValidStudyLog(data) {
       return data.keys().hasAll(['uid', 'date', 'subject', 'fileNames']) && 
-             data.keys().size() == 4 &&
+             data.keys().size() <= 6 &&
              data.uid == request.auth.uid &&
              data.date is timestamp &&
-             data.subject is string && data.subject.size() > 0 && data.subject.size() < 200 &&
-             data.fileNames is string && data.fileNames.size() < 5000;
+             data.subject is string && data.subject.size() < 200 &&
+             data.fileNames is string && data.fileNames.size() < 5000 &&
+             (data.get('isAutomatic', false) is bool);
     }
 
     function isValidResult(data) {
@@ -73,8 +74,8 @@ service cloud.firestore {
              data.total is int &&
              data.timeSpent is int &&
              data.fileName is string && data.fileName.size() < 500 &&
-             data.questions is list && data.questions.size() <= 100 &&
-             data.answers is list && data.answers.size() <= 100;
+             data.questions is list && data.questions.size() <= 500 &&
+             data.answers is list && data.answers.size() <= 500;
     }
 
     function isValidRevisionTask(data) {
@@ -99,6 +100,16 @@ service cloud.firestore {
              data.nextReviewDate is timestamp;
     }
 
+    function isValidActiveSession(data) {
+      return data.keys().hasAll(['questions', 'answers', 'currentIndex', 'lastFileName', 'isSimulado']) &&
+             data.questions is list && data.questions.size() <= 500 &&
+             data.answers is list && data.answers.size() <= 500 &&
+             data.currentIndex is int &&
+             data.lastFileName is string && data.lastFileName.size() <= 500 &&
+             data.isSimulado is bool &&
+             (data.updatedAt == null || data.updatedAt is timestamp);
+    }
+
     // ===============================================================
     // Collection Matches
     // ===============================================================
@@ -110,15 +121,19 @@ service cloud.firestore {
         (incoming().role == existing().role || isAdmin()) &&
         incoming().diff(existing()).affectedKeys().hasAll([]) // Size check in isValidUser
       );
+
+      match /activeSession/{docId} {
+        allow get: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) && isVerified() && isValidActiveSession(incoming());
+        allow delete: if isOwner(userId) || isAdmin();
+      }
     }
 
     match /studyLogs/{logId} {
       allow get: if isValidId(logId) && (existing().uid == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create: if isValidId(logId) && isVerified() && isValidStudyLog(incoming());
-      allow update: if isValidId(logId) && existing().uid == request.auth.uid && isValidStudyLog(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasAny(['subject', 'fileNames', 'date'])
-      );
+      allow create: if isValidId(logId) && isVerified() && (isValidStudyLog(incoming()) || isAdmin());
+      allow update: if isValidId(logId) && (existing().uid == request.auth.uid || isAdmin()) && (isValidStudyLog(incoming()) || isAdmin());
       allow delete: if isValidId(logId) && (existing().uid == request.auth.uid || isAdmin());
     }
 

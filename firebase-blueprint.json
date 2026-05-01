@@ -73,7 +73,8 @@
         "uid": { "type": "string" },
         "date": { "type": "string", "format": "date-time" },
         "subject": { "type": "string" },
-        "fileNames": { "type": "string", "description": "Manual input of file names studied." }
+        "fileNames": { "type": "string", "description": "Manual input of file names studied." },
+        "isAutomatic": { "type": "boolean" }
       },
       "required": ["uid", "date", "subject", "fileNames"]
     },
@@ -130,12 +131,30 @@
         }
       },
       "required": ["uid", "items"]
+    },
+    "ActiveSession": {
+      "title": "Active Session",
+      "description": "Stores current state of an ongoing quiz to allow resuming.",
+      "type": "object",
+      "properties": {
+        "questions": { "type": "array", "items": { "type": "object" } },
+        "answers": { "type": "array", "items": { "type": "string" } },
+        "currentIndex": { "type": "integer" },
+        "lastFileName": { "type": "string" },
+        "isSimulado": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["questions", "answers", "currentIndex", "lastFileName", "isSimulado"]
     }
   },
   "firestore": {
     "/users/{uid}": {
       "schema": "UserProfile",
       "description": "Collection of user profiles."
+    },
+    "/users/{uid}/activeSession/{docId}": {
+      "schema": "ActiveSession",
+      "description": "Current active quiz session for a user."
     },
     "/results/{resultId}": {
       "schema": "QuizResult",

@@ -3,20 +3,48 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { auth, db, loginWithGoogle, logout, onAuthStateChanged, collection, query, where, orderBy, onSnapshot, setDoc, doc, Timestamp, handleFirestoreError, OperationType, getDoc, getDocs, deleteDoc, writeBatch, updateDoc, limit } from './firebase';
-import { User } from 'firebase/auth';
-import { 
-  Upload, 
-  CheckCircle2, 
-  XCircle, 
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  auth,
+  db,
+  loginWithGoogle,
+  logout,
+  onAuthStateChanged,
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  setDoc,
+  doc,
+  Timestamp,
+  handleFirestoreError,
+  OperationType,
+  getDoc,
+  getDocs,
+  deleteDoc,
+  writeBatch,
+  updateDoc,
+  limit,
+} from "./firebase";
+import { User } from "firebase/auth";
+import {
+  Upload,
+  CheckCircle2,
+  XCircle,
   X,
   FileDown,
   Sparkles,
-  ArrowRight, 
-  RotateCcw, 
-  BookOpen, 
+  ArrowRight,
+  RotateCcw,
+  BookOpen,
   BrainCircuit,
   Loader2,
   FileText,
@@ -71,66 +99,80 @@ import {
   Filter,
   Table,
   Globe,
-  WifiOff
-} from 'lucide-react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import mammoth from 'mammoth';
-import { 
-  format, 
-  isSameDay, 
-  startOfMonth, 
-  endOfMonth, 
-  startOfWeek, 
-  endOfWeek, 
-  eachDayOfInterval, 
-  addMonths, 
-  subMonths, 
+  WifiOff,
+} from "lucide-react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import mammoth from "mammoth";
+import {
+  format,
+  isSameDay,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  addMonths,
+  subMonths,
   isToday,
   addDays,
   isAfter,
   isBefore,
-  startOfDay
-} from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
+  startOfDay,
+} from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
   ResponsiveContainer,
   Cell,
   PieChart,
   Pie,
   LineChart,
-  Line
-} from 'recharts';
-import { generateQuiz, QuizQuestion, QuizFormat, generateDeepDive, generateSpeech, ContentItem, chatWithProfessor, generateFlashcardsFromIncorrectQuestions } from './services/geminiService';
-import { cn } from './lib/utils';
-import Logo from './components/Logo';
+  Line,
+} from "recharts";
+import {
+  generateQuiz,
+  QuizQuestion,
+  QuizFormat,
+  generateDeepDive,
+  generateSpeech,
+  ContentItem,
+  chatWithProfessor,
+  generateFlashcardsFromIncorrectQuestions,
+} from "./services/geminiService";
+import { cn } from "./lib/utils";
+import Logo from "./components/Logo";
 
 const normalizeSubject = (s: string) => {
-  if (!s) return '';
+  if (!s) return "";
   // Try to keep it as simple as possible but handle common prefixes
   let normalized = s.replace(/\.[^/.]+$/, ""); // Remove extension
-  
+
   // Only remove prefixes if they look like "Aula 01 - " or "01. "
-  if (/^Aula\s+\d+/i.test(normalized) || /^\d+\s*[\.\-\:]\s*/.test(normalized)) {
-    normalized = normalized.replace(/^\d+[\s\.\-\:]*/, '').replace(/^Aula\s+\d+[\s\.\-\:]*/i, '');
+  if (
+    /^Aula\s+\d+/i.test(normalized) ||
+    /^\d+\s*[\.\-\:]\s*/.test(normalized)
+  ) {
+    normalized = normalized
+      .replace(/^\d+[\s\.\-\:]*/, "")
+      .replace(/^Aula\s+\d+[\s\.\-\:]*/i, "");
   }
-  
+
   return normalized.trim() || s;
 };
 
 const formatTime = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
 declare global {
@@ -142,7 +184,7 @@ declare global {
   }
 }
 
-type QuizState = 'idle' | 'loading' | 'active' | 'finished';
+type QuizState = "idle" | "loading" | "active" | "finished";
 
 interface StudyLog {
   id: string;
@@ -153,684 +195,756 @@ interface StudyLog {
   isAutomatic?: boolean;
 }
 
-type ThemeColor = 'emerald' | 'navy' | 'brown' | 'slate' | 'yellow' | 'amber' | 'moss' | 'rose' | 'violet' | 'cyan' | 'orange' | 'fuchsia' | 'indigo' | 'black' | 'custom';
+type ThemeColor =
+  | "emerald"
+  | "navy"
+  | "brown"
+  | "slate"
+  | "yellow"
+  | "amber"
+  | "moss"
+  | "rose"
+  | "violet"
+  | "cyan"
+  | "orange"
+  | "fuchsia"
+  | "indigo"
+  | "black"
+  | "custom";
 
 const THEME_CONFIG = {
   emerald: {
-    primary: 'bg-emerald-600',
-    primaryHover: 'hover:bg-emerald-700',
-    secondary: 'bg-emerald-500',
-    secondaryHover: 'hover:bg-emerald-500',
-    text: 'text-emerald-600',
-    textDark: 'dark:text-white',
-    textLight: 'text-emerald-700',
-    textLightDark: 'dark:text-slate-200',
-    border: 'border-emerald-600',
-    borderDark: 'dark:border-emerald-500',
-    bg: 'bg-emerald-50',
-    bgDark: 'dark:bg-emerald-900/20',
-    accent: 'accent-emerald-600',
-    accentDark: 'dark:accent-emerald-500',
-    ring: 'focus:ring-emerald-500/10',
-    focusBorder: 'focus:border-emerald-500',
-    gradientFrom: 'from-emerald-500',
-    gradientTo: 'to-emerald-700',
-    shadow: 'shadow-emerald-500/20',
-    shadowLg: 'shadow-emerald-500/30',
-    shadowXl: 'shadow-emerald-200',
-    shadowXlDark: 'dark:shadow-emerald-900/20',
-    prose: 'prose-emerald',
-    selection: 'selection:bg-emerald-100 dark:selection:bg-emerald-900/30',
-    icon: 'text-emerald-600 dark:text-emerald-500',
-    difficultyEasy: 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400',
-    deepDiveBg: 'bg-emerald-600/10',
-    deepDiveIcon: 'bg-emerald-600',
-    deepDiveAudio: 'bg-emerald-500',
-    deepDiveLoader: 'text-emerald-400',
-    deepDiveTip: 'bg-emerald-50 border-emerald-100 text-emerald-900/80 dark:bg-emerald-400/5 dark:border-emerald-400/10 dark:text-emerald-100/80',
-    deepDiveTipIcon: 'text-emerald-600 dark:text-emerald-400',
-    chatUser: 'bg-emerald-600',
-    chatUserBubble: 'bg-emerald-600/10 text-emerald-900 dark:bg-emerald-600/20 dark:text-emerald-50',
-    resultCircle: 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400',
-    bgLight: 'bg-emerald-50',
-    bgLightDark: 'dark:bg-emerald-900/20',
-    borderLight: 'border-emerald-600',
-    borderLightDark: 'dark:border-emerald-500',
-    shadowLight: 'shadow-emerald-500/20',
-    shadowDark: 'dark:shadow-emerald-900/20',
-    darkPrimary: 'bg-emerald-600',
-    contrastText: 'text-white'
+    primary: "bg-emerald-600",
+    primaryHover: "hover:bg-emerald-700",
+    secondary: "bg-emerald-500",
+    secondaryHover: "hover:bg-emerald-500",
+    text: "text-emerald-600",
+    textDark: "dark:text-white",
+    textLight: "text-emerald-700",
+    textLightDark: "dark:text-slate-200",
+    border: "border-emerald-600",
+    borderDark: "dark:border-emerald-500",
+    bg: "bg-emerald-50",
+    bgDark: "dark:bg-emerald-900/20",
+    accent: "accent-emerald-600",
+    accentDark: "dark:accent-emerald-500",
+    ring: "focus:ring-emerald-500/10",
+    focusBorder: "focus:border-emerald-500",
+    gradientFrom: "from-emerald-500",
+    gradientTo: "to-emerald-700",
+    shadow: "shadow-emerald-500/20",
+    shadowLg: "shadow-emerald-500/30",
+    shadowXl: "shadow-emerald-200",
+    shadowXlDark: "dark:shadow-emerald-900/20",
+    prose: "prose-emerald",
+    selection: "selection:bg-emerald-100 dark:selection:bg-emerald-900/30",
+    icon: "text-emerald-600 dark:text-emerald-500",
+    difficultyEasy:
+      "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400",
+    deepDiveBg: "bg-emerald-600/10",
+    deepDiveIcon: "bg-emerald-600",
+    deepDiveAudio: "bg-emerald-500",
+    deepDiveLoader: "text-emerald-400",
+    deepDiveTip:
+      "bg-emerald-50 border-emerald-100 text-emerald-900/80 dark:bg-emerald-400/5 dark:border-emerald-400/10 dark:text-emerald-100/80",
+    deepDiveTipIcon: "text-emerald-600 dark:text-emerald-400",
+    chatUser: "bg-emerald-600",
+    chatUserBubble:
+      "bg-emerald-600/10 text-emerald-900 dark:bg-emerald-600/20 dark:text-emerald-50",
+    resultCircle:
+      "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400",
+    bgLight: "bg-emerald-50",
+    bgLightDark: "dark:bg-emerald-900/20",
+    borderLight: "border-emerald-600",
+    borderLightDark: "dark:border-emerald-500",
+    shadowLight: "shadow-emerald-500/20",
+    shadowDark: "dark:shadow-emerald-900/20",
+    darkPrimary: "bg-emerald-600",
+    contrastText: "text-white",
   },
   navy: {
-    primary: 'bg-blue-900',
-    primaryHover: 'hover:bg-blue-950',
-    secondary: 'bg-blue-800',
-    secondaryHover: 'hover:bg-blue-800',
-    text: 'text-blue-900',
-    textDark: 'dark:text-white',
-    textLight: 'text-blue-950',
-    textLightDark: 'dark:text-slate-200',
-    border: 'border-blue-900',
-    borderDark: 'dark:border-blue-400',
-    bg: 'bg-blue-50',
-    bgDark: 'dark:bg-blue-950/20',
-    accent: 'accent-blue-900',
-    accentDark: 'dark:accent-blue-400',
-    ring: 'focus:ring-blue-800/10',
-    focusBorder: 'focus:border-blue-800',
-    gradientFrom: 'from-blue-800',
-    gradientTo: 'to-blue-950',
-    shadow: 'shadow-blue-900/20',
-    shadowLg: 'shadow-blue-900/30',
-    shadowXl: 'shadow-blue-200',
-    shadowXlDark: 'dark:shadow-blue-950/20',
-    prose: 'prose-blue',
-    selection: 'selection:bg-blue-100 dark:selection:bg-blue-950/30',
-    icon: 'text-blue-900 dark:text-blue-400',
-    difficultyEasy: 'bg-blue-100 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300',
-    deepDiveBg: 'bg-blue-900/10',
-    deepDiveIcon: 'bg-blue-900',
-    deepDiveAudio: 'bg-blue-800',
-    deepDiveLoader: 'text-blue-400',
-    deepDiveTip: 'bg-blue-50 border-blue-100 text-blue-900/80 dark:bg-blue-400/5 dark:border-blue-400/10 dark:text-blue-100/80',
-    deepDiveTipIcon: 'text-blue-900 dark:text-blue-400',
-    chatUser: 'bg-blue-900',
-    chatUserBubble: 'bg-blue-900/10 text-blue-900 dark:bg-blue-900/20 dark:text-blue-50',
-    resultCircle: 'bg-blue-100 dark:bg-blue-950/20 text-blue-900 dark:text-blue-400',
-    bgLight: 'bg-blue-50',
-    bgLightDark: 'dark:bg-blue-950/20',
-    borderLight: 'border-blue-900',
-    borderLightDark: 'dark:border-blue-400',
-    shadowLight: 'shadow-blue-900/20',
-    shadowDark: 'dark:shadow-blue-950/20',
-    darkPrimary: 'bg-blue-900',
-    contrastText: 'text-white'
+    primary: "bg-blue-900",
+    primaryHover: "hover:bg-blue-950",
+    secondary: "bg-blue-800",
+    secondaryHover: "hover:bg-blue-800",
+    text: "text-blue-900",
+    textDark: "dark:text-white",
+    textLight: "text-blue-950",
+    textLightDark: "dark:text-slate-200",
+    border: "border-blue-900",
+    borderDark: "dark:border-blue-400",
+    bg: "bg-blue-50",
+    bgDark: "dark:bg-blue-950/20",
+    accent: "accent-blue-900",
+    accentDark: "dark:accent-blue-400",
+    ring: "focus:ring-blue-800/10",
+    focusBorder: "focus:border-blue-800",
+    gradientFrom: "from-blue-800",
+    gradientTo: "to-blue-950",
+    shadow: "shadow-blue-900/20",
+    shadowLg: "shadow-blue-900/30",
+    shadowXl: "shadow-blue-200",
+    shadowXlDark: "dark:shadow-blue-950/20",
+    prose: "prose-blue",
+    selection: "selection:bg-blue-100 dark:selection:bg-blue-950/30",
+    icon: "text-blue-900 dark:text-blue-400",
+    difficultyEasy:
+      "bg-blue-100 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300",
+    deepDiveBg: "bg-blue-900/10",
+    deepDiveIcon: "bg-blue-900",
+    deepDiveAudio: "bg-blue-800",
+    deepDiveLoader: "text-blue-400",
+    deepDiveTip:
+      "bg-blue-50 border-blue-100 text-blue-900/80 dark:bg-blue-400/5 dark:border-blue-400/10 dark:text-blue-100/80",
+    deepDiveTipIcon: "text-blue-900 dark:text-blue-400",
+    chatUser: "bg-blue-900",
+    chatUserBubble:
+      "bg-blue-900/10 text-blue-900 dark:bg-blue-900/20 dark:text-blue-50",
+    resultCircle:
+      "bg-blue-100 dark:bg-blue-950/20 text-blue-900 dark:text-blue-400",
+    bgLight: "bg-blue-50",
+    bgLightDark: "dark:bg-blue-950/20",
+    borderLight: "border-blue-900",
+    borderLightDark: "dark:border-blue-400",
+    shadowLight: "shadow-blue-900/20",
+    shadowDark: "dark:shadow-blue-950/20",
+    darkPrimary: "bg-blue-900",
+    contrastText: "text-white",
   },
   brown: {
-    primary: 'bg-amber-900',
-    primaryHover: 'hover:bg-amber-950',
-    secondary: 'bg-amber-800',
-    secondaryHover: 'hover:bg-amber-800',
-    text: 'text-amber-900',
-    textDark: 'dark:text-white',
-    textLight: 'text-amber-950',
-    textLightDark: 'dark:text-slate-200',
-    border: 'border-amber-900',
-    borderDark: 'dark:border-amber-400',
-    bg: 'bg-amber-50',
-    bgDark: 'dark:bg-amber-950/20',
-    accent: 'accent-amber-900',
-    accentDark: 'dark:accent-amber-400',
-    ring: 'focus:ring-amber-800/10',
-    focusBorder: 'focus:border-amber-800',
-    gradientFrom: 'from-amber-800',
-    gradientTo: 'to-amber-950',
-    shadow: 'shadow-amber-900/20',
-    shadowLg: 'shadow-amber-900/30',
-    shadowXl: 'shadow-amber-200',
-    shadowXlDark: 'dark:shadow-amber-950/20',
-    prose: 'prose-amber',
-    selection: 'selection:bg-amber-100 dark:selection:bg-amber-950/30',
-    icon: 'text-amber-900 dark:text-amber-400',
-    difficultyEasy: 'bg-amber-100 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300',
-    deepDiveBg: 'bg-amber-900/10',
-    deepDiveIcon: 'bg-amber-900',
-    deepDiveAudio: 'bg-amber-800',
-    deepDiveLoader: 'text-amber-400',
-    deepDiveTip: 'bg-amber-50 border-amber-100 text-amber-900/80 dark:bg-amber-400/5 dark:border-amber-400/10 dark:text-amber-100/80',
-    deepDiveTipIcon: 'text-amber-900 dark:text-amber-400',
-    chatUser: 'bg-amber-900',
-    chatUserBubble: 'bg-amber-900/10 text-amber-900 dark:bg-amber-900/20 dark:text-amber-50',
-    resultCircle: 'bg-amber-100 dark:bg-amber-900/20 text-amber-900 dark:text-amber-400',
-    bgLight: 'bg-amber-50',
-    bgLightDark: 'dark:bg-amber-950/20',
-    borderLight: 'border-amber-900',
-    borderLightDark: 'dark:border-amber-400',
-    shadowLight: 'shadow-amber-900/20',
-    shadowDark: 'dark:shadow-amber-950/20',
-    darkPrimary: 'bg-amber-900',
-    contrastText: 'text-white'
+    primary: "bg-amber-900",
+    primaryHover: "hover:bg-amber-950",
+    secondary: "bg-amber-800",
+    secondaryHover: "hover:bg-amber-800",
+    text: "text-amber-900",
+    textDark: "dark:text-white",
+    textLight: "text-amber-950",
+    textLightDark: "dark:text-slate-200",
+    border: "border-amber-900",
+    borderDark: "dark:border-amber-400",
+    bg: "bg-amber-50",
+    bgDark: "dark:bg-amber-950/20",
+    accent: "accent-amber-900",
+    accentDark: "dark:accent-amber-400",
+    ring: "focus:ring-amber-800/10",
+    focusBorder: "focus:border-amber-800",
+    gradientFrom: "from-amber-800",
+    gradientTo: "to-amber-950",
+    shadow: "shadow-amber-900/20",
+    shadowLg: "shadow-amber-900/30",
+    shadowXl: "shadow-amber-200",
+    shadowXlDark: "dark:shadow-amber-950/20",
+    prose: "prose-amber",
+    selection: "selection:bg-amber-100 dark:selection:bg-amber-950/30",
+    icon: "text-amber-900 dark:text-amber-400",
+    difficultyEasy:
+      "bg-amber-100 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300",
+    deepDiveBg: "bg-amber-900/10",
+    deepDiveIcon: "bg-amber-900",
+    deepDiveAudio: "bg-amber-800",
+    deepDiveLoader: "text-amber-400",
+    deepDiveTip:
+      "bg-amber-50 border-amber-100 text-amber-900/80 dark:bg-amber-400/5 dark:border-amber-400/10 dark:text-amber-100/80",
+    deepDiveTipIcon: "text-amber-900 dark:text-amber-400",
+    chatUser: "bg-amber-900",
+    chatUserBubble:
+      "bg-amber-900/10 text-amber-900 dark:bg-amber-900/20 dark:text-amber-50",
+    resultCircle:
+      "bg-amber-100 dark:bg-amber-900/20 text-amber-900 dark:text-amber-400",
+    bgLight: "bg-amber-50",
+    bgLightDark: "dark:bg-amber-950/20",
+    borderLight: "border-amber-900",
+    borderLightDark: "dark:border-amber-400",
+    shadowLight: "shadow-amber-900/20",
+    shadowDark: "dark:shadow-amber-950/20",
+    darkPrimary: "bg-amber-900",
+    contrastText: "text-white",
   },
   slate: {
-    primary: 'bg-slate-600',
-    primaryHover: 'hover:bg-slate-700',
-    secondary: 'bg-slate-500',
-    secondaryHover: 'hover:bg-slate-500',
-    text: 'text-slate-600',
-    textDark: 'dark:text-white',
-    textLight: 'text-slate-700',
-    textLightDark: 'dark:text-slate-200',
-    border: 'border-slate-600',
-    borderDark: 'dark:border-slate-500',
-    bg: 'bg-slate-50',
-    bgDark: 'dark:bg-slate-900/20',
-    accent: 'accent-slate-600',
-    accentDark: 'dark:accent-slate-500',
-    ring: 'focus:ring-slate-500/10',
-    focusBorder: 'focus:border-slate-500',
-    gradientFrom: 'from-slate-500',
-    gradientTo: 'to-slate-700',
-    shadow: 'shadow-slate-500/20',
-    shadowLg: 'shadow-slate-500/30',
-    shadowXl: 'shadow-slate-200',
-    shadowXlDark: 'dark:shadow-slate-900/20',
-    prose: 'prose-slate',
-    selection: 'selection:bg-slate-100 dark:selection:bg-slate-900/30',
-    icon: 'text-slate-600 dark:text-slate-500',
-    difficultyEasy: 'bg-slate-100 dark:bg-slate-900/20 text-slate-700 dark:text-slate-400',
-    deepDiveBg: 'bg-slate-600/10',
-    deepDiveIcon: 'bg-slate-600',
-    deepDiveAudio: 'bg-slate-500',
-    deepDiveLoader: 'text-slate-400',
-    deepDiveTip: 'bg-slate-50 border-slate-100 text-slate-900/80 dark:bg-slate-400/5 dark:border-slate-400/10 dark:text-slate-100/80',
-    deepDiveTipIcon: 'text-slate-600 dark:text-slate-400',
-    chatUser: 'bg-slate-600',
-    chatUserBubble: 'bg-slate-600/10 text-slate-900 dark:bg-slate-600/20 dark:text-slate-50',
-    resultCircle: 'bg-slate-100 dark:bg-slate-900/20 text-slate-600 dark:text-slate-400',
-    bgLight: 'bg-slate-50',
-    bgLightDark: 'dark:bg-slate-900/20',
-    borderLight: 'border-slate-600',
-    borderLightDark: 'dark:border-slate-500',
-    shadowLight: 'shadow-slate-500/20',
-    shadowDark: 'dark:shadow-slate-900/20',
-    darkPrimary: 'bg-slate-600',
-    contrastText: 'text-white'
+    primary: "bg-slate-600",
+    primaryHover: "hover:bg-slate-700",
+    secondary: "bg-slate-500",
+    secondaryHover: "hover:bg-slate-500",
+    text: "text-slate-600",
+    textDark: "dark:text-white",
+    textLight: "text-slate-700",
+    textLightDark: "dark:text-slate-200",
+    border: "border-slate-600",
+    borderDark: "dark:border-slate-500",
+    bg: "bg-slate-50",
+    bgDark: "dark:bg-slate-900/20",
+    accent: "accent-slate-600",
+    accentDark: "dark:accent-slate-500",
+    ring: "focus:ring-slate-500/10",
+    focusBorder: "focus:border-slate-500",
+    gradientFrom: "from-slate-500",
+    gradientTo: "to-slate-700",
+    shadow: "shadow-slate-500/20",
+    shadowLg: "shadow-slate-500/30",
+    shadowXl: "shadow-slate-200",
+    shadowXlDark: "dark:shadow-slate-900/20",
+    prose: "prose-slate",
+    selection: "selection:bg-slate-100 dark:selection:bg-slate-900/30",
+    icon: "text-slate-600 dark:text-slate-500",
+    difficultyEasy:
+      "bg-slate-100 dark:bg-slate-900/20 text-slate-700 dark:text-slate-400",
+    deepDiveBg: "bg-slate-600/10",
+    deepDiveIcon: "bg-slate-600",
+    deepDiveAudio: "bg-slate-500",
+    deepDiveLoader: "text-slate-400",
+    deepDiveTip:
+      "bg-slate-50 border-slate-100 text-slate-900/80 dark:bg-slate-400/5 dark:border-slate-400/10 dark:text-slate-100/80",
+    deepDiveTipIcon: "text-slate-600 dark:text-slate-400",
+    chatUser: "bg-slate-600",
+    chatUserBubble:
+      "bg-slate-600/10 text-slate-900 dark:bg-slate-600/20 dark:text-slate-50",
+    resultCircle:
+      "bg-slate-100 dark:bg-slate-900/20 text-slate-600 dark:text-slate-400",
+    bgLight: "bg-slate-50",
+    bgLightDark: "dark:bg-slate-900/20",
+    borderLight: "border-slate-600",
+    borderLightDark: "dark:border-slate-500",
+    shadowLight: "shadow-slate-500/20",
+    shadowDark: "dark:shadow-slate-900/20",
+    darkPrimary: "bg-slate-600",
+    contrastText: "text-white",
   },
   yellow: {
-    primary: 'bg-yellow-500',
-    primaryHover: 'hover:bg-yellow-600',
-    secondary: 'bg-yellow-400',
-    secondaryHover: 'hover:bg-yellow-400',
-    text: 'text-yellow-600',
-    textDark: 'dark:text-white',
-    textLight: 'text-yellow-700',
-    textLightDark: 'dark:text-slate-200',
-    border: 'border-yellow-500',
-    borderDark: 'dark:border-yellow-400',
-    bg: 'bg-yellow-50',
-    bgDark: 'dark:bg-yellow-900/20',
-    accent: 'accent-yellow-500',
-    accentDark: 'dark:accent-yellow-400',
-    ring: 'focus:ring-yellow-400/10',
-    focusBorder: 'focus:border-yellow-400',
-    gradientFrom: 'from-yellow-400',
-    gradientTo: 'to-yellow-600',
-    shadow: 'shadow-yellow-500/20',
-    shadowLg: 'shadow-yellow-500/30',
-    shadowXl: 'shadow-yellow-200',
-    shadowXlDark: 'dark:shadow-yellow-900/20',
-    prose: 'prose-yellow',
-    selection: 'selection:bg-yellow-100 dark:selection:bg-yellow-900/30',
-    icon: 'text-yellow-600 dark:text-yellow-500',
-    difficultyEasy: 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400',
-    deepDiveBg: 'bg-yellow-500/10',
-    deepDiveIcon: 'bg-yellow-500',
-    deepDiveAudio: 'bg-yellow-400',
-    deepDiveLoader: 'text-yellow-400',
-    deepDiveTip: 'bg-yellow-50 border-yellow-100 text-yellow-900/80 dark:bg-yellow-400/5 dark:border-yellow-400/10 dark:text-yellow-100/80',
-    deepDiveTipIcon: 'text-yellow-600 dark:text-yellow-400',
-    chatUser: 'bg-yellow-500',
-    chatUserBubble: 'bg-yellow-500/10 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-50',
-    resultCircle: 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400',
-    bgLight: 'bg-yellow-50',
-    bgLightDark: 'dark:bg-yellow-900/20',
-    borderLight: 'border-yellow-500',
-    borderLightDark: 'dark:border-yellow-400',
-    shadowLight: 'shadow-yellow-500/20',
-    shadowDark: 'dark:shadow-yellow-900/20',
-    darkPrimary: 'bg-yellow-500',
-    contrastText: 'text-black'
+    primary: "bg-yellow-500",
+    primaryHover: "hover:bg-yellow-600",
+    secondary: "bg-yellow-400",
+    secondaryHover: "hover:bg-yellow-400",
+    text: "text-yellow-600",
+    textDark: "dark:text-white",
+    textLight: "text-yellow-700",
+    textLightDark: "dark:text-slate-200",
+    border: "border-yellow-500",
+    borderDark: "dark:border-yellow-400",
+    bg: "bg-yellow-50",
+    bgDark: "dark:bg-yellow-900/20",
+    accent: "accent-yellow-500",
+    accentDark: "dark:accent-yellow-400",
+    ring: "focus:ring-yellow-400/10",
+    focusBorder: "focus:border-yellow-400",
+    gradientFrom: "from-yellow-400",
+    gradientTo: "to-yellow-600",
+    shadow: "shadow-yellow-500/20",
+    shadowLg: "shadow-yellow-500/30",
+    shadowXl: "shadow-yellow-200",
+    shadowXlDark: "dark:shadow-yellow-900/20",
+    prose: "prose-yellow",
+    selection: "selection:bg-yellow-100 dark:selection:bg-yellow-900/30",
+    icon: "text-yellow-600 dark:text-yellow-500",
+    difficultyEasy:
+      "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400",
+    deepDiveBg: "bg-yellow-500/10",
+    deepDiveIcon: "bg-yellow-500",
+    deepDiveAudio: "bg-yellow-400",
+    deepDiveLoader: "text-yellow-400",
+    deepDiveTip:
+      "bg-yellow-50 border-yellow-100 text-yellow-900/80 dark:bg-yellow-400/5 dark:border-yellow-400/10 dark:text-yellow-100/80",
+    deepDiveTipIcon: "text-yellow-600 dark:text-yellow-400",
+    chatUser: "bg-yellow-500",
+    chatUserBubble:
+      "bg-yellow-500/10 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-50",
+    resultCircle:
+      "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400",
+    bgLight: "bg-yellow-50",
+    bgLightDark: "dark:bg-yellow-900/20",
+    borderLight: "border-yellow-500",
+    borderLightDark: "dark:border-yellow-400",
+    shadowLight: "shadow-yellow-500/20",
+    shadowDark: "dark:shadow-yellow-900/20",
+    darkPrimary: "bg-yellow-500",
+    contrastText: "text-black",
   },
   amber: {
-    primary: 'bg-amber-600',
-    primaryHover: 'hover:bg-amber-700',
-    secondary: 'bg-amber-500',
-    secondaryHover: 'hover:bg-amber-500',
-    text: 'text-amber-600',
-    textDark: 'dark:text-white',
-    textLight: 'text-amber-700',
-    textLightDark: 'dark:text-slate-200',
-    border: 'border-amber-600',
-    borderDark: 'dark:border-amber-500',
-    bg: 'bg-amber-50',
-    bgDark: 'dark:bg-amber-900/20',
-    accent: 'accent-amber-600',
-    accentDark: 'dark:accent-amber-500',
-    ring: 'focus:ring-amber-500/10',
-    focusBorder: 'focus:border-amber-500',
-    gradientFrom: 'from-amber-500',
-    gradientTo: 'to-amber-700',
-    shadow: 'shadow-amber-500/20',
-    shadowLg: 'shadow-amber-500/30',
-    shadowXl: 'shadow-amber-200',
-    shadowXlDark: 'dark:shadow-amber-900/20',
-    prose: 'prose-amber',
-    selection: 'selection:bg-amber-100 dark:selection:bg-amber-900/30',
-    icon: 'text-amber-600 dark:text-amber-500',
-    difficultyEasy: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400',
-    deepDiveBg: 'bg-amber-600/10',
-    deepDiveIcon: 'bg-amber-600',
-    deepDiveAudio: 'bg-amber-500',
-    deepDiveLoader: 'text-amber-400',
-    deepDiveTip: 'bg-amber-50 border-amber-100 text-amber-900/80 dark:bg-amber-400/5 dark:border-amber-400/10 dark:text-amber-100/80',
-    deepDiveTipIcon: 'text-amber-600 dark:text-amber-400',
-    chatUser: 'bg-amber-600',
-    chatUserBubble: 'bg-amber-600/10 text-amber-900 dark:bg-amber-600/20 dark:text-amber-50',
-    resultCircle: 'bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400',
-    bgLight: 'bg-amber-50',
-    bgLightDark: 'dark:bg-amber-900/20',
-    borderLight: 'border-amber-600',
-    borderLightDark: 'dark:border-amber-500',
-    shadowLight: 'shadow-amber-500/20',
-    shadowDark: 'dark:shadow-amber-900/20',
-    darkPrimary: 'bg-amber-600',
-    contrastText: 'text-white'
+    primary: "bg-amber-600",
+    primaryHover: "hover:bg-amber-700",
+    secondary: "bg-amber-500",
+    secondaryHover: "hover:bg-amber-500",
+    text: "text-amber-600",
+    textDark: "dark:text-white",
+    textLight: "text-amber-700",
+    textLightDark: "dark:text-slate-200",
+    border: "border-amber-600",
+    borderDark: "dark:border-amber-500",
+    bg: "bg-amber-50",
+    bgDark: "dark:bg-amber-900/20",
+    accent: "accent-amber-600",
+    accentDark: "dark:accent-amber-500",
+    ring: "focus:ring-amber-500/10",
+    focusBorder: "focus:border-amber-500",
+    gradientFrom: "from-amber-500",
+    gradientTo: "to-amber-700",
+    shadow: "shadow-amber-500/20",
+    shadowLg: "shadow-amber-500/30",
+    shadowXl: "shadow-amber-200",
+    shadowXlDark: "dark:shadow-amber-900/20",
+    prose: "prose-amber",
+    selection: "selection:bg-amber-100 dark:selection:bg-amber-900/30",
+    icon: "text-amber-600 dark:text-amber-500",
+    difficultyEasy:
+      "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400",
+    deepDiveBg: "bg-amber-600/10",
+    deepDiveIcon: "bg-amber-600",
+    deepDiveAudio: "bg-amber-500",
+    deepDiveLoader: "text-amber-400",
+    deepDiveTip:
+      "bg-amber-50 border-amber-100 text-amber-900/80 dark:bg-amber-400/5 dark:border-amber-400/10 dark:text-amber-100/80",
+    deepDiveTipIcon: "text-amber-600 dark:text-amber-400",
+    chatUser: "bg-amber-600",
+    chatUserBubble:
+      "bg-amber-600/10 text-amber-900 dark:bg-amber-600/20 dark:text-amber-50",
+    resultCircle:
+      "bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400",
+    bgLight: "bg-amber-50",
+    bgLightDark: "dark:bg-amber-900/20",
+    borderLight: "border-amber-600",
+    borderLightDark: "dark:border-amber-500",
+    shadowLight: "shadow-amber-500/20",
+    shadowDark: "dark:shadow-amber-900/20",
+    darkPrimary: "bg-amber-600",
+    contrastText: "text-white",
   },
   moss: {
-    primary: 'bg-lime-800',
-    primaryHover: 'hover:bg-lime-900',
-    secondary: 'bg-lime-700',
-    secondaryHover: 'hover:bg-lime-700',
-    text: 'text-lime-800',
-    textDark: 'dark:text-lime-400',
-    textLight: 'text-lime-900',
-    textLightDark: 'dark:text-lime-300',
-    border: 'border-lime-800',
-    borderDark: 'dark:border-lime-400',
-    bg: 'bg-lime-50',
-    bgDark: 'dark:bg-lime-950/20',
-    accent: 'accent-lime-800',
-    accentDark: 'dark:accent-lime-400',
-    ring: 'focus:ring-lime-700/10',
-    focusBorder: 'focus:border-lime-700',
-    gradientFrom: 'from-lime-700',
-    gradientTo: 'to-lime-900',
-    shadow: 'shadow-lime-800/20',
-    shadowLg: 'shadow-lime-800/30',
-    shadowXl: 'shadow-lime-200',
-    shadowXlDark: 'dark:shadow-lime-950/20',
-    prose: 'prose-lime',
-    selection: 'selection:bg-lime-100 dark:selection:bg-lime-950/30',
-    icon: 'text-lime-800 dark:text-lime-400',
-    difficultyEasy: 'bg-lime-100 dark:bg-lime-950/20 text-lime-700 dark:text-lime-300',
-    deepDiveBg: 'bg-lime-800/10',
-    deepDiveIcon: 'bg-lime-800',
-    deepDiveAudio: 'bg-lime-700',
-    deepDiveLoader: 'text-lime-400',
-    deepDiveTip: 'bg-lime-50 border-lime-100 text-lime-900/80 dark:bg-lime-400/5 dark:border-lime-400/10 dark:text-lime-100/80',
-    deepDiveTipIcon: 'text-lime-800 dark:text-lime-400',
-    chatUser: 'bg-lime-800',
-    chatUserBubble: 'bg-lime-800/10 text-lime-900 dark:bg-lime-800/20 dark:text-lime-50',
-    resultCircle: 'bg-lime-100 dark:bg-lime-950/20 text-lime-800 dark:text-lime-400',
-    bgLight: 'bg-lime-50',
-    bgLightDark: 'dark:bg-lime-950/20',
-    borderLight: 'border-lime-800',
-    borderLightDark: 'dark:border-lime-400',
-    shadowLight: 'shadow-lime-800/20',
-    shadowDark: 'dark:shadow-lime-950/20',
-    darkPrimary: 'bg-lime-800',
-    contrastText: 'text-white'
+    primary: "bg-lime-800",
+    primaryHover: "hover:bg-lime-900",
+    secondary: "bg-lime-700",
+    secondaryHover: "hover:bg-lime-700",
+    text: "text-lime-800",
+    textDark: "dark:text-lime-400",
+    textLight: "text-lime-900",
+    textLightDark: "dark:text-lime-300",
+    border: "border-lime-800",
+    borderDark: "dark:border-lime-400",
+    bg: "bg-lime-50",
+    bgDark: "dark:bg-lime-950/20",
+    accent: "accent-lime-800",
+    accentDark: "dark:accent-lime-400",
+    ring: "focus:ring-lime-700/10",
+    focusBorder: "focus:border-lime-700",
+    gradientFrom: "from-lime-700",
+    gradientTo: "to-lime-900",
+    shadow: "shadow-lime-800/20",
+    shadowLg: "shadow-lime-800/30",
+    shadowXl: "shadow-lime-200",
+    shadowXlDark: "dark:shadow-lime-950/20",
+    prose: "prose-lime",
+    selection: "selection:bg-lime-100 dark:selection:bg-lime-950/30",
+    icon: "text-lime-800 dark:text-lime-400",
+    difficultyEasy:
+      "bg-lime-100 dark:bg-lime-950/20 text-lime-700 dark:text-lime-300",
+    deepDiveBg: "bg-lime-800/10",
+    deepDiveIcon: "bg-lime-800",
+    deepDiveAudio: "bg-lime-700",
+    deepDiveLoader: "text-lime-400",
+    deepDiveTip:
+      "bg-lime-50 border-lime-100 text-lime-900/80 dark:bg-lime-400/5 dark:border-lime-400/10 dark:text-lime-100/80",
+    deepDiveTipIcon: "text-lime-800 dark:text-lime-400",
+    chatUser: "bg-lime-800",
+    chatUserBubble:
+      "bg-lime-800/10 text-lime-900 dark:bg-lime-800/20 dark:text-lime-50",
+    resultCircle:
+      "bg-lime-100 dark:bg-lime-950/20 text-lime-800 dark:text-lime-400",
+    bgLight: "bg-lime-50",
+    bgLightDark: "dark:bg-lime-950/20",
+    borderLight: "border-lime-800",
+    borderLightDark: "dark:border-lime-400",
+    shadowLight: "shadow-lime-800/20",
+    shadowDark: "dark:shadow-lime-950/20",
+    darkPrimary: "bg-lime-800",
+    contrastText: "text-white",
   },
   rose: {
-    primary: 'bg-rose-600',
-    primaryHover: 'hover:bg-rose-700',
-    secondary: 'bg-rose-500',
-    secondaryHover: 'hover:bg-rose-500',
-    text: 'text-rose-600',
-    textDark: 'dark:text-rose-500',
-    textLight: 'text-rose-700',
-    textLightDark: 'dark:text-rose-400',
-    border: 'border-rose-600',
-    borderDark: 'dark:border-rose-500',
-    bg: 'bg-rose-50',
-    bgDark: 'dark:bg-rose-900/20',
-    accent: 'accent-rose-600',
-    accentDark: 'dark:accent-rose-500',
-    ring: 'focus:ring-rose-500/10',
-    focusBorder: 'focus:border-rose-500',
-    gradientFrom: 'from-rose-500',
-    gradientTo: 'to-rose-700',
-    shadow: 'shadow-rose-500/20',
-    shadowLg: 'shadow-rose-500/30',
-    shadowXl: 'shadow-rose-200',
-    shadowXlDark: 'dark:shadow-rose-900/20',
-    prose: 'prose-rose',
-    selection: 'selection:bg-rose-100 dark:selection:bg-rose-900/30',
-    icon: 'text-rose-600 dark:text-rose-500',
-    difficultyEasy: 'bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400',
-    deepDiveBg: 'bg-rose-600/10',
-    deepDiveIcon: 'bg-rose-600',
-    deepDiveAudio: 'bg-rose-500',
-    deepDiveLoader: 'text-rose-400',
-    deepDiveTip: 'bg-rose-50 border-rose-100 text-rose-900/80 dark:bg-rose-400/5 dark:border-rose-400/10 dark:text-rose-100/80',
-    deepDiveTipIcon: 'text-rose-600 dark:text-rose-400',
-    chatUser: 'bg-rose-600',
-    chatUserBubble: 'bg-rose-600/10 text-rose-900 dark:bg-rose-600/20 dark:text-rose-50',
-    resultCircle: 'bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400',
-    bgLight: 'bg-rose-50',
-    bgLightDark: 'dark:bg-rose-900/20',
-    borderLight: 'border-rose-600',
-    borderLightDark: 'dark:border-rose-500',
-    shadowLight: 'shadow-rose-500/20',
-    shadowDark: 'dark:shadow-rose-900/20',
-    darkPrimary: 'bg-rose-600',
-    contrastText: 'text-white'
+    primary: "bg-rose-600",
+    primaryHover: "hover:bg-rose-700",
+    secondary: "bg-rose-500",
+    secondaryHover: "hover:bg-rose-500",
+    text: "text-rose-600",
+    textDark: "dark:text-rose-500",
+    textLight: "text-rose-700",
+    textLightDark: "dark:text-rose-400",
+    border: "border-rose-600",
+    borderDark: "dark:border-rose-500",
+    bg: "bg-rose-50",
+    bgDark: "dark:bg-rose-900/20",
+    accent: "accent-rose-600",
+    accentDark: "dark:accent-rose-500",
+    ring: "focus:ring-rose-500/10",
+    focusBorder: "focus:border-rose-500",
+    gradientFrom: "from-rose-500",
+    gradientTo: "to-rose-700",
+    shadow: "shadow-rose-500/20",
+    shadowLg: "shadow-rose-500/30",
+    shadowXl: "shadow-rose-200",
+    shadowXlDark: "dark:shadow-rose-900/20",
+    prose: "prose-rose",
+    selection: "selection:bg-rose-100 dark:selection:bg-rose-900/30",
+    icon: "text-rose-600 dark:text-rose-500",
+    difficultyEasy:
+      "bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400",
+    deepDiveBg: "bg-rose-600/10",
+    deepDiveIcon: "bg-rose-600",
+    deepDiveAudio: "bg-rose-500",
+    deepDiveLoader: "text-rose-400",
+    deepDiveTip:
+      "bg-rose-50 border-rose-100 text-rose-900/80 dark:bg-rose-400/5 dark:border-rose-400/10 dark:text-rose-100/80",
+    deepDiveTipIcon: "text-rose-600 dark:text-rose-400",
+    chatUser: "bg-rose-600",
+    chatUserBubble:
+      "bg-rose-600/10 text-rose-900 dark:bg-rose-600/20 dark:text-rose-50",
+    resultCircle:
+      "bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400",
+    bgLight: "bg-rose-50",
+    bgLightDark: "dark:bg-rose-900/20",
+    borderLight: "border-rose-600",
+    borderLightDark: "dark:border-rose-500",
+    shadowLight: "shadow-rose-500/20",
+    shadowDark: "dark:shadow-rose-900/20",
+    darkPrimary: "bg-rose-600",
+    contrastText: "text-white",
   },
   violet: {
-    primary: 'bg-violet-600',
-    primaryHover: 'hover:bg-violet-700',
-    secondary: 'bg-violet-500',
-    secondaryHover: 'hover:bg-violet-500',
-    text: 'text-violet-600',
-    textDark: 'dark:text-violet-500',
-    textLight: 'text-violet-700',
-    textLightDark: 'dark:text-violet-400',
-    border: 'border-violet-600',
-    borderDark: 'dark:border-violet-500',
-    bg: 'bg-violet-50',
-    bgDark: 'dark:bg-violet-900/20',
-    accent: 'accent-violet-600',
-    accentDark: 'dark:accent-violet-500',
-    ring: 'focus:ring-violet-500/10',
-    focusBorder: 'focus:border-violet-500',
-    gradientFrom: 'from-violet-500',
-    gradientTo: 'to-violet-700',
-    shadow: 'shadow-violet-500/20',
-    shadowLg: 'shadow-violet-500/30',
-    shadowXl: 'shadow-violet-200',
-    shadowXlDark: 'dark:shadow-violet-900/20',
-    prose: 'prose-violet',
-    selection: 'selection:bg-violet-100 dark:selection:bg-violet-900/30',
-    icon: 'text-violet-600 dark:text-violet-500',
-    difficultyEasy: 'bg-violet-100 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400',
-    deepDiveBg: 'bg-violet-600/10',
-    deepDiveIcon: 'bg-violet-600',
-    deepDiveAudio: 'bg-violet-500',
-    deepDiveLoader: 'text-violet-400',
-    deepDiveTip: 'bg-violet-50 border-violet-100 text-violet-900/80 dark:bg-violet-400/5 dark:border-violet-400/10 dark:text-violet-100/80',
-    deepDiveTipIcon: 'text-violet-600 dark:text-violet-400',
-    chatUser: 'bg-violet-600',
-    chatUserBubble: 'bg-violet-600/10 text-violet-900 dark:bg-violet-600/20 dark:text-violet-50',
-    resultCircle: 'bg-violet-100 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400',
-    bgLight: 'bg-violet-50',
-    bgLightDark: 'dark:bg-violet-900/20',
-    borderLight: 'border-violet-600',
-    borderLightDark: 'dark:border-violet-500',
-    shadowLight: 'shadow-violet-500/20',
-    shadowDark: 'dark:shadow-violet-900/20',
-    darkPrimary: 'bg-violet-600',
-    contrastText: 'text-white'
+    primary: "bg-violet-600",
+    primaryHover: "hover:bg-violet-700",
+    secondary: "bg-violet-500",
+    secondaryHover: "hover:bg-violet-500",
+    text: "text-violet-600",
+    textDark: "dark:text-violet-500",
+    textLight: "text-violet-700",
+    textLightDark: "dark:text-violet-400",
+    border: "border-violet-600",
+    borderDark: "dark:border-violet-500",
+    bg: "bg-violet-50",
+    bgDark: "dark:bg-violet-900/20",
+    accent: "accent-violet-600",
+    accentDark: "dark:accent-violet-500",
+    ring: "focus:ring-violet-500/10",
+    focusBorder: "focus:border-violet-500",
+    gradientFrom: "from-violet-500",
+    gradientTo: "to-violet-700",
+    shadow: "shadow-violet-500/20",
+    shadowLg: "shadow-violet-500/30",
+    shadowXl: "shadow-violet-200",
+    shadowXlDark: "dark:shadow-violet-900/20",
+    prose: "prose-violet",
+    selection: "selection:bg-violet-100 dark:selection:bg-violet-900/30",
+    icon: "text-violet-600 dark:text-violet-500",
+    difficultyEasy:
+      "bg-violet-100 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400",
+    deepDiveBg: "bg-violet-600/10",
+    deepDiveIcon: "bg-violet-600",
+    deepDiveAudio: "bg-violet-500",
+    deepDiveLoader: "text-violet-400",
+    deepDiveTip:
+      "bg-violet-50 border-violet-100 text-violet-900/80 dark:bg-violet-400/5 dark:border-violet-400/10 dark:text-violet-100/80",
+    deepDiveTipIcon: "text-violet-600 dark:text-violet-400",
+    chatUser: "bg-violet-600",
+    chatUserBubble:
+      "bg-violet-600/10 text-violet-900 dark:bg-violet-600/20 dark:text-violet-50",
+    resultCircle:
+      "bg-violet-100 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400",
+    bgLight: "bg-violet-50",
+    bgLightDark: "dark:bg-violet-900/20",
+    borderLight: "border-violet-600",
+    borderLightDark: "dark:border-violet-500",
+    shadowLight: "shadow-violet-500/20",
+    shadowDark: "dark:shadow-violet-900/20",
+    darkPrimary: "bg-violet-600",
+    contrastText: "text-white",
   },
   cyan: {
-    primary: 'bg-cyan-600',
-    primaryHover: 'hover:bg-cyan-700',
-    secondary: 'bg-cyan-500',
-    secondaryHover: 'hover:bg-cyan-500',
-    text: 'text-cyan-600',
-    textDark: 'dark:text-cyan-500',
-    textLight: 'text-cyan-700',
-    textLightDark: 'dark:text-cyan-400',
-    border: 'border-cyan-600',
-    borderDark: 'dark:border-cyan-500',
-    bg: 'bg-cyan-50',
-    bgDark: 'dark:bg-cyan-900/20',
-    accent: 'accent-cyan-600',
-    accentDark: 'dark:accent-cyan-500',
-    ring: 'focus:ring-cyan-500/10',
-    focusBorder: 'focus:border-cyan-500',
-    gradientFrom: 'from-cyan-500',
-    gradientTo: 'to-cyan-700',
-    shadow: 'shadow-cyan-500/20',
-    shadowLg: 'shadow-cyan-500/30',
-    shadowXl: 'shadow-cyan-200',
-    shadowXlDark: 'dark:shadow-cyan-900/20',
-    prose: 'prose-cyan',
-    selection: 'selection:bg-cyan-100 dark:selection:bg-cyan-900/30',
-    icon: 'text-cyan-600 dark:text-cyan-500',
-    difficultyEasy: 'bg-cyan-100 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-400',
-    deepDiveBg: 'bg-cyan-600/10',
-    deepDiveIcon: 'bg-cyan-600',
-    deepDiveAudio: 'bg-cyan-500',
-    deepDiveLoader: 'text-cyan-400',
-    deepDiveTip: 'bg-cyan-50 border-cyan-100 text-cyan-900/80 dark:bg-cyan-400/5 dark:border-cyan-400/10 dark:text-cyan-100/80',
-    deepDiveTipIcon: 'text-cyan-600 dark:text-cyan-400',
-    chatUser: 'bg-cyan-600',
-    chatUserBubble: 'bg-cyan-600/10 text-cyan-900 dark:bg-cyan-600/20 dark:text-cyan-50',
-    resultCircle: 'bg-cyan-100 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400',
-    bgLight: 'bg-cyan-50',
-    bgLightDark: 'dark:bg-cyan-900/20',
-    borderLight: 'border-cyan-600',
-    borderLightDark: 'dark:border-cyan-500',
-    shadowLight: 'shadow-cyan-500/20',
-    shadowDark: 'dark:shadow-cyan-900/20',
-    darkPrimary: 'bg-cyan-600',
-    contrastText: 'text-white'
+    primary: "bg-cyan-600",
+    primaryHover: "hover:bg-cyan-700",
+    secondary: "bg-cyan-500",
+    secondaryHover: "hover:bg-cyan-500",
+    text: "text-cyan-600",
+    textDark: "dark:text-cyan-500",
+    textLight: "text-cyan-700",
+    textLightDark: "dark:text-cyan-400",
+    border: "border-cyan-600",
+    borderDark: "dark:border-cyan-500",
+    bg: "bg-cyan-50",
+    bgDark: "dark:bg-cyan-900/20",
+    accent: "accent-cyan-600",
+    accentDark: "dark:accent-cyan-500",
+    ring: "focus:ring-cyan-500/10",
+    focusBorder: "focus:border-cyan-500",
+    gradientFrom: "from-cyan-500",
+    gradientTo: "to-cyan-700",
+    shadow: "shadow-cyan-500/20",
+    shadowLg: "shadow-cyan-500/30",
+    shadowXl: "shadow-cyan-200",
+    shadowXlDark: "dark:shadow-cyan-900/20",
+    prose: "prose-cyan",
+    selection: "selection:bg-cyan-100 dark:selection:bg-cyan-900/30",
+    icon: "text-cyan-600 dark:text-cyan-500",
+    difficultyEasy:
+      "bg-cyan-100 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-400",
+    deepDiveBg: "bg-cyan-600/10",
+    deepDiveIcon: "bg-cyan-600",
+    deepDiveAudio: "bg-cyan-500",
+    deepDiveLoader: "text-cyan-400",
+    deepDiveTip:
+      "bg-cyan-50 border-cyan-100 text-cyan-900/80 dark:bg-cyan-400/5 dark:border-cyan-400/10 dark:text-cyan-100/80",
+    deepDiveTipIcon: "text-cyan-600 dark:text-cyan-400",
+    chatUser: "bg-cyan-600",
+    chatUserBubble:
+      "bg-cyan-600/10 text-cyan-900 dark:bg-cyan-600/20 dark:text-cyan-50",
+    resultCircle:
+      "bg-cyan-100 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400",
+    bgLight: "bg-cyan-50",
+    bgLightDark: "dark:bg-cyan-900/20",
+    borderLight: "border-cyan-600",
+    borderLightDark: "dark:border-cyan-500",
+    shadowLight: "shadow-cyan-500/20",
+    shadowDark: "dark:shadow-cyan-900/20",
+    darkPrimary: "bg-cyan-600",
+    contrastText: "text-white",
   },
   orange: {
-    primary: 'bg-orange-600',
-    primaryHover: 'hover:bg-orange-700',
-    secondary: 'bg-orange-500',
-    secondaryHover: 'hover:bg-orange-500',
-    text: 'text-orange-600',
-    textDark: 'dark:text-orange-500',
-    textLight: 'text-orange-700',
-    textLightDark: 'dark:text-orange-400',
-    border: 'border-orange-600',
-    borderDark: 'dark:border-orange-500',
-    bg: 'bg-orange-50',
-    bgDark: 'dark:bg-orange-900/20',
-    accent: 'accent-orange-600',
-    accentDark: 'dark:accent-orange-500',
-    ring: 'focus:ring-orange-500/10',
-    focusBorder: 'focus:border-orange-500',
-    gradientFrom: 'from-orange-500',
-    gradientTo: 'to-orange-700',
-    shadow: 'shadow-orange-500/20',
-    shadowLg: 'shadow-orange-500/30',
-    shadowXl: 'shadow-orange-200',
-    shadowXlDark: 'dark:shadow-orange-900/20',
-    prose: 'prose-orange',
-    selection: 'selection:bg-orange-100 dark:selection:bg-orange-900/30',
-    icon: 'text-orange-600 dark:text-orange-500',
-    difficultyEasy: 'bg-orange-100 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400',
-    deepDiveBg: 'bg-orange-600/10',
-    deepDiveIcon: 'bg-orange-600',
-    deepDiveAudio: 'bg-orange-500',
-    deepDiveLoader: 'text-orange-400',
-    deepDiveTip: 'bg-orange-50 border-orange-100 text-orange-900/80 dark:bg-orange-400/5 dark:border-orange-400/10 dark:text-orange-100/80',
-    deepDiveTipIcon: 'text-orange-600 dark:text-orange-400',
-    chatUser: 'bg-orange-600',
-    chatUserBubble: 'bg-orange-600/10 text-orange-900 dark:bg-orange-600/20 dark:text-orange-50',
-    resultCircle: 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400',
-    bgLight: 'bg-orange-50',
-    bgLightDark: 'dark:bg-orange-900/20',
-    borderLight: 'border-orange-600',
-    borderLightDark: 'dark:border-orange-500',
-    shadowLight: 'shadow-orange-500/20',
-    shadowDark: 'dark:shadow-orange-900/20',
-    darkPrimary: 'bg-orange-600',
-    contrastText: 'text-white'
+    primary: "bg-orange-600",
+    primaryHover: "hover:bg-orange-700",
+    secondary: "bg-orange-500",
+    secondaryHover: "hover:bg-orange-500",
+    text: "text-orange-600",
+    textDark: "dark:text-orange-500",
+    textLight: "text-orange-700",
+    textLightDark: "dark:text-orange-400",
+    border: "border-orange-600",
+    borderDark: "dark:border-orange-500",
+    bg: "bg-orange-50",
+    bgDark: "dark:bg-orange-900/20",
+    accent: "accent-orange-600",
+    accentDark: "dark:accent-orange-500",
+    ring: "focus:ring-orange-500/10",
+    focusBorder: "focus:border-orange-500",
+    gradientFrom: "from-orange-500",
+    gradientTo: "to-orange-700",
+    shadow: "shadow-orange-500/20",
+    shadowLg: "shadow-orange-500/30",
+    shadowXl: "shadow-orange-200",
+    shadowXlDark: "dark:shadow-orange-900/20",
+    prose: "prose-orange",
+    selection: "selection:bg-orange-100 dark:selection:bg-orange-900/30",
+    icon: "text-orange-600 dark:text-orange-500",
+    difficultyEasy:
+      "bg-orange-100 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400",
+    deepDiveBg: "bg-orange-600/10",
+    deepDiveIcon: "bg-orange-600",
+    deepDiveAudio: "bg-orange-500",
+    deepDiveLoader: "text-orange-400",
+    deepDiveTip:
+      "bg-orange-50 border-orange-100 text-orange-900/80 dark:bg-orange-400/5 dark:border-orange-400/10 dark:text-orange-100/80",
+    deepDiveTipIcon: "text-orange-600 dark:text-orange-400",
+    chatUser: "bg-orange-600",
+    chatUserBubble:
+      "bg-orange-600/10 text-orange-900 dark:bg-orange-600/20 dark:text-orange-50",
+    resultCircle:
+      "bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400",
+    bgLight: "bg-orange-50",
+    bgLightDark: "dark:bg-orange-900/20",
+    borderLight: "border-orange-600",
+    borderLightDark: "dark:border-orange-500",
+    shadowLight: "shadow-orange-500/20",
+    shadowDark: "dark:shadow-orange-900/20",
+    darkPrimary: "bg-orange-600",
+    contrastText: "text-white",
   },
   fuchsia: {
-    primary: 'bg-fuchsia-600',
-    primaryHover: 'hover:bg-fuchsia-700',
-    secondary: 'bg-fuchsia-500',
-    secondaryHover: 'hover:bg-fuchsia-500',
-    text: 'text-fuchsia-600',
-    textDark: 'dark:text-fuchsia-500',
-    textLight: 'text-fuchsia-700',
-    textLightDark: 'dark:text-fuchsia-400',
-    border: 'border-fuchsia-600',
-    borderDark: 'dark:border-fuchsia-500',
-    bg: 'bg-fuchsia-50',
-    bgDark: 'dark:bg-fuchsia-900/20',
-    accent: 'accent-fuchsia-600',
-    accentDark: 'dark:accent-fuchsia-500',
-    ring: 'focus:ring-fuchsia-500/10',
-    focusBorder: 'focus:border-fuchsia-500',
-    gradientFrom: 'from-fuchsia-500',
-    gradientTo: 'to-fuchsia-700',
-    shadow: 'shadow-fuchsia-500/20',
-    shadowLg: 'shadow-fuchsia-500/30',
-    shadowXl: 'shadow-fuchsia-200',
-    shadowXlDark: 'dark:shadow-fuchsia-900/20',
-    prose: 'prose-fuchsia',
-    selection: 'selection:bg-fuchsia-100 dark:selection:bg-fuchsia-900/30',
-    icon: 'text-fuchsia-600 dark:text-fuchsia-500',
-    difficultyEasy: 'bg-fuchsia-100 dark:bg-fuchsia-900/20 text-fuchsia-700 dark:text-fuchsia-400',
-    deepDiveBg: 'bg-fuchsia-600/10',
-    deepDiveIcon: 'bg-fuchsia-600',
-    deepDiveAudio: 'bg-fuchsia-500',
-    deepDiveLoader: 'text-fuchsia-400',
-    deepDiveTip: 'bg-fuchsia-50 border-fuchsia-100 text-fuchsia-900/80 dark:bg-fuchsia-400/5 dark:border-fuchsia-400/10 dark:text-fuchsia-100/80',
-    deepDiveTipIcon: 'text-fuchsia-600 dark:text-fuchsia-400',
-    chatUser: 'bg-fuchsia-600',
-    chatUserBubble: 'bg-fuchsia-600/10 text-fuchsia-900 dark:bg-fuchsia-600/20 dark:text-fuchsia-50',
-    resultCircle: 'bg-fuchsia-100 dark:bg-fuchsia-900/20 text-fuchsia-600 dark:text-fuchsia-400',
-    bgLight: 'bg-fuchsia-50',
-    bgLightDark: 'dark:bg-fuchsia-900/20',
-    borderLight: 'border-fuchsia-600',
-    borderLightDark: 'dark:border-fuchsia-500',
-    shadowLight: 'shadow-fuchsia-500/20',
-    shadowDark: 'dark:shadow-fuchsia-900/20',
-    darkPrimary: 'bg-fuchsia-600',
-    contrastText: 'text-white'
+    primary: "bg-fuchsia-600",
+    primaryHover: "hover:bg-fuchsia-700",
+    secondary: "bg-fuchsia-500",
+    secondaryHover: "hover:bg-fuchsia-500",
+    text: "text-fuchsia-600",
+    textDark: "dark:text-fuchsia-500",
+    textLight: "text-fuchsia-700",
+    textLightDark: "dark:text-fuchsia-400",
+    border: "border-fuchsia-600",
+    borderDark: "dark:border-fuchsia-500",
+    bg: "bg-fuchsia-50",
+    bgDark: "dark:bg-fuchsia-900/20",
+    accent: "accent-fuchsia-600",
+    accentDark: "dark:accent-fuchsia-500",
+    ring: "focus:ring-fuchsia-500/10",
+    focusBorder: "focus:border-fuchsia-500",
+    gradientFrom: "from-fuchsia-500",
+    gradientTo: "to-fuchsia-700",
+    shadow: "shadow-fuchsia-500/20",
+    shadowLg: "shadow-fuchsia-500/30",
+    shadowXl: "shadow-fuchsia-200",
+    shadowXlDark: "dark:shadow-fuchsia-900/20",
+    prose: "prose-fuchsia",
+    selection: "selection:bg-fuchsia-100 dark:selection:bg-fuchsia-900/30",
+    icon: "text-fuchsia-600 dark:text-fuchsia-500",
+    difficultyEasy:
+      "bg-fuchsia-100 dark:bg-fuchsia-900/20 text-fuchsia-700 dark:text-fuchsia-400",
+    deepDiveBg: "bg-fuchsia-600/10",
+    deepDiveIcon: "bg-fuchsia-600",
+    deepDiveAudio: "bg-fuchsia-500",
+    deepDiveLoader: "text-fuchsia-400",
+    deepDiveTip:
+      "bg-fuchsia-50 border-fuchsia-100 text-fuchsia-900/80 dark:bg-fuchsia-400/5 dark:border-fuchsia-400/10 dark:text-fuchsia-100/80",
+    deepDiveTipIcon: "text-fuchsia-600 dark:text-fuchsia-400",
+    chatUser: "bg-fuchsia-600",
+    chatUserBubble:
+      "bg-fuchsia-600/10 text-fuchsia-900 dark:bg-fuchsia-600/20 dark:text-fuchsia-50",
+    resultCircle:
+      "bg-fuchsia-100 dark:bg-fuchsia-900/20 text-fuchsia-600 dark:text-fuchsia-400",
+    bgLight: "bg-fuchsia-50",
+    bgLightDark: "dark:bg-fuchsia-900/20",
+    borderLight: "border-fuchsia-600",
+    borderLightDark: "dark:border-fuchsia-500",
+    shadowLight: "shadow-fuchsia-500/20",
+    shadowDark: "dark:shadow-fuchsia-900/20",
+    darkPrimary: "bg-fuchsia-600",
+    contrastText: "text-white",
   },
   indigo: {
-    primary: 'bg-indigo-600',
-    primaryHover: 'hover:bg-indigo-700',
-    secondary: 'bg-indigo-500',
-    secondaryHover: 'hover:bg-indigo-500',
-    text: 'text-indigo-600',
-    textDark: 'dark:text-indigo-500',
-    textLight: 'text-indigo-700',
-    textLightDark: 'dark:text-indigo-400',
-    border: 'border-indigo-600',
-    borderDark: 'dark:border-indigo-500',
-    bg: 'bg-indigo-50',
-    bgDark: 'dark:bg-indigo-900/20',
-    accent: 'accent-indigo-600',
-    accentDark: 'dark:accent-indigo-500',
-    ring: 'focus:ring-indigo-500/10',
-    focusBorder: 'focus:border-indigo-500',
-    gradientFrom: 'from-indigo-500',
-    gradientTo: 'to-indigo-700',
-    shadow: 'shadow-indigo-500/20',
-    shadowLg: 'shadow-indigo-500/30',
-    shadowXl: 'shadow-indigo-200',
-    shadowXlDark: 'dark:shadow-indigo-900/20',
-    prose: 'prose-indigo',
-    selection: 'selection:bg-indigo-100 dark:selection:bg-indigo-900/30',
-    icon: 'text-indigo-600 dark:text-indigo-500',
-    difficultyEasy: 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400',
-    deepDiveBg: 'bg-indigo-600/10',
-    deepDiveIcon: 'bg-indigo-600',
-    deepDiveAudio: 'bg-indigo-500',
-    deepDiveLoader: 'text-indigo-400',
-    deepDiveTip: 'bg-indigo-50 border-indigo-100 text-indigo-900/80 dark:bg-indigo-400/5 dark:border-indigo-400/10 dark:text-indigo-100/80',
-    deepDiveTipIcon: 'text-indigo-600 dark:text-indigo-400',
-    chatUser: 'bg-indigo-600',
-    chatUserBubble: 'bg-indigo-600/10 text-indigo-900 dark:bg-indigo-600/20 dark:text-indigo-50',
-    resultCircle: 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400',
-    bgLight: 'bg-indigo-50',
-    bgLightDark: 'dark:bg-indigo-900/20',
-    borderLight: 'border-indigo-600',
-    borderLightDark: 'dark:border-indigo-500',
-    shadowLight: 'shadow-indigo-500/20',
-    shadowDark: 'dark:shadow-indigo-900/20',
-    darkPrimary: 'bg-indigo-600',
-    contrastText: 'text-white'
+    primary: "bg-indigo-600",
+    primaryHover: "hover:bg-indigo-700",
+    secondary: "bg-indigo-500",
+    secondaryHover: "hover:bg-indigo-500",
+    text: "text-indigo-600",
+    textDark: "dark:text-indigo-500",
+    textLight: "text-indigo-700",
+    textLightDark: "dark:text-indigo-400",
+    border: "border-indigo-600",
+    borderDark: "dark:border-indigo-500",
+    bg: "bg-indigo-50",
+    bgDark: "dark:bg-indigo-900/20",
+    accent: "accent-indigo-600",
+    accentDark: "dark:accent-indigo-500",
+    ring: "focus:ring-indigo-500/10",
+    focusBorder: "focus:border-indigo-500",
+    gradientFrom: "from-indigo-500",
+    gradientTo: "to-indigo-700",
+    shadow: "shadow-indigo-500/20",
+    shadowLg: "shadow-indigo-500/30",
+    shadowXl: "shadow-indigo-200",
+    shadowXlDark: "dark:shadow-indigo-900/20",
+    prose: "prose-indigo",
+    selection: "selection:bg-indigo-100 dark:selection:bg-indigo-900/30",
+    icon: "text-indigo-600 dark:text-indigo-500",
+    difficultyEasy:
+      "bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400",
+    deepDiveBg: "bg-indigo-600/10",
+    deepDiveIcon: "bg-indigo-600",
+    deepDiveAudio: "bg-indigo-500",
+    deepDiveLoader: "text-indigo-400",
+    deepDiveTip:
+      "bg-indigo-50 border-indigo-100 text-indigo-900/80 dark:bg-indigo-400/5 dark:border-indigo-400/10 dark:text-indigo-100/80",
+    deepDiveTipIcon: "text-indigo-600 dark:text-indigo-400",
+    chatUser: "bg-indigo-600",
+    chatUserBubble:
+      "bg-indigo-600/10 text-indigo-900 dark:bg-indigo-600/20 dark:text-indigo-50",
+    resultCircle:
+      "bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400",
+    bgLight: "bg-indigo-50",
+    bgLightDark: "dark:bg-indigo-900/20",
+    borderLight: "border-indigo-600",
+    borderLightDark: "dark:border-indigo-500",
+    shadowLight: "shadow-indigo-500/20",
+    shadowDark: "dark:shadow-indigo-900/20",
+    darkPrimary: "bg-indigo-600",
+    contrastText: "text-white",
   },
   black: {
-    primary: 'bg-slate-900',
-    primaryHover: 'hover:bg-black',
-    secondary: 'bg-slate-800',
-    secondaryHover: 'hover:bg-slate-800',
-    text: 'text-slate-900',
-    textDark: 'dark:text-white',
-    textLight: 'text-slate-700',
-    textLightDark: 'dark:text-slate-300',
-    border: 'border-slate-900',
-    borderDark: 'dark:border-white',
-    bg: 'bg-slate-50',
-    bgDark: 'dark:bg-slate-900/20',
-    accent: 'accent-slate-900',
-    accentDark: 'dark:accent-white',
-    ring: 'focus:ring-slate-800/10',
-    focusBorder: 'focus:border-slate-800',
-    gradientFrom: 'from-slate-800',
-    gradientTo: 'to-black',
-    shadow: 'shadow-slate-900/20',
-    shadowLg: 'shadow-slate-900/30',
-    shadowXl: 'shadow-slate-200',
-    shadowXlDark: 'dark:shadow-slate-900/20',
-    prose: 'prose-slate',
-    selection: 'selection:bg-slate-200 dark:selection:bg-slate-800',
-    icon: 'text-slate-900 dark:text-white',
-    difficultyEasy: 'bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200',
-    deepDiveBg: 'bg-slate-900/10',
-    deepDiveIcon: 'bg-slate-900',
-    deepDiveAudio: 'bg-slate-800',
-    deepDiveLoader: 'text-slate-400',
-    deepDiveTip: 'bg-slate-50 border-slate-200 text-slate-900/80 dark:bg-slate-400/5 dark:border-slate-400/10 dark:text-slate-100/80',
-    deepDiveTipIcon: 'text-slate-900 dark:text-white',
-    chatUser: 'bg-slate-900',
-    chatUserBubble: 'bg-slate-900/10 text-slate-900 dark:bg-slate-900/20 dark:text-white',
-    resultCircle: 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white',
-    bgLight: 'bg-slate-50',
-    bgLightDark: 'dark:bg-slate-900/20',
-    borderLight: 'border-slate-900',
-    borderLightDark: 'dark:border-white',
-    shadowLight: 'shadow-slate-900/20',
-    shadowDark: 'dark:shadow-slate-900/20',
-    darkPrimary: 'bg-slate-900',
-    contrastText: 'text-white'
+    primary: "bg-slate-900",
+    primaryHover: "hover:bg-black",
+    secondary: "bg-slate-800",
+    secondaryHover: "hover:bg-slate-800",
+    text: "text-slate-900",
+    textDark: "dark:text-white",
+    textLight: "text-slate-700",
+    textLightDark: "dark:text-slate-300",
+    border: "border-slate-900",
+    borderDark: "dark:border-white",
+    bg: "bg-slate-50",
+    bgDark: "dark:bg-slate-900/20",
+    accent: "accent-slate-900",
+    accentDark: "dark:accent-white",
+    ring: "focus:ring-slate-800/10",
+    focusBorder: "focus:border-slate-800",
+    gradientFrom: "from-slate-800",
+    gradientTo: "to-black",
+    shadow: "shadow-slate-900/20",
+    shadowLg: "shadow-slate-900/30",
+    shadowXl: "shadow-slate-200",
+    shadowXlDark: "dark:shadow-slate-900/20",
+    prose: "prose-slate",
+    selection: "selection:bg-slate-200 dark:selection:bg-slate-800",
+    icon: "text-slate-900 dark:text-white",
+    difficultyEasy:
+      "bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200",
+    deepDiveBg: "bg-slate-900/10",
+    deepDiveIcon: "bg-slate-900",
+    deepDiveAudio: "bg-slate-800",
+    deepDiveLoader: "text-slate-400",
+    deepDiveTip:
+      "bg-slate-50 border-slate-200 text-slate-900/80 dark:bg-slate-400/5 dark:border-slate-400/10 dark:text-slate-100/80",
+    deepDiveTipIcon: "text-slate-900 dark:text-white",
+    chatUser: "bg-slate-900",
+    chatUserBubble:
+      "bg-slate-900/10 text-slate-900 dark:bg-slate-900/20 dark:text-white",
+    resultCircle:
+      "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white",
+    bgLight: "bg-slate-50",
+    bgLightDark: "dark:bg-slate-900/20",
+    borderLight: "border-slate-900",
+    borderLightDark: "dark:border-white",
+    shadowLight: "shadow-slate-900/20",
+    shadowDark: "dark:shadow-slate-900/20",
+    darkPrimary: "bg-slate-900",
+    contrastText: "text-white",
   },
   custom: {
-    primary: 'bg-[var(--theme-primary)]',
-    primaryHover: 'hover:opacity-90',
-    secondary: 'bg-[var(--theme-secondary)]',
-    secondaryHover: 'hover:opacity-90',
-    text: 'text-[var(--theme-primary)]',
-    textDark: 'dark:text-[var(--theme-primary)]',
-    textLight: 'text-[var(--theme-primary)]',
-    textLightDark: 'dark:text-[var(--theme-primary)]',
-    border: 'border-[var(--theme-primary)]',
-    borderDark: 'dark:border-[var(--theme-primary)]',
-    bg: 'bg-[var(--theme-bg)]',
-    bgDark: 'dark:bg-[var(--theme-bg-dark)]',
-    accent: 'accent-[var(--theme-primary)]',
-    accentDark: 'dark:accent-[var(--theme-primary)]',
-    ring: 'focus:ring-[var(--theme-primary)]/10',
-    focusBorder: 'focus:border-[var(--theme-primary)]',
-    gradientFrom: 'from-[var(--theme-primary)]',
-    gradientTo: 'to-[var(--theme-secondary)]',
-    shadow: 'shadow-[var(--theme-primary)]/20',
-    shadowLg: 'shadow-[var(--theme-primary)]/30',
-    shadowXl: 'shadow-[var(--theme-primary)]/20',
-    shadowXlDark: 'dark:shadow-[var(--theme-primary)]/20',
-    prose: 'prose-slate',
-    selection: 'selection:bg-[var(--theme-primary)]/10',
-    icon: 'text-[var(--theme-primary)]',
-    difficultyEasy: 'bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]',
-    deepDiveBg: 'bg-[var(--theme-primary)]/10',
-    deepDiveIcon: 'bg-[var(--theme-primary)]',
-    deepDiveAudio: 'bg-[var(--theme-primary)]',
-    deepDiveLoader: 'text-[var(--theme-primary)]',
-    deepDiveTip: 'bg-[var(--theme-bg)] border-[var(--theme-primary)]/20 text-[var(--theme-primary)]',
-    deepDiveTipIcon: 'text-[var(--theme-primary)]',
-    chatUser: 'bg-[var(--theme-primary)]',
-    chatUserBubble: 'bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]',
-    resultCircle: 'bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]',
-    bgLight: 'bg-[var(--theme-bg)]',
-    bgLightDark: 'dark:bg-[var(--theme-bg-dark)]',
-    borderLight: 'border-[var(--theme-primary)]',
-    borderLightDark: 'dark:border-[var(--theme-primary)]',
-    shadowLight: 'shadow-[var(--theme-primary)]/20',
-    shadowDark: 'dark:shadow-[var(--theme-primary)]/20',
-    darkPrimary: 'bg-[var(--theme-primary)]',
-    contrastText: 'text-white'
-  }
+    primary: "bg-[var(--theme-primary)]",
+    primaryHover: "hover:opacity-90",
+    secondary: "bg-[var(--theme-secondary)]",
+    secondaryHover: "hover:opacity-90",
+    text: "text-[var(--theme-primary)]",
+    textDark: "dark:text-[var(--theme-primary)]",
+    textLight: "text-[var(--theme-primary)]",
+    textLightDark: "dark:text-[var(--theme-primary)]",
+    border: "border-[var(--theme-primary)]",
+    borderDark: "dark:border-[var(--theme-primary)]",
+    bg: "bg-[var(--theme-bg)]",
+    bgDark: "dark:bg-[var(--theme-bg-dark)]",
+    accent: "accent-[var(--theme-primary)]",
+    accentDark: "dark:accent-[var(--theme-primary)]",
+    ring: "focus:ring-[var(--theme-primary)]/10",
+    focusBorder: "focus:border-[var(--theme-primary)]",
+    gradientFrom: "from-[var(--theme-primary)]",
+    gradientTo: "to-[var(--theme-secondary)]",
+    shadow: "shadow-[var(--theme-primary)]/20",
+    shadowLg: "shadow-[var(--theme-primary)]/30",
+    shadowXl: "shadow-[var(--theme-primary)]/20",
+    shadowXlDark: "dark:shadow-[var(--theme-primary)]/20",
+    prose: "prose-slate",
+    selection: "selection:bg-[var(--theme-primary)]/10",
+    icon: "text-[var(--theme-primary)]",
+    difficultyEasy: "bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]",
+    deepDiveBg: "bg-[var(--theme-primary)]/10",
+    deepDiveIcon: "bg-[var(--theme-primary)]",
+    deepDiveAudio: "bg-[var(--theme-primary)]",
+    deepDiveLoader: "text-[var(--theme-primary)]",
+    deepDiveTip:
+      "bg-[var(--theme-bg)] border-[var(--theme-primary)]/20 text-[var(--theme-primary)]",
+    deepDiveTipIcon: "text-[var(--theme-primary)]",
+    chatUser: "bg-[var(--theme-primary)]",
+    chatUserBubble: "bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]",
+    resultCircle: "bg-[var(--theme-primary)]/10 text-[var(--theme-primary)]",
+    bgLight: "bg-[var(--theme-bg)]",
+    bgLightDark: "dark:bg-[var(--theme-bg-dark)]",
+    borderLight: "border-[var(--theme-primary)]",
+    borderLightDark: "dark:border-[var(--theme-primary)]",
+    shadowLight: "shadow-[var(--theme-primary)]/20",
+    shadowDark: "dark:shadow-[var(--theme-primary)]/20",
+    darkPrimary: "bg-[var(--theme-primary)]",
+    contrastText: "text-white",
+  },
 };
 
 interface RevisionTask {
@@ -862,65 +976,74 @@ interface QuizResult {
   revisionTasks?: string[]; // IDs of RevisionTask
 }
 
-const MultiDateCalendar = ({ 
-  selectedDates, 
-  onToggleDate, 
-  onApply, 
+const MultiDateCalendar = ({
+  selectedDates,
+  onToggleDate,
+  onApply,
   onCancel,
-  theme 
-}: { 
-  selectedDates: string[], 
-  onToggleDate: (date: string) => void, 
-  onApply: () => void,
-  onCancel: () => void,
-  theme: any 
+  theme,
+}: {
+  selectedDates: string[];
+  onToggleDate: (date: string) => void;
+  onApply: () => void;
+  onCancel: () => void;
+  theme: any;
 }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  
+
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(monthStart);
   const startDate = startOfWeek(monthStart);
   const endDate = endOfWeek(monthEnd);
-  
+
   const calendarDays = eachDayOfInterval({
     start: startDate,
     end: endDate,
   });
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 10, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 10, scale: 0.95 }}
       className="absolute top-full right-0 mt-2 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-black/10 dark:border-white/10 p-4 w-72 z-[100]"
     >
       <div className="flex items-center justify-between mb-4">
-        <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors">
+        <button
+          onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+          className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors"
+        >
           <ChevronLeft size={18} className="dark:text-white" />
         </button>
         <h3 className="font-bold text-sm dark:text-white capitalize">
-          {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+          {format(currentMonth, "MMMM yyyy", { locale: ptBR })}
         </h3>
-        <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors">
+        <button
+          onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+          className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors"
+        >
           <ChevronRight size={18} className="dark:text-white" />
         </button>
       </div>
-      
+
       <div className="grid grid-cols-7 gap-1 mb-2">
-        {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, i) => (
-          <div key={`${day}-${i}`} className="text-center text-[10px] font-bold text-black/40 dark:text-slate-500 py-1">
+        {["D", "S", "T", "Q", "Q", "S", "S"].map((day, i) => (
+          <div
+            key={`${day}-${i}`}
+            className="text-center text-[10px] font-bold text-black/40 dark:text-slate-500 py-1"
+          >
             {day}
           </div>
         ))}
       </div>
-      
+
       <div className="grid grid-cols-7 gap-1">
-        {calendarDays.map(day => {
-          const dateStr = format(day, 'yyyy-MM-dd');
+        {calendarDays.map((day) => {
+          const dateStr = format(day, "yyyy-MM-dd");
           const isSelected = selectedDates.includes(dateStr);
           const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
           const isTodayDate = isToday(day);
-          
+
           return (
             <button
               key={dateStr}
@@ -928,29 +1051,39 @@ const MultiDateCalendar = ({
               className={cn(
                 "h-8 w-8 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center relative",
                 !isCurrentMonth && "opacity-20",
-                isSelected 
-                  ? cn(theme.primary, theme.contrastText, "shadow-md scale-110 z-10") 
+                isSelected
+                  ? cn(
+                      theme.primary,
+                      theme.contrastText,
+                      "shadow-md scale-110 z-10",
+                    )
                   : "hover:bg-black/5 dark:hover:bg-white/5 dark:text-white",
-                isTodayDate && !isSelected && "border border-blue-500/50"
+                isTodayDate && !isSelected && "border border-blue-500/50",
               )}
             >
-              {format(day, 'd')}
-              {isTodayDate && !isSelected && <div className="absolute bottom-1 w-1 h-1 bg-blue-500 rounded-full" />}
+              {format(day, "d")}
+              {isTodayDate && !isSelected && (
+                <div className="absolute bottom-1 w-1 h-1 bg-blue-500 rounded-full" />
+              )}
             </button>
           );
         })}
       </div>
-      
+
       <div className="flex items-center gap-2 mt-4 pt-4 border-t border-black/5 dark:border-white/5">
-        <button 
+        <button
           onClick={onCancel}
           className="flex-1 py-2 rounded-xl text-[10px] font-bold hover:bg-black/5 dark:hover:bg-white/5 dark:text-white transition-all"
         >
           Cancelar
         </button>
-        <button 
+        <button
           onClick={onApply}
-          className={cn("flex-1 py-2 rounded-xl text-[10px] font-bold transition-all shadow-lg", theme.primary, theme.contrastText)}
+          className={cn(
+            "flex-1 py-2 rounded-xl text-[10px] font-bold transition-all shadow-lg",
+            theme.primary,
+            theme.contrastText,
+          )}
         >
           Filtrar ({selectedDates.length})
         </button>
@@ -963,129 +1096,177 @@ const NEURO_INSIGHTS = [
   {
     author: "Andrew Huberman",
     role: "Neurocientista de Stanford",
-    content: "A visualização de um ponto fixo por 30-60 segundos antes de estudar aumenta a liberação de norepinefrina, preparando o cérebro para o foco profundo.",
+    content:
+      "A visualização de um ponto fixo por 30-60 segundos antes de estudar aumenta a liberação de norepinefrina, preparando o cérebro para o foco profundo.",
     tip: "Dica Active: Antes de começar, olhe para um ponto na parede e respire fundo. Seu cérebro vai 'entrar no modo' foco.",
-    practicalExample: "Imagine que você vai começar a estudar Matemática. Antes de abrir o livro, foque no canto da mesa ou em um ponto na parede. Não desvie o olhar por 45 segundos. Sinta sua mente 'afunilando' para uma tarefa única.",
-    scientificBasis: "Isso ativa o sistema de alerta do tronco encefálico (Locus Coeruleus), que dispara noradrenalina para o córtex pré-frontal, aumentando a acuidade visual e mental."
+    practicalExample:
+      "Imagine que você vai começar a estudar Matemática. Antes de abrir o livro, foque no canto da mesa ou em um ponto na parede. Não desvie o olhar por 45 segundos. Sinta sua mente 'afunilando' para uma tarefa única.",
+    scientificBasis:
+      "Isso ativa o sistema de alerta do tronco encefálico (Locus Coeruleus), que dispara noradrenalina para o córtex pré-frontal, aumentando a acuidade visual e mental.",
   },
   {
     author: "Carol Dweck",
     role: "Psicóloga de Stanford",
-    content: "O 'Growth Mindset' (Mentalidade de Crescimento) é a crença de que a inteligência pode ser desenvolvida através do esforço e da prática.",
+    content:
+      "O 'Growth Mindset' (Mentalidade de Crescimento) é a crença de que a inteligência pode ser desenvolvida através do esforço e da prática.",
     tip: "Dica Active: Viu um erro no quiz? Diga: 'Ainda não aprendi isso', em vez de 'Eu não sei isso'.",
-    practicalExample: "Ao errar uma questão difícil, em vez de fechar o app frustrado, anote o conceito que você errou em um post-it e diga em voz alta: 'Meu cérebro está criando novas conexões agora para resolver isso na próxima'.",
-    scientificBasis: "A mentalidade de crescimento reduz a resposta de ansiedade do cérebro ao erro (ERN - Error-Related Negativity), permitindo que você aprenda com a falha em vez de ser paralisado por ela."
+    practicalExample:
+      "Ao errar uma questão difícil, em vez de fechar o app frustrado, anote o conceito que você errou em um post-it e diga em voz alta: 'Meu cérebro está criando novas conexões agora para resolver isso na próxima'.",
+    scientificBasis:
+      "A mentalidade de crescimento reduz a resposta de ansiedade do cérebro ao erro (ERN - Error-Related Negativity), permitindo que você aprenda com a falha em vez de ser paralisado por ela.",
   },
   {
     author: "Barbara Oakley",
     role: "Autora de 'Learning How to Learn'",
-    content: "O cérebro tem dois modos: focado e difuso. Alternar entre eles é essencial para resolver problemas complexos.",
+    content:
+      "O cérebro tem dois modos: focado e difuso. Alternar entre eles é essencial para resolver problemas complexos.",
     tip: "Dica Active: Use a técnica Pomodoro. 25 min de foco total e 5 min de descanso para o modo difuso processar os dados.",
-    practicalExample: "Se estiver travado em um problema de lógica, pare tudo. Vá lavar louça ou caminhar por 5 minutos sem pensar em nada. Frequentemente, a solução surgirá 'do nada' enquanto você não está focado.",
-    scientificBasis: "O 'Modo Difuso' permite que o cérebro faça conexões distantes em regiões neurais que não estão ativas durante o foco intenso, facilitando o 'insight' e a criatividade."
+    practicalExample:
+      "Se estiver travado em um problema de lógica, pare tudo. Vá lavar louça ou caminhar por 5 minutos sem pensar em nada. Frequentemente, a solução surgirá 'do nada' enquanto você não está focado.",
+    scientificBasis:
+      "O 'Modo Difuso' permite que o cérebro faça conexões distantes em regiões neurais que não estão ativas durante o foco intenso, facilitando o 'insight' e a criatividade.",
   },
   {
     author: "Santiago Ramón y Cajal",
     role: "Pai da Neurociência Moderna",
-    content: "Todo homem pode ser, se o desejar, escultor de seu próprio cérebro.",
+    content:
+      "Todo homem pode ser, se o desejar, escultor de seu próprio cérebro.",
     tip: "Dica Active: Cada questão respondida é um golpe de cinzel na escultura do seu conhecimento.",
-    practicalExample: "Pense em cada sessão de 30 minutos como uma sessão de academia para neurônios. Se você estuda consistentemente, você está fisicamente alterando a fiação da sua cabeça para ser mais inteligente naquela matéria.",
-    scientificBasis: "Neuroplasticidade: o ato de aprender e praticar causa alterações estruturais nas sinapses (LTP - Long Term Potentiation), tornando as vias neurais mais rápidas e eficientes."
+    practicalExample:
+      "Pense em cada sessão de 30 minutos como uma sessão de academia para neurônios. Se você estuda consistentemente, você está fisicamente alterando a fiação da sua cabeça para ser mais inteligente naquela matéria.",
+    scientificBasis:
+      "Neuroplasticidade: o ato de aprender e praticar causa alterações estruturais nas sinapses (LTP - Long Term Potentiation), tornando as vias neurais mais rápidas e eficientes.",
   },
   {
     author: "Eric Kandel",
     role: "Prêmio Nobel de Medicina",
-    content: "A aprendizagem muda a estrutura física do cérebro. Cada novo fato fortalece conexões sinápticas existentes.",
+    content:
+      "A aprendizagem muda a estrutura física do cérebro. Cada novo fato fortalece conexões sinápticas existentes.",
     tip: "Dica Active: Ao revisar, você está literalmente 'engrossando' as estradas de informação no seu cérebro.",
-    practicalExample: "Ao fazer um quiz sobre um assunto que você já viu semana passada, você está pavimentando uma estrada de terra e transformando-a em uma rodovia de alta velocidade na sua memória.",
-    scientificBasis: "A síntese de novas proteínas nos neurônios é necessária para converter a memória de curto prazo (lábil) em memória de longo prazo (estável)."
+    practicalExample:
+      "Ao fazer um quiz sobre um assunto que você já viu semana passada, você está pavimentando uma estrada de terra e transformando-a em uma rodovia de alta velocidade na sua memória.",
+    scientificBasis:
+      "A síntese de novas proteínas nos neurônios é necessária para converter a memória de curto prazo (lábil) em memória de longo prazo (estável).",
   },
   {
     author: "Matthew Walker",
     role: "Especialista em Sono",
-    content: "O sono é o filtro que consolida as memórias. É à noite que o cérebro decide o que manter do estudo do dia.",
+    content:
+      "O sono é o filtro que consolida as memórias. É à noite que o cérebro decide o que manter do estudo do dia.",
     tip: "Dica Active: Nunca sacrifique o sono por horas extras de estudo. Seu cérebro precisa da noite para 'salvar o arquivo'.",
-    practicalExample: "Se você estudou muito um tópico difícil hoje, durma pelo menos 7-8 horas. No dia seguinte, você descobrirá que entende o assunto muito melhor do que quando foi dormir.",
-    scientificBasis: "Durante o sono REM e NREM, o hipocampo 'reproduz' as informações aprendidas durante o dia para o neocórtex, fixando o conhecimento de forma permanente."
+    practicalExample:
+      "Se você estudou muito um tópico difícil hoje, durma pelo menos 7-8 horas. No dia seguinte, você descobrirá que entende o assunto muito melhor do que quando foi dormir.",
+    scientificBasis:
+      "Durante o sono REM e NREM, o hipocampo 'reproduz' as informações aprendidas durante o dia para o neocórtex, fixando o conhecimento de forma permanente.",
   },
   {
     author: "James Clear",
     role: "Autor de Hábitos Atômicos",
-    content: "A consistência supera a intensidade. Melhor estudar 15 minutos todo dia do que 5 horas em um único dia.",
+    content:
+      "A consistência supera a intensidade. Melhor estudar 15 minutos todo dia do que 5 horas em um único dia.",
     tip: "Dica Active: Mantenha sua 'streak' ativa aqui na plataforma. Pequenos passos diários levam a grandes destinos.",
-    practicalExample: "Em um dia corrido, não pule o estudo. Faça apenas um quiz de 5 minutos. O objetivo não é o conteúdo, mas manter o hábito vivo no seu sistema nervoso.",
-    scientificBasis: "Hábitos são caminhos neurais automatizados nos gânglios da base. Repetições pequenas e frequentes exigem menos força de vontade do córtex pré-frontal ao longo do tempo."
+    practicalExample:
+      "Em um dia corrido, não pule o estudo. Faça apenas um quiz de 5 minutos. O objetivo não é o conteúdo, mas manter o hábito vivo no seu sistema nervoso.",
+    scientificBasis:
+      "Hábitos são caminhos neurais automatizados nos gânglios da base. Repetições pequenas e frequentes exigem menos força de vontade do córtex pré-frontal ao longo do tempo.",
   },
   {
     author: "Stanislas Dehaene",
     role: "Neurocientista Cognitivo",
-    content: "A atenção é o funil do aprendizado. Sem foco seletivo, o cérebro descarta a informação como ruído.",
+    content:
+      "A atenção é o funil do aprendizado. Sem foco seletivo, o cérebro descarta a informação como ruído.",
     tip: "Dica Active: Silencie o celular. Um único bip pode custar 20 minutos para você retomar o estado de 'flow'.",
-    practicalExample: "Ao entrar no app para estudar, coloque o celular em outro cômodo. O simples fato de saber que o celular está perto (mesmo desligado) consome recursos de atenção do seu cérebro.",
-    scientificBasis: "A 'Carga Cognitiva' é limitada. Distrações competem pelo espaço na memória de trabalho, impedindo que o conteúdo novo seja processado profundamente."
+    practicalExample:
+      "Ao entrar no app para estudar, coloque o celular em outro cômodo. O simples fato de saber que o celular está perto (mesmo desligado) consome recursos de atenção do seu cérebro.",
+    scientificBasis:
+      "A 'Carga Cognitiva' é limitada. Distrações competem pelo espaço na memória de trabalho, impedindo que o conteúdo novo seja processado profundamente.",
   },
   {
     author: "Andrew Huberman",
     role: "Neurocientista de Stanford",
-    content: "Celebrar pequenas vitórias libera dopamina, um combustível químico que reduz a sensação de fadiga mental.",
+    content:
+      "Celebrar pequenas vitórias libera dopamina, um combustível químico que reduz a sensação de fadiga mental.",
     tip: "Dica Active: Terminou uma aula difícil? Comemore! Isso sinaliza ao cérebro que o esforço vale a pena.",
-    practicalExample: "Ao acertar uma sequência de questões, de um pequeno 'soco no ar' ou diga 'isso!'. Esse pequeno gesto físico dispara dopamina, que te dará energia para a próxima rodada.",
-    scientificBasis: "A dopamina não é apenas sobre prazer, é sobre motivação e busca. Ela 'limpa' a adenosina (que causa sono/fadiga) e mantém você em alerta."
+    practicalExample:
+      "Ao acertar uma sequência de questões, de um pequeno 'soco no ar' ou diga 'isso!'. Esse pequeno gesto físico dispara dopamina, que te dará energia para a próxima rodada.",
+    scientificBasis:
+      "A dopamina não é apenas sobre prazer, é sobre motivação e busca. Ela 'limpa' a adenosina (que causa sono/fadiga) e mantém você em alerta.",
   },
   {
     author: "Barbara Oakley",
     role: "Especialista em Aprendizagem",
-    content: "O 'Recall Ativo' - tentar lembrar da informação sem olhar - é a técnica de estudo mais eficiente que existe.",
+    content:
+      "O 'Recall Ativo' - tentar lembrar da informação sem olhar - é a técnica de estudo mais eficiente que existe.",
     tip: "Dica Active: Após ler um material, feche os olhos e tente explicar o que aprendeu em voz alta.",
-    practicalExample: "Depois de gerar um quiz e terminar, não vá direto para o próximo. Tente escrever em um papel 3 coisas principais que você aprendeu sem consultar nada.",
-    scientificBasis: "O ato de 'puxar' a informação da memória fortalece o traço mnemônico muito mais do que a simples releitura (que gera uma falsa ilusão de competência)."
+    practicalExample:
+      "Depois de gerar um quiz e terminar, não vá direto para o próximo. Tente escrever em um papel 3 coisas principais que você aprendeu sem consultar nada.",
+    scientificBasis:
+      "O ato de 'puxar' a informação da memória fortalece o traço mnemônico muito mais do que a simples releitura (que gera uma falsa ilusão de competência).",
   },
   {
     author: "David Eagleman",
     role: "Neurocientista e Escritor",
-    content: "O cérebro é uma rede dinâmica que se reconfigura baseando-se no que você foca.",
+    content:
+      "O cérebro é uma rede dinâmica que se reconfigura baseando-se no que você foca.",
     tip: "Dica Active: Direcione sua curiosidade. Perguntar 'por quê?' abre portas sinápticas que a simples leitura fecha.",
-    practicalExample: "Sempre que ler um conceito novo, pergunte ao chat da Experte IA: 'Como isso se aplica na vida real?'. A curiosidade prepara o hipocampo (centro da memória) para absorver dados.",
-    scientificBasis: "A curiosidade ativa o sistema de recompensa dopaminérgico antes mesmo do aprendizado ocorrer, tornando a memorização quase automática."
+    practicalExample:
+      "Sempre que ler um conceito novo, pergunte ao chat da Experte IA: 'Como isso se aplica na vida real?'. A curiosidade prepara o hipocampo (centro da memória) para absorver dados.",
+    scientificBasis:
+      "A curiosidade ativa o sistema de recompensa dopaminérgico antes mesmo do aprendizado ocorrer, tornando a memorização quase automática.",
   },
   {
     author: "Antonio Damasio",
     role: "Neurocientista",
-    content: "Sentimentos de satisfação com o progresso são essenciais para manter a motivação de longo prazo.",
+    content:
+      "Sentimentos de satisfação com o progresso são essenciais para manter a motivação de longo prazo.",
     tip: "Dica Active: Olhe seu gráfico de desempenho hoje. Veja como você evoluiu desde o primeiro dia.",
-    practicalExample: "Uma vez por semana, abra seu Dashboard e compare seus acertos atuais com os da primeira semana. O cérebro precisa de evidências visuais de progresso para continuar investindo energia.",
-    scientificBasis: "O sistema límbico e o córtex pré-frontal trabalham juntos. Emoções positivas sobre o desempenho sinalizam que a tarefa é segura e valiosa, mantendo o engajamento."
+    practicalExample:
+      "Uma vez por semana, abra seu Dashboard e compare seus acertos atuais com os da primeira semana. O cérebro precisa de evidências visuais de progresso para continuar investindo energia.",
+    scientificBasis:
+      "O sistema límbico e o córtex pré-frontal trabalham juntos. Emoções positivas sobre o desempenho sinalizam que a tarefa é segura e valiosa, mantendo o engajamento.",
   },
   {
     author: "Andrew Huberman",
     role: "Neurocientista de Stanford",
-    content: "A luz solar nos olhos logo pela manhã regula o ciclo circadiano, melhorando o foco e a claridade mental durante todo o dia de estudo.",
+    content:
+      "A luz solar nos olhos logo pela manhã regula o ciclo circadiano, melhorando o foco e a claridade mental durante todo o dia de estudo.",
     tip: "Dica Active: Tente estudar perto de uma janela ou saia 5 min ao sol antes de começar a primeira sessão.",
-    practicalExample: "Assim que acordar, abra a janela. A luz natural (mesmo em dias nublados) ativa o 'temporizador' do seu cérebro, garantindo que você tenha foco ao meio-dia e sono à noite.",
-    scientificBasis: "A luz de alta intensidade ativa as células ganglionares da retina, que enviam sinais ao Núcleo Supraquiasmático (NSQ) para suprimir a melatonina e elevar o cortisol matinal."
+    practicalExample:
+      "Assim que acordar, abra a janela. A luz natural (mesmo em dias nublados) ativa o 'temporizador' do seu cérebro, garantindo que você tenha foco ao meio-dia e sono à noite.",
+    scientificBasis:
+      "A luz de alta intensidade ativa as células ganglionares da retina, que enviam sinais ao Núcleo Supraquiasmático (NSQ) para suprimir a melatonina e elevar o cortisol matinal.",
   },
   {
     author: "Carol Dweck",
     role: "Pesquisadora de Mindset",
-    content: "Elogiar o processo (esforço, estratégia) em vez do talento inato é o que constrói a resiliência acadêmica.",
+    content:
+      "Elogiar o processo (esforço, estratégia) em vez do talento inato é o que constrói a resiliência acadêmica.",
     tip: "Dica Active: Hoje, comemore o fato de que você se sentou para estudar, independentemente da nota que tirou.",
-    practicalExample: "Em vez de pensar 'Eu sou inteligente em História', pense 'Eu usei uma ótima estratégia de mapas mentais em História hoje'. Isso coloca o poder de melhoria nas suas mãos.",
-    scientificBasis: "O foco no processo mantém os níveis de motivação estáveis mesmo diante de tarefas mais difíceis, evitando o medo de falhar que atinge quem se acha 'naturalmente talentoso'."
+    practicalExample:
+      "Em vez de pensar 'Eu sou inteligente em História', pense 'Eu usei uma ótima estratégia de mapas mentais em História hoje'. Isso coloca o poder de melhoria nas suas mãos.",
+    scientificBasis:
+      "O foco no processo mantém os níveis de motivação estáveis mesmo diante de tarefas mais difíceis, evitando o medo de falhar que atinge quem se acha 'naturalmente talentoso'.",
   },
   {
     author: "Richard Feynman",
     role: "Físico e Educador",
-    content: "Se você não consegue explicar algo de forma simples, você não entendeu o suficiente.",
+    content:
+      "Se você não consegue explicar algo de forma simples, você não entendeu o suficiente.",
     tip: "Dica Active: Tente explicar o conteúdo de hoje para uma criança imaginária. Se travar, volte e estude esse ponto.",
-    practicalExample: "Depois de terminar um tópico complexo, grave um áudio de 1 minuto para si mesmo explicando o que entendeu como se estivesse ensinando um amigo. Se você se enrolar nas palavras, você achou um buraco no seu conhecimento.",
-    scientificBasis: "A 'Técnica Feynman' exige a simplificação e re-codificação simbólica do conhecimento, o que força o cérebro a sair da decoreba e entrar na compreensão profunda."
-  }
+    practicalExample:
+      "Depois de terminar um tópico complexo, grave um áudio de 1 minuto para si mesmo explicando o que entendeu como se estivesse ensinando um amigo. Se você se enrolar nas palavras, você achou um buraco no seu conhecimento.",
+    scientificBasis:
+      "A 'Técnica Feynman' exige a simplificação e re-codificação simbólica do conhecimento, o que força o cérebro a sair da decoreba e entrar na compreensão profunda.",
+  },
 ];
 
 const DailyStimulusCard = ({ theme }: { theme: any }) => {
   const insight = React.useMemo(() => {
     const today = new Date();
-    const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000);
+    const dayOfYear = Math.floor(
+      (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) /
+        86400000,
+    );
     return NEURO_INSIGHTS[dayOfYear % NEURO_INSIGHTS.length];
   }, []);
 
@@ -1098,7 +1279,7 @@ const DailyStimulusCard = ({ theme }: { theme: any }) => {
       {/* Decorative Orbs */}
       <div className="absolute -top-24 -right-24 w-80 h-80 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-all duration-700 pointer-events-none" />
       <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
-      
+
       <div className="relative flex flex-col gap-10">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center justify-between border-b border-white/10 pb-8">
@@ -1107,20 +1288,27 @@ const DailyStimulusCard = ({ theme }: { theme: any }) => {
               <Zap size={24} fill="currentColor" />
             </div>
             <div>
-              <span className="text-white/60 text-[10px] sm:text-xs font-black uppercase tracking-[0.3em] block mb-1">Cisterna de Sabedoria</span>
+              <span className="text-white/60 text-[10px] sm:text-xs font-black uppercase tracking-[0.3em] block mb-1">
+                Cisterna de Sabedoria
+              </span>
               <h3 className="text-white text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2">
-                Neuro-Insight <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Neuro-Insight{" "}
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               </h3>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-4 bg-white/10 backdrop-blur-xl px-5 py-3 rounded-2xl border border-white/10">
             <div className="w-12 h-12 rounded-full bg-indigo-500/30 flex items-center justify-center text-white border border-white/20 shadow-inner">
               <Brain size={24} />
             </div>
             <div>
-              <p className="text-white font-black text-sm sm:text-base leading-none mb-1">{insight.author}</p>
-              <p className="text-white/50 text-[10px] font-bold uppercase tracking-[0.1em]">{insight.role}</p>
+              <p className="text-white font-black text-sm sm:text-base leading-none mb-1">
+                {insight.author}
+              </p>
+              <p className="text-white/50 text-[10px] font-bold uppercase tracking-[0.1em]">
+                {insight.role}
+              </p>
             </div>
           </div>
         </div>
@@ -1128,12 +1316,14 @@ const DailyStimulusCard = ({ theme }: { theme: any }) => {
         {/* Content Section */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           <div className="lg:col-span-12 space-y-6">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               className="relative"
             >
-              <span className="absolute -left-6 -top-4 text-7xl text-white/10 font-serif leading-none">“</span>
+              <span className="absolute -left-6 -top-4 text-7xl text-white/10 font-serif leading-none">
+                “
+              </span>
               <h4 className="text-white text-xl sm:text-2xl lg:text-3xl font-bold leading-relaxed italic z-10 relative">
                 {insight.content}
               </h4>
@@ -1142,40 +1332,46 @@ const DailyStimulusCard = ({ theme }: { theme: any }) => {
 
           {/* Practical Guidance Grid */}
           <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-6">
-             {/* Practical Example */}
-             <motion.div 
-               whileHover={{ y: -5 }}
-               className="bg-white/10 backdrop-blur-xl p-8 rounded-[2rem] border border-white/10 space-y-4 hover:border-white/30 transition-all"
-             >
-                <div className="flex items-center gap-3 text-emerald-400">
-                  <Play size={20} fill="currentColor" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Exemplo Prático</span>
-                </div>
-                <p className="text-white/90 text-sm sm:text-base font-medium leading-relaxed">
-                  {insight.practicalExample}
-                </p>
-             </motion.div>
+            {/* Practical Example */}
+            <motion.div
+              whileHover={{ y: -5 }}
+              className="bg-white/10 backdrop-blur-xl p-8 rounded-[2rem] border border-white/10 space-y-4 hover:border-white/30 transition-all"
+            >
+              <div className="flex items-center gap-3 text-emerald-400">
+                <Play size={20} fill="currentColor" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                  Exemplo Prático
+                </span>
+              </div>
+              <p className="text-white/90 text-sm sm:text-base font-medium leading-relaxed">
+                {insight.practicalExample}
+              </p>
+            </motion.div>
 
-             {/* Scientific Basis */}
-             <motion.div 
-               whileHover={{ y: -5 }}
-               className="bg-indigo-900/40 backdrop-blur-xl p-8 rounded-[2rem] border border-indigo-500/30 space-y-4 hover:border-indigo-400/50 transition-all"
-             >
-                <div className="flex items-center gap-3 text-indigo-400">
-                  <BrainCircuit size={20} />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Orientação Científica</span>
-                </div>
-                <p className="text-indigo-50/80 text-sm sm:text-base font-medium leading-relaxed italic">
-                  {insight.scientificBasis}
-                </p>
-             </motion.div>
+            {/* Scientific Basis */}
+            <motion.div
+              whileHover={{ y: -5 }}
+              className="bg-indigo-900/40 backdrop-blur-xl p-8 rounded-[2rem] border border-indigo-500/30 space-y-4 hover:border-indigo-400/50 transition-all"
+            >
+              <div className="flex items-center gap-3 text-indigo-400">
+                <BrainCircuit size={20} />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                  Orientação Científica
+                </span>
+              </div>
+              <p className="text-indigo-50/80 text-sm sm:text-base font-medium leading-relaxed italic">
+                {insight.scientificBasis}
+              </p>
+            </motion.div>
           </div>
 
           <div className="lg:col-span-12">
             <div className="bg-gradient-to-r from-amber-500/20 to-transparent p-6 rounded-2xl border-l-4 border-amber-400">
               <div className="flex items-center gap-3 text-amber-400 mb-2">
                 <Lightbulb size={20} className="animate-bounce" />
-                <span className="text-[10px] font-black uppercase tracking-widest italic">Pulo do Gato (Dica Active)</span>
+                <span className="text-[10px] font-black uppercase tracking-widest italic">
+                  Pulo do Gato (Dica Active)
+                </span>
               </div>
               <p className="text-white text-sm sm:text-base font-bold">
                 {insight.tip}
@@ -1184,7 +1380,7 @@ const DailyStimulusCard = ({ theme }: { theme: any }) => {
           </div>
         </div>
       </div>
-      
+
       {/* Background Icon */}
       <div className="absolute top-1/2 right-4 -translate-y-1/2 opacity-[0.05] text-white pointer-events-none">
         <Sparkles size={300} />
@@ -1193,11 +1389,11 @@ const DailyStimulusCard = ({ theme }: { theme: any }) => {
   );
 };
 
-const Dashboard = ({ 
-  history, 
-  theme, 
-  onClose, 
-  themeColor, 
+const Dashboard = ({
+  history,
+  theme,
+  onClose,
+  themeColor,
   onPracticeTopic,
   dateFilter,
   setDateFilter,
@@ -1220,67 +1416,72 @@ const Dashboard = ({
   onEditSubject,
   flashcards,
   onOpenFlashcards,
-  onOpenStudySchedule
-}: { 
-  history: QuizResult[], 
-  theme: any, 
-  onClose: () => void, 
-  themeColor: ThemeColor,
-  onPracticeTopic: (topic: string, quizIds?: string[]) => void,
-  dateFilter: string[],
-  setDateFilter: (val: string[]) => void,
-  subjectFilter: string,
-  setSubjectFilter: (val: string) => void,
-  subjects: string[],
-  handleAddSubject: (e: React.FormEvent) => void,
-  handleRemoveSubject: (subject: string) => void,
-  newSubjectInput: string,
-  setNewSubjectInput: (val: string) => void,
-  onDeleteSubjectHistory: (subject: string) => void,
-  onDeleteQuiz: (id: string) => void,
-  userProfile: any,
-  itemsDue: any[],
-  onStartSRSReview: () => void,
-  selectedSubjects: string[],
-  setSelectedSubjects: React.Dispatch<React.SetStateAction<string[]>>,
-  onDeleteQuizzes: (ids: string[]) => void,
-  onDeleteSubjectsHistory: (subjects: string[]) => void,
-  onEditSubject: (original: string, newName: string) => void,
-  flashcards: any[],
-  onOpenFlashcards: () => void,
-  onOpenStudySchedule: () => void
+  onOpenStudySchedule,
+}: {
+  history: QuizResult[];
+  theme: any;
+  onClose: () => void;
+  themeColor: ThemeColor;
+  onPracticeTopic: (topic: string, quizIds?: string[]) => void;
+  dateFilter: string[];
+  setDateFilter: (val: string[]) => void;
+  subjectFilter: string;
+  setSubjectFilter: (val: string) => void;
+  subjects: string[];
+  handleAddSubject: (e: React.FormEvent) => void;
+  handleRemoveSubject: (subject: string) => void;
+  newSubjectInput: string;
+  setNewSubjectInput: (val: string) => void;
+  onDeleteSubjectHistory: (subject: string) => void;
+  onDeleteQuiz: (id: string) => void;
+  userProfile: any;
+  itemsDue: any[];
+  onStartSRSReview: () => void;
+  selectedSubjects: string[];
+  setSelectedSubjects: React.Dispatch<React.SetStateAction<string[]>>;
+  onDeleteQuizzes: (ids: string[]) => void;
+  onDeleteSubjectsHistory: (subjects: string[]) => void;
+  onEditSubject: (original: string, newName: string) => void;
+  flashcards: any[];
+  onOpenFlashcards: () => void;
+  onOpenStudySchedule: () => void;
 }) => {
   const [activeFolder, setActiveFolder] = React.useState<string | null>(null);
-  const [editingSubject, setEditingSubject] = React.useState<{ original: string, current: string } | null>(null);
+  const [editingSubject, setEditingSubject] = React.useState<{
+    original: string;
+    current: string;
+  } | null>(null);
   const [selectedQuizzes, setSelectedQuizzes] = React.useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = React.useState(false);
 
   const toggleQuizSelection = (id: string) => {
-    setSelectedQuizzes(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    setSelectedQuizzes((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
     );
   };
 
   const toggleSubjectSelection = (subject: string) => {
     setSelectedSubjects(
       selectedSubjects.includes(subject)
-        ? selectedSubjects.filter(s => s !== subject)
-        : [...selectedSubjects, subject]
+        ? selectedSubjects.filter((s) => s !== subject)
+        : [...selectedSubjects, subject],
     );
   };
 
   const handleDeepenSelected = () => {
     if (selectedSubjects.length === 0 && selectedQuizzes.length === 0) return;
-    
+
     // Combine all quiz IDs from selected subjects and selected quizzes
     const allQuizIds = new Set<string>(selectedQuizzes);
-    
-    selectedSubjects.forEach(subject => {
-      const quizzes = history.filter(res => {
-        const quizSubjects = new Set(res.questions.map(q => normalizeSubject(q.subject || res.fileName)));
+
+    selectedSubjects.forEach((subject) => {
+      const quizzes = history.filter((res) => {
+        const quizSubjects = new Set(
+          res.questions.map((q) => normalizeSubject(q.subject || res.fileName)),
+        );
         return quizSubjects.has(subject);
       });
-      quizzes.forEach(q => allQuizIds.add(q.id));
+      quizzes.forEach((q) => allQuizIds.add(q.id));
     });
 
     if (allQuizIds.size > 0) {
@@ -1292,7 +1493,9 @@ const Dashboard = ({
     }
   };
   const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
-  const [tempSelectedDates, setTempSelectedDates] = React.useState<string[]>([]);
+  const [tempSelectedDates, setTempSelectedDates] = React.useState<string[]>(
+    [],
+  );
 
   // Reset selection when changing folder
   React.useEffect(() => {
@@ -1300,35 +1503,41 @@ const Dashboard = ({
   }, [activeFolder]);
 
   const filteredHistory = React.useMemo(() => {
-    return history.filter(res => {
-      const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
-      
+    return history.filter((res) => {
+      const date =
+        res.date instanceof Date ? res.date : (res.date as any).toDate();
+
       // Date filter
       let dateMatch = true;
-      if (dateFilter.includes('all')) {
+      if (dateFilter.includes("all")) {
         dateMatch = true;
-      } else if (dateFilter.includes('today')) {
+      } else if (dateFilter.includes("today")) {
         const today = new Date();
         dateMatch = date.toDateString() === today.toDateString();
-      } else if (dateFilter.includes('week')) {
+      } else if (dateFilter.includes("week")) {
         const lastWeek = new Date();
         lastWeek.setDate(lastWeek.getDate() - 7);
         dateMatch = date >= lastWeek;
-      } else if (dateFilter.includes('month')) {
+      } else if (dateFilter.includes("month")) {
         const lastMonth = new Date();
         lastMonth.setMonth(lastMonth.getMonth() - 1);
         dateMatch = date >= lastMonth;
       } else if (dateFilter.length > 0) {
-        dateMatch = dateFilter.some(df => {
+        dateMatch = dateFilter.some((df) => {
           const filterDate = new Date(df);
-          return !isNaN(filterDate.getTime()) && date.toDateString() === filterDate.toDateString();
+          return (
+            !isNaN(filterDate.getTime()) &&
+            date.toDateString() === filterDate.toDateString()
+          );
         });
       }
 
       // Subject filter (now checks if ANY question in the quiz matches the subject filter)
       let subjectMatch = true;
-      if (subjectFilter !== 'all') {
-        subjectMatch = res.questions.some(q => q.subject === subjectFilter) || (res.fileName === subjectFilter);
+      if (subjectFilter !== "all") {
+        subjectMatch =
+          res.questions.some((q) => q.subject === subjectFilter) ||
+          res.fileName === subjectFilter;
       }
 
       return dateMatch && subjectMatch;
@@ -1336,76 +1545,102 @@ const Dashboard = ({
   }, [history, dateFilter, subjectFilter]);
 
   const stats = React.useMemo(() => {
-    if (filteredHistory.length === 0) return {
-      totalQuizzes: 0,
-      totalQuestions: 0,
-      totalCorrect: 0,
-      totalIncorrect: 0,
-      avgAccuracy: 0,
-      recentAccuracy: 0,
-      trend: 'stable' as const,
-      totalTime: 0,
-      avgTimePerQuestion: 0,
-      subjectData: [],
-      strengths: [],
-      weaknesses: [],
-      focusTopics: []
-    };
+    if (filteredHistory.length === 0)
+      return {
+        totalQuizzes: 0,
+        totalQuestions: 0,
+        totalCorrect: 0,
+        totalIncorrect: 0,
+        avgAccuracy: 0,
+        recentAccuracy: 0,
+        trend: "stable" as const,
+        totalTime: 0,
+        avgTimePerQuestion: 0,
+        subjectData: [],
+        strengths: [],
+        weaknesses: [],
+        focusTopics: [],
+      };
 
     let totalQuestions = 0;
     let totalCorrect = 0;
     let totalTime = 0;
-    const subjectStats: { [key: string]: { correct: number, total: number, lastDate: Date, attempts: number } } = {};
+    const subjectStats: {
+      [key: string]: {
+        correct: number;
+        total: number;
+        lastDate: Date;
+        attempts: number;
+      };
+    } = {};
 
-    filteredHistory.forEach(res => {
-      const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
+    filteredHistory.forEach((res) => {
+      const date =
+        res.date instanceof Date ? res.date : (res.date as any).toDate();
       totalTime += res.timeSpent;
 
       res.questions.forEach((q, idx) => {
         const subject = normalizeSubject(q.subject || res.fileName);
         const isCorrect = res.answers[idx] === q.correctAnswer;
-        
+
         if (!subjectStats[subject]) {
-          subjectStats[subject] = { correct: 0, total: 0, lastDate: date, attempts: 0 };
+          subjectStats[subject] = {
+            correct: 0,
+            total: 0,
+            lastDate: date,
+            attempts: 0,
+          };
         }
-        
+
         subjectStats[subject].total += 1;
         if (isCorrect) subjectStats[subject].correct += 1;
-        if (date > subjectStats[subject].lastDate) subjectStats[subject].lastDate = date;
-        
+        if (date > subjectStats[subject].lastDate)
+          subjectStats[subject].lastDate = date;
+
         totalQuestions += 1;
         if (isCorrect) totalCorrect += 1;
       });
-      
+
       // Count attempts per subject per quiz
-      const quizSubjects = new Set(res.questions.map(q => normalizeSubject(q.subject || res.fileName)));
-      quizSubjects.forEach(s => {
+      const quizSubjects = new Set(
+        res.questions.map((q) => normalizeSubject(q.subject || res.fileName)),
+      );
+      quizSubjects.forEach((s) => {
         if (subjectStats[s]) subjectStats[s].attempts += 1;
       });
     });
 
     const totalQuizzes = history.length;
     const totalIncorrect = totalQuestions - totalCorrect;
-    const avgAccuracy = totalQuestions > 0 ? (totalCorrect / totalQuestions) * 100 : 0;
-    const avgTimePerQuestion = totalQuestions > 0 ? totalTime / totalQuestions : 0;
-    
-    const subjectData = Object.entries(subjectStats).map(([name, data]) => ({
-      name,
-      accuracy: Math.round((data.correct / data.total) * 100),
-      correct: data.correct,
-      total: data.total,
-      attempts: data.attempts,
-      lastDate: data.lastDate,
-      status: (data.correct / data.total) >= 0.8 ? 'Mastered' : (data.correct / data.total) >= 0.6 ? 'Improving' : 'Critical'
-    })).sort((a, b) => {
-      if (a.name === 'Outros') return 1;
-      if (b.name === 'Outros') return -1;
-      return a.name.localeCompare(b.name);
-    });
+    const avgAccuracy =
+      totalQuestions > 0 ? (totalCorrect / totalQuestions) * 100 : 0;
+    const avgTimePerQuestion =
+      totalQuestions > 0 ? totalTime / totalQuestions : 0;
+
+    const subjectData = Object.entries(subjectStats)
+      .map(([name, data]) => ({
+        name,
+        accuracy: Math.round((data.correct / data.total) * 100),
+        correct: data.correct,
+        total: data.total,
+        attempts: data.attempts,
+        lastDate: data.lastDate,
+        status:
+          data.correct / data.total >= 0.8
+            ? "Mastered"
+            : data.correct / data.total >= 0.6
+              ? "Improving"
+              : "Critical",
+      }))
+      .sort((a, b) => {
+        if (a.name === "Outros") return 1;
+        if (b.name === "Outros") return -1;
+        return a.name.localeCompare(b.name);
+      });
 
     // Ensure all subjects from settings are present in subjectData
-    subjects.forEach(s => {
-      if (!subjectData.some(sd => sd.name === s)) {
+    subjects.forEach((s) => {
+      if (!subjectData.some((sd) => sd.name === s)) {
         subjectData.push({
           name: s,
           accuracy: 0,
@@ -1413,7 +1648,7 @@ const Dashboard = ({
           total: 0,
           attempts: 0,
           lastDate: new Date(),
-          status: 'Critical'
+          status: "Critical",
         });
       }
     });
@@ -1421,24 +1656,35 @@ const Dashboard = ({
     const recentHistory = history.slice(-5);
     let recentCorrect = 0;
     let recentTotal = 0;
-    recentHistory.forEach(res => {
+    recentHistory.forEach((res) => {
       recentCorrect += res.correct;
       recentTotal += res.total;
     });
-    const recentAccuracy = recentTotal > 0 ? (recentCorrect / recentTotal) * 100 : 0;
-    const trend = recentAccuracy > avgAccuracy ? 'up' : recentAccuracy < avgAccuracy ? 'down' : 'stable';
+    const recentAccuracy =
+      recentTotal > 0 ? (recentCorrect / recentTotal) * 100 : 0;
+    const trend =
+      recentAccuracy > avgAccuracy
+        ? "up"
+        : recentAccuracy < avgAccuracy
+          ? "down"
+          : "stable";
 
-    const strengths = subjectData.filter(s => s.accuracy >= 80);
-    const weaknesses = subjectData.filter(s => s.accuracy < 60);
+    const strengths = subjectData.filter((s) => s.accuracy >= 80);
+    const weaknesses = subjectData.filter((s) => s.accuracy < 60);
     const focusTopics = subjectData
-      .filter(s => s.accuracy < 75)
-      .sort((a, b) => (b.total * (1 - b.accuracy/100)) - (a.total * (1 - a.accuracy/100)))
+      .filter((s) => s.accuracy < 75)
+      .sort(
+        (a, b) =>
+          b.total * (1 - b.accuracy / 100) - a.total * (1 - a.accuracy / 100),
+      )
       .slice(0, 3);
 
     // Group quizzes by subject for the folder view
     const quizzesBySubject: { [key: string]: QuizResult[] } = {};
-    filteredHistory.forEach(res => {
-      const subject = normalizeSubject(res.questions[0]?.subject || res.fileName);
+    filteredHistory.forEach((res) => {
+      const subject = normalizeSubject(
+        res.questions[0]?.subject || res.fileName,
+      );
       if (!quizzesBySubject[subject]) quizzesBySubject[subject] = [];
       quizzesBySubject[subject].push(res);
     });
@@ -1457,14 +1703,14 @@ const Dashboard = ({
       strengths,
       weaknesses,
       focusTopics,
-      quizzesBySubject
+      quizzesBySubject,
     };
   }, [filteredHistory, history]);
 
   const allSubjectsFromHistory = React.useMemo(() => {
     const set = new Set<string>();
-    history.forEach(res => {
-      res.questions.forEach(q => {
+    history.forEach((res) => {
+      res.questions.forEach((q) => {
         if (q.subject) set.add(normalizeSubject(q.subject));
       });
       if (res.fileName) set.add(normalizeSubject(res.fileName));
@@ -1472,21 +1718,40 @@ const Dashboard = ({
     return Array.from(set).sort();
   }, [history]);
 
-  if (history.length === 0) return (
-    <div className="flex flex-col items-center justify-center p-12 text-center space-y-6 min-h-[60vh]">
-      <div className="w-24 h-24 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center">
-        <LayoutDashboard size={48} className="text-black/20 dark:text-white/20" />
+  if (history.length === 0)
+    return (
+      <div className="flex flex-col items-center justify-center p-12 text-center space-y-6 min-h-[60vh]">
+        <div className="w-24 h-24 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center">
+          <LayoutDashboard
+            size={48}
+            className="text-black/20 dark:text-white/20"
+          />
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-2xl font-bold dark:text-white">
+            Nenhum dado disponível
+          </h3>
+          <p className="text-black/40 dark:text-slate-400 max-w-xs mx-auto">
+            Realize alguns quizzes para começar a visualizar seu desempenho nos
+            estudos.
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className={cn(
+            "px-8 py-3 rounded-2xl font-bold transition-all active:scale-95 shadow-lg",
+            theme.primary,
+            theme.contrastText,
+            theme.shadow,
+          )}
+        >
+          Voltar para o Início
+        </button>
       </div>
-      <div className="space-y-2">
-        <h3 className="text-2xl font-bold dark:text-white">Nenhum dado disponível</h3>
-        <p className="text-black/40 dark:text-slate-400 max-w-xs mx-auto">Realize alguns quizzes para começar a visualizar seu desempenho nos estudos.</p>
-      </div>
-      <button onClick={onClose} className={cn("px-8 py-3 rounded-2xl font-bold transition-all active:scale-95 shadow-lg", theme.primary, theme.contrastText, theme.shadow)}>Voltar para o Início</button>
-    </div>
-  );
+    );
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 max-w-[96%] mx-auto"
@@ -1494,27 +1759,51 @@ const Dashboard = ({
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 sm:p-8 rounded-[2.5rem] border border-white/20 dark:border-slate-800/50 shadow-2xl">
         <div className="flex items-center gap-4 sm:gap-6">
-          <div className={cn("p-4 sm:p-5 rounded-[2rem] shadow-xl transform -rotate-3", theme.primary, theme.contrastText)}>
+          <div
+            className={cn(
+              "p-4 sm:p-5 rounded-[2rem] shadow-xl transform -rotate-3",
+              theme.primary,
+              theme.contrastText,
+            )}
+          >
             <LayoutDashboard size={32} />
           </div>
           <div>
-            <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-[0.3em] uppercase mb-1 block">ESTATÍSTICAS</span>
-            <h2 className="text-2xl sm:text-3xl font-black dark:text-white tracking-tight">Análise Estratégica</h2>
+            <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-[0.3em] uppercase mb-1 block">
+              ESTATÍSTICAS
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-black dark:text-white tracking-tight">
+              Análise Estratégica
+            </h2>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-black/40 dark:text-slate-400 font-bold">Status de Desempenho:</span>
-              <span className={cn(
-                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-sm",
-                stats.totalQuizzes > 0 ? (stats.avgAccuracy >= 70 ? "bg-emerald-500 text-white" :
-                stats.avgAccuracy >= 50 ? "bg-amber-500 text-white" :
-                "bg-rose-500 text-white") : "bg-slate-200 text-slate-500"
-              )}>
-                {stats.totalQuizzes > 0 ? (stats.avgAccuracy >= 70 ? 'Consistente' : stats.avgAccuracy >= 50 ? 'Em Evolução' : 'Atenção Crítica') : 'Sem Dados'}
+              <span className="text-xs text-black/40 dark:text-slate-400 font-bold">
+                Status de Desempenho:
+              </span>
+              <span
+                className={cn(
+                  "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-sm",
+                  stats.totalQuizzes > 0
+                    ? stats.avgAccuracy >= 70
+                      ? "bg-emerald-500 text-white"
+                      : stats.avgAccuracy >= 50
+                        ? "bg-amber-500 text-white"
+                        : "bg-rose-500 text-white"
+                    : "bg-slate-200 text-slate-500",
+                )}
+              >
+                {stats.totalQuizzes > 0
+                  ? stats.avgAccuracy >= 70
+                    ? "Consistente"
+                    : stats.avgAccuracy >= 50
+                      ? "Em Evolução"
+                      : "Atenção Crítica"
+                  : "Sem Dados"}
               </span>
             </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          <button 
+          <button
             onClick={() => {
               setIsSelectionMode(!isSelectionMode);
               if (isSelectionMode) {
@@ -1524,23 +1813,35 @@ const Dashboard = ({
             }}
             className={cn(
               "flex items-center justify-center gap-2 px-6 py-3 rounded-2xl transition-all font-black text-xs active:scale-95 flex-1 sm:flex-none border",
-              isSelectionMode 
-                ? "bg-blue-500 text-white border-blue-600 shadow-lg shadow-blue-500/20" 
-                : "bg-black/5 dark:bg-white/5 dark:text-white border-black/5 dark:border-white/5 hover:bg-black/10 dark:hover:bg-white/10"
+              isSelectionMode
+                ? "bg-blue-500 text-white border-blue-600 shadow-lg shadow-blue-500/20"
+                : "bg-black/5 dark:bg-white/5 dark:text-white border-black/5 dark:border-white/5 hover:bg-black/10 dark:hover:bg-white/10",
             )}
           >
             <CheckCircle2 size={18} />
-            {isSelectionMode ? 'Cancelar Seleção' : 'Selecionar'}
+            {isSelectionMode ? "Cancelar Seleção" : "Selecionar"}
           </button>
 
           <div className="flex flex-col gap-1 bg-black/5 dark:bg-white/5 p-2 rounded-2xl border border-black/5 dark:border-white/5 flex-1 sm:flex-none min-w-[160px] relative">
             <div className="flex items-center gap-2">
-              <Calendar size={14} className="text-black/40 dark:text-slate-500 ml-1" />
-              <select 
-                value={dateFilter.length === 1 && ['all', 'today', 'week', 'month'].includes(dateFilter[0]) ? dateFilter[0] : 'specific'}
+              <Calendar
+                size={14}
+                className="text-black/40 dark:text-slate-500 ml-1"
+              />
+              <select
+                value={
+                  dateFilter.length === 1 &&
+                  ["all", "today", "week", "month"].includes(dateFilter[0])
+                    ? dateFilter[0]
+                    : "specific"
+                }
                 onChange={(e) => {
-                  if (e.target.value === 'specific') {
-                    setTempSelectedDates(dateFilter.filter(d => !['all', 'today', 'week', 'month'].includes(d)));
+                  if (e.target.value === "specific") {
+                    setTempSelectedDates(
+                      dateFilter.filter(
+                        (d) => !["all", "today", "week", "month"].includes(d),
+                      ),
+                    );
                     setIsCalendarOpen(true);
                   } else {
                     setDateFilter([e.target.value]);
@@ -1549,31 +1850,70 @@ const Dashboard = ({
                 }}
                 className="bg-transparent text-xs font-black dark:text-white outline-none cursor-pointer pr-1 w-full"
               >
-                <option value="all" className="bg-white dark:bg-slate-900 dark:text-white">Todo Período</option>
-                <option value="today" className="bg-white dark:bg-slate-900 dark:text-white">Hoje</option>
-                <option value="week" className="bg-white dark:bg-slate-900 dark:text-white">Últimos 7 dias</option>
-                <option value="month" className="bg-white dark:bg-slate-900 dark:text-white">Último mês</option>
-                <option value="specific" className="bg-white dark:bg-slate-900 dark:text-white">Datas Específicas...</option>
+                <option
+                  value="all"
+                  className="bg-white dark:bg-slate-900 dark:text-white"
+                >
+                  Todo Período
+                </option>
+                <option
+                  value="today"
+                  className="bg-white dark:bg-slate-900 dark:text-white"
+                >
+                  Hoje
+                </option>
+                <option
+                  value="week"
+                  className="bg-white dark:bg-slate-900 dark:text-white"
+                >
+                  Últimos 7 dias
+                </option>
+                <option
+                  value="month"
+                  className="bg-white dark:bg-slate-900 dark:text-white"
+                >
+                  Último mês
+                </option>
+                <option
+                  value="specific"
+                  className="bg-white dark:bg-slate-900 dark:text-white"
+                >
+                  Datas Específicas...
+                </option>
               </select>
             </div>
           </div>
 
           <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 p-2 rounded-2xl border border-black/5 dark:border-white/5 flex-1 sm:flex-none">
-            <BookOpen size={14} className="text-black/40 dark:text-slate-500 ml-1" />
-            <select 
+            <BookOpen
+              size={14}
+              className="text-black/40 dark:text-slate-500 ml-1"
+            />
+            <select
               value={subjectFilter}
               onChange={(e) => setSubjectFilter(e.target.value)}
               className="bg-transparent text-xs font-black dark:text-white outline-none cursor-pointer pr-1 w-full max-w-[150px]"
             >
-              <option value="all" className="bg-white dark:bg-slate-900 dark:text-white">Todas Matérias</option>
-              {allSubjectsFromHistory.map(s => (
-                <option key={s} value={s} className="bg-white dark:bg-slate-900 dark:text-white">{s}</option>
+              <option
+                value="all"
+                className="bg-white dark:bg-slate-900 dark:text-white"
+              >
+                Todas Matérias
+              </option>
+              {allSubjectsFromHistory.map((s) => (
+                <option
+                  key={s}
+                  value={s}
+                  className="bg-white dark:bg-slate-900 dark:text-white"
+                >
+                  {s}
+                </option>
               ))}
             </select>
           </div>
 
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all font-black text-xs dark:text-white active:scale-95 flex-1 sm:flex-none border border-black/5 dark:border-white/5"
           >
             <ChevronLeft size={18} />
@@ -1587,172 +1927,239 @@ const Dashboard = ({
           <>
             {/* Main Column */}
             <div className="lg:col-span-3 space-y-8">
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[140px]"
-            >
-              <div className="flex items-end gap-2">
-                <p className="text-3xl font-black dark:text-white">{stats.totalCorrect}</p>
-                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">+{Math.round(stats.avgAccuracy)}%</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-500/10 rounded-xl">
-                  <CheckCircle2 size={18} className="text-emerald-500" />
-                </div>
-                <h3 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Acertos</h3>
-              </div>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[140px]"
-            >
-              <div className="flex items-end gap-2">
-                <p className="text-3xl font-black dark:text-white">{stats.totalIncorrect}</p>
-                <span className="text-xs font-bold text-rose-600 dark:text-rose-400 mb-1">-{Math.round(100 - stats.avgAccuracy)}%</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-rose-500/10 rounded-xl">
-                  <XCircle size={18} className="text-rose-500" />
-                </div>
-                <h3 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Erros</h3>
-              </div>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[140px]"
-            >
-              <div className="flex items-end gap-2">
-                <p className="text-2xl font-black dark:text-white truncate">{formatTime(stats.totalTime)}</p>
-                <span className="text-xs font-bold text-amber-600 dark:text-amber-400 mb-1">Total</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-500/10 rounded-xl">
-                  <Clock size={18} className="text-amber-500" />
-                </div>
-                <h3 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Tempo</h3>
-              </div>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[140px]"
-            >
-              <div className="flex items-end gap-2">
-                <p className="text-4xl font-black dark:text-white">{stats.totalQuizzes}</p>
-                <span className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1">Sessões</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-xl">
-                  <Target size={18} className="text-blue-500" />
-                </div>
-                <h3 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Quizzes</h3>
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Achievements Card */}
-          <div className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 dark:border-slate-800/50 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-1.5 bg-amber-500/10 rounded-lg">
-                  <Trophy size={20} className="text-amber-500" />
-                </div>
-                <h3 className="text-lg font-bold dark:text-white">Conquistas</h3>
-              </div>
-              <span className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">
-                {userProfile?.achievements?.length || 0} Desbloqueadas
-              </span>
-            </div>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {[
-                { id: 'streak_7', title: 'Fogo nos Estudos', desc: '7 dias seguidos', icon: <Flame size={20} /> },
-                { id: 'quizzes_10', title: 'Decatlo', desc: '10 quizzes feitos', icon: <Award size={20} /> },
-                { id: 'correct_100', title: 'Centurião', desc: '100 acertos', icon: <Target size={20} /> },
-                { id: 'streak_30', title: 'Mestre da Constância', desc: '30 dias seguidos', icon: <Zap size={20} /> },
-              ].map(achievement => {
-                const isUnlocked = userProfile?.achievements?.includes(achievement.id);
-                return (
-                  <div 
-                    key={achievement.id}
-                    className={cn(
-                      "p-4 rounded-2xl border transition-all flex flex-col items-center text-center gap-2",
-                      isUnlocked 
-                        ? "bg-amber-500/5 border-amber-500/20 text-amber-900 dark:text-amber-400" 
-                        : "bg-black/5 border-transparent opacity-40 grayscale"
-                    )}
-                  >
-                    <div className={cn("p-2 rounded-xl", isUnlocked ? "bg-amber-500/20" : "bg-black/10")}>
-                      {achievement.icon}
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold leading-tight">{achievement.title}</p>
-                      <p className="text-[10px] opacity-60">{achievement.desc}</p>
-                    </div>
+              {/* Stats Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[140px]"
+                >
+                  <div className="flex items-end gap-2">
+                    <p className="text-3xl font-black dark:text-white">
+                      {stats.totalCorrect}
+                    </p>
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">
+                      +{Math.round(stats.avgAccuracy)}%
+                    </span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-          
-          <DailyStimulusCard theme={theme} />
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-500/10 rounded-xl">
+                      <CheckCircle2 size={18} className="text-emerald-500" />
+                    </div>
+                    <h3 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">
+                      Acertos
+                    </h3>
+                  </div>
+                </motion.div>
 
-          {/* Main Grid (Subject Performance) */}
-          <div className="space-y-8">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[140px]"
+                >
+                  <div className="flex items-end gap-2">
+                    <p className="text-3xl font-black dark:text-white">
+                      {stats.totalIncorrect}
+                    </p>
+                    <span className="text-xs font-bold text-rose-600 dark:text-rose-400 mb-1">
+                      -{Math.round(100 - stats.avgAccuracy)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-rose-500/10 rounded-xl">
+                      <XCircle size={18} className="text-rose-500" />
+                    </div>
+                    <h3 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">
+                      Erros
+                    </h3>
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[140px]"
+                >
+                  <div className="flex items-end gap-2">
+                    <p className="text-2xl font-black dark:text-white truncate">
+                      {formatTime(stats.totalTime)}
+                    </p>
+                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 mb-1">
+                      Total
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-500/10 rounded-xl">
+                      <Clock size={18} className="text-amber-500" />
+                    </div>
+                    <h3 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">
+                      Tempo
+                    </h3>
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[140px]"
+                >
+                  <div className="flex items-end gap-2">
+                    <p className="text-4xl font-black dark:text-white">
+                      {stats.totalQuizzes}
+                    </p>
+                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1">
+                      Sessões
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-500/10 rounded-xl">
+                      <Target size={18} className="text-blue-500" />
+                    </div>
+                    <h3 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">
+                      Quizzes
+                    </h3>
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Achievements Card */}
+              <div className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 dark:border-slate-800/50 shadow-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-1.5 bg-amber-500/10 rounded-lg">
+                      <Trophy size={20} className="text-amber-500" />
+                    </div>
+                    <h3 className="text-lg font-bold dark:text-white">
+                      Conquistas
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">
+                    {userProfile?.achievements?.length || 0} Desbloqueadas
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    {
+                      id: "streak_7",
+                      title: "Fogo nos Estudos",
+                      desc: "7 dias seguidos",
+                      icon: <Flame size={20} />,
+                    },
+                    {
+                      id: "quizzes_10",
+                      title: "Decatlo",
+                      desc: "10 quizzes feitos",
+                      icon: <Award size={20} />,
+                    },
+                    {
+                      id: "correct_100",
+                      title: "Centurião",
+                      desc: "100 acertos",
+                      icon: <Target size={20} />,
+                    },
+                    {
+                      id: "streak_30",
+                      title: "Mestre da Constância",
+                      desc: "30 dias seguidos",
+                      icon: <Zap size={20} />,
+                    },
+                  ].map((achievement) => {
+                    const isUnlocked = userProfile?.achievements?.includes(
+                      achievement.id,
+                    );
+                    return (
+                      <div
+                        key={achievement.id}
+                        className={cn(
+                          "p-4 rounded-2xl border transition-all flex flex-col items-center text-center gap-2",
+                          isUnlocked
+                            ? "bg-amber-500/5 border-amber-500/20 text-amber-900 dark:text-amber-400"
+                            : "bg-black/5 border-transparent opacity-40 grayscale",
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "p-2 rounded-xl",
+                            isUnlocked ? "bg-amber-500/20" : "bg-black/10",
+                          )}
+                        >
+                          {achievement.icon}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold leading-tight">
+                            {achievement.title}
+                          </p>
+                          <p className="text-[10px] opacity-60">
+                            {achievement.desc}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <DailyStimulusCard theme={theme} />
+
+              {/* Main Grid (Subject Performance) */}
+              <div className="space-y-8">
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-[0.3em] uppercase mb-1">MÉTRICAS</span>
+                  <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-[0.3em] uppercase mb-1">
+                    MÉTRICAS
+                  </span>
                   <h3 className="text-2xl font-black dark:text-white flex items-center gap-3">
                     <FolderOpen size={28} className={theme.text} />
                     Desempenho por Matéria
                   </h3>
                 </div>
 
-                <SubjectPerformanceBarChart subjectStats={stats.subjectData} theme={theme} />
+                <SubjectPerformanceBarChart
+                  subjectStats={stats.subjectData}
+                  theme={theme}
+                />
 
-              <div className="grid grid-cols-1 gap-4">
-                {stats.subjectData.map((s, i) => {
-                  const isExpanded = activeFolder === s.name;
-                  const isSelected = selectedSubjects.includes(s.name);
-                  const isStrength = stats.strengths.some(st => st.name === s.name);
-                  const isFocus = stats.focusTopics.some(ft => ft.name === s.name);
-                  const subjectQuizzes = stats.quizzesBySubject[s.name] || [];
-                  
+                <div className="grid grid-cols-1 gap-4">
+                  {stats.subjectData.map((s, i) => {
+                    const isExpanded = activeFolder === s.name;
+                    const isSelected = selectedSubjects.includes(s.name);
+                    const isStrength = stats.strengths.some(
+                      (st) => st.name === s.name,
+                    );
+                    const isFocus = stats.focusTopics.some(
+                      (ft) => ft.name === s.name,
+                    );
+                    const subjectQuizzes = stats.quizzesBySubject[s.name] || [];
+
                     return (
-                      <motion.div 
+                      <motion.div
                         key={i}
                         layout
                         className={cn(
                           "group relative rounded-[2rem] border shadow-xl overflow-hidden transition-all backdrop-blur-2xl",
-                          isSelected ? "bg-blue-500/10 border-blue-500/30 ring-2 ring-blue-500/20" :
-                          isExpanded 
-                            ? "bg-white/60 dark:bg-slate-900/60 border-blue-500/40 shadow-blue-500/10" 
-                            : "bg-white/40 dark:bg-slate-900/40 border-white/20 dark:border-slate-800/50 hover:border-white/40 dark:hover:border-slate-700/50 shadow-black/5"
+                          isSelected
+                            ? "bg-blue-500/10 border-blue-500/30 ring-2 ring-blue-500/20"
+                            : isExpanded
+                              ? "bg-white/60 dark:bg-slate-900/60 border-blue-500/40 shadow-blue-500/10"
+                              : "bg-white/40 dark:bg-slate-900/40 border-white/20 dark:border-slate-800/50 hover:border-white/40 dark:hover:border-slate-700/50 shadow-black/5",
                         )}
                       >
                         {/* Selection Checkbox */}
                         {isSelectionMode && (
-                          <div 
+                          <div
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleSubjectSelection(s.name);
                             }}
                             className={cn(
                               "absolute top-4 right-4 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all z-10 cursor-pointer",
-                              isSelected 
-                                ? "bg-blue-500 border-blue-500 text-white scale-110 shadow-lg shadow-blue-500/20" 
-                                : "bg-white/50 dark:bg-slate-800/50 border-black/10 dark:border-white/10 hover:border-blue-500/50"
+                              isSelected
+                                ? "bg-blue-500 border-blue-500 text-white scale-110 shadow-lg shadow-blue-500/20"
+                                : "bg-white/50 dark:bg-slate-800/50 border-black/10 dark:border-white/10 hover:border-blue-500/50",
                             )}
                           >
                             {isSelected && <CheckCircle2 size={14} />}
@@ -1760,24 +2167,34 @@ const Dashboard = ({
                         )}
 
                         {/* Folder Tab Effect (Vertical) */}
-                        <div className={cn(
-                          "absolute top-6 left-0 w-1.5 h-12 rounded-r-xl",
-                          isStrength ? "bg-emerald-500" : isFocus ? "bg-rose-500" : theme.primary
-                        )} />
-                        
-                        <div 
+                        <div
+                          className={cn(
+                            "absolute top-6 left-0 w-1.5 h-12 rounded-r-xl",
+                            isStrength
+                              ? "bg-emerald-500"
+                              : isFocus
+                                ? "bg-rose-500"
+                                : theme.primary,
+                          )}
+                        />
+
+                        <div
                           onClick={() => {
                             setActiveFolder(isExpanded ? null : s.name);
                           }}
                           className="p-6 cursor-pointer flex flex-col sm:flex-row sm:items-center gap-6"
                         >
                           <div className="flex items-center gap-4 flex-1 min-w-0">
-                            <div className={cn(
-                              "p-4 rounded-2xl shadow-sm shrink-0",
-                              isStrength ? "bg-emerald-500/10 text-emerald-500" :
-                              isFocus ? "bg-rose-500/10 text-rose-500" :
-                              "bg-black/5 dark:bg-white/5 text-black/40 dark:text-slate-400"
-                            )}>
+                            <div
+                              className={cn(
+                                "p-4 rounded-2xl shadow-sm shrink-0",
+                                isStrength
+                                  ? "bg-emerald-500/10 text-emerald-500"
+                                  : isFocus
+                                    ? "bg-rose-500/10 text-rose-500"
+                                    : "bg-black/5 dark:bg-white/5 text-black/40 dark:text-slate-400",
+                              )}
+                            >
                               <Folder size={24} />
                             </div>
                             <div className="flex flex-col flex-1 min-w-0">
@@ -1785,31 +2202,51 @@ const Dashboard = ({
                                 <span className="text-[10px] font-black text-black/30 dark:text-slate-500 uppercase tracking-widest">
                                   {s.total} Questões
                                 </span>
-                                <span className={cn(
-                                  "text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest",
-                                  isStrength ? "bg-emerald-500/10 text-emerald-600" :
-                                  isFocus ? "bg-rose-500/10 text-rose-600" :
-                                  "bg-black/10 text-black/40 dark:text-slate-500"
-                                )}>
-                                  {isStrength ? 'Ponto Forte' : isFocus ? 'Foco Necessário' : 'Em Evolução'}
+                                <span
+                                  className={cn(
+                                    "text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest",
+                                    isStrength
+                                      ? "bg-emerald-500/10 text-emerald-600"
+                                      : isFocus
+                                        ? "bg-rose-500/10 text-rose-600"
+                                        : "bg-black/10 text-black/40 dark:text-slate-500",
+                                  )}
+                                >
+                                  {isStrength
+                                    ? "Ponto Forte"
+                                    : isFocus
+                                      ? "Foco Necessário"
+                                      : "Em Evolução"}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
                                 {editingSubject?.original === s.name ? (
-                                  <input 
+                                  <input
                                     autoFocus
                                     type="text"
                                     value={editingSubject.current}
-                                    onChange={(e) => setEditingSubject({ ...editingSubject, current: e.target.value })}
+                                    onChange={(e) =>
+                                      setEditingSubject({
+                                        ...editingSubject,
+                                        current: e.target.value,
+                                      })
+                                    }
                                     onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        onEditSubject(s.name, editingSubject.current);
+                                      if (e.key === "Enter") {
+                                        onEditSubject(
+                                          s.name,
+                                          editingSubject.current,
+                                        );
                                         setEditingSubject(null);
                                       }
-                                      if (e.key === 'Escape') setEditingSubject(null);
+                                      if (e.key === "Escape")
+                                        setEditingSubject(null);
                                     }}
                                     onBlur={() => {
-                                      onEditSubject(s.name, editingSubject.current);
+                                      onEditSubject(
+                                        s.name,
+                                        editingSubject.current,
+                                      );
                                       setEditingSubject(null);
                                     }}
                                     onClick={(e) => e.stopPropagation()}
@@ -1817,16 +2254,24 @@ const Dashboard = ({
                                   />
                                 ) : (
                                   <>
-                                    <h4 className={cn(
-                                      "font-black dark:text-white leading-tight truncate",
-                                      s.name.length > 30 ? "text-base" : "text-lg sm:text-xl"
-                                    )} title={s.name}>
+                                    <h4
+                                      className={cn(
+                                        "font-black dark:text-white leading-tight truncate",
+                                        s.name.length > 30
+                                          ? "text-base"
+                                          : "text-lg sm:text-xl",
+                                      )}
+                                      title={s.name}
+                                    >
                                       {s.name}
                                     </h4>
-                                    <button 
+                                    <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setEditingSubject({ original: s.name, current: s.name });
+                                        setEditingSubject({
+                                          original: s.name,
+                                          current: s.name,
+                                        });
                                       }}
                                       className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-black/20 dark:text-slate-600 hover:text-blue-500 transition-all opacity-0 group-hover:opacity-100"
                                       title="Editar Nome"
@@ -1842,31 +2287,49 @@ const Dashboard = ({
                           <div className="flex flex-wrap items-center gap-4 sm:ml-auto">
                             <div className="flex items-center gap-3">
                               <div className="flex flex-col items-center">
-                                <span className="text-[10px] font-black text-emerald-500">{s.correct}</span>
-                                <span className="text-[8px] font-bold text-black/30 uppercase">Acertos</span>
+                                <span className="text-[10px] font-black text-emerald-500">
+                                  {s.correct}
+                                </span>
+                                <span className="text-[8px] font-bold text-black/30 uppercase">
+                                  Acertos
+                                </span>
                               </div>
                               <div className="w-px h-6 bg-black/5 dark:bg-white/5" />
                               <div className="flex flex-col items-center">
-                                <span className="text-[10px] font-black text-rose-500">{s.total - s.correct}</span>
-                                <span className="text-[8px] font-bold text-black/30 uppercase">Erros</span>
+                                <span className="text-[10px] font-black text-rose-500">
+                                  {s.total - s.correct}
+                                </span>
+                                <span className="text-[8px] font-bold text-black/30 uppercase">
+                                  Erros
+                                </span>
                               </div>
                             </div>
 
                             <div className="flex items-center gap-4 min-w-[140px]">
                               <div className="flex items-center gap-2">
-                                <p className={cn("text-xl font-black", 
-                                  s.accuracy >= 80 ? "text-emerald-500" : 
-                                  s.accuracy >= 60 ? "text-amber-500" : "text-rose-500"
-                                )}>
+                                <p
+                                  className={cn(
+                                    "text-xl font-black",
+                                    s.accuracy >= 80
+                                      ? "text-emerald-500"
+                                      : s.accuracy >= 60
+                                        ? "text-amber-500"
+                                        : "text-rose-500",
+                                  )}
+                                >
                                   {s.accuracy}%
                                 </p>
                                 <div className="h-10 w-1.5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden relative">
-                                  <motion.div 
+                                  <motion.div
                                     initial={{ height: 0 }}
                                     animate={{ height: `${s.accuracy}%` }}
-                                    className={cn("w-full rounded-full absolute bottom-0", 
-                                      s.accuracy >= 80 ? "bg-emerald-500" : 
-                                      s.accuracy >= 60 ? "bg-amber-500" : "bg-rose-500"
+                                    className={cn(
+                                      "w-full rounded-full absolute bottom-0",
+                                      s.accuracy >= 80
+                                        ? "bg-emerald-500"
+                                        : s.accuracy >= 60
+                                          ? "bg-amber-500"
+                                          : "bg-rose-500",
                                     )}
                                   />
                                 </div>
@@ -1874,23 +2337,28 @@ const Dashboard = ({
                             </div>
 
                             <div className="flex items-center gap-2">
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onPracticeTopic(s.name);
                                 }}
                                 className={cn(
                                   "px-4 py-2 rounded-xl font-black text-[10px] transition-all active:scale-95 flex items-center gap-2 shadow-lg",
-                                  theme.primary, theme.contrastText
+                                  theme.primary,
+                                  theme.contrastText,
                                 )}
                               >
                                 <Zap size={14} />
                                 APROFUNDAR
                               </button>
-                              <div className={cn(
-                                "p-2 rounded-full transition-all",
-                                isExpanded ? "bg-blue-500/10 text-blue-500 rotate-180" : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-600"
-                              )}>
+                              <div
+                                className={cn(
+                                  "p-2 rounded-full transition-all",
+                                  isExpanded
+                                    ? "bg-blue-500/10 text-blue-500 rotate-180"
+                                    : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-600",
+                                )}
+                              >
                                 <ChevronDown size={20} />
                               </div>
                             </div>
@@ -1900,287 +2368,374 @@ const Dashboard = ({
                         {/* Expanded Content (Quiz History) */}
                         <AnimatePresence>
                           {isExpanded && (
-                            <motion.div 
+                            <motion.div
                               initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
+                              animate={{ height: "auto", opacity: 1 }}
                               exit={{ height: 0, opacity: 0 }}
                               className="px-6 pb-6"
                             >
                               <div className="pt-6 border-t border-black/5 dark:border-white/5 space-y-6">
-                                <PerformanceTimeline 
-                                  history={subjectQuizzes} 
-                                  theme={theme} 
-                                  title={`Evolução: ${s.name}`} 
+                                <PerformanceTimeline
+                                  history={subjectQuizzes}
+                                  theme={theme}
+                                  title={`Evolução: ${s.name}`}
                                 />
 
                                 <div className="space-y-4">
                                   <div className="flex items-center justify-between">
-                                    <h5 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Histórico Recente</h5>
-                                    <button 
-                                      onClick={() => onDeleteSubjectHistory(s.name)}
+                                    <h5 className="text-[10px] font-black text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">
+                                      Histórico Recente
+                                    </h5>
+                                    <button
+                                      onClick={() =>
+                                        onDeleteSubjectHistory(s.name)
+                                      }
                                       className="text-[10px] font-black text-rose-500/60 hover:text-rose-500 transition-colors uppercase tracking-widest flex items-center gap-1.5"
                                     >
                                       <Trash2 size={12} />
                                       Limpar Histórico
                                     </button>
                                   </div>
-                                  
+
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  {subjectQuizzes.slice().reverse().map((res, idx) => {
-                                    const isQuizSelected = selectedQuizzes.includes(res.id);
-                                    return (
-                                      <div 
-                                        key={idx} 
-                                        onClick={() => isSelectionMode && toggleQuizSelection(res.id)}
-                                        className={cn(
-                                          "flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-white/5 border transition-all group cursor-pointer",
-                                          isQuizSelected ? "border-blue-500 bg-blue-500/5" : "border-transparent hover:border-black/5 dark:hover:border-white/5"
-                                        )}
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          {isSelectionMode && (
-                                            <div className={cn(
-                                              "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
-                                              isQuizSelected ? "bg-blue-500 border-blue-500 text-white" : "border-black/10 dark:border-white/10"
-                                            )}>
-                                              {isQuizSelected && <Check size={12} />}
-                                            </div>
-                                          )}
-                                          <div className={cn(
-                                            "w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs shadow-sm",
-                                            (res.correct / res.total) >= 0.8 ? "bg-emerald-500/10 text-emerald-600" :
-                                            (res.correct / res.total) >= 0.6 ? "bg-amber-500/10 text-amber-600" :
-                                            "bg-rose-500/10 text-rose-600"
-                                          )}>
-                                            {Math.round((res.correct / res.total) * 100)}%
-                                          </div>
-                                          <div>
-                                            <p className="text-xs font-black dark:text-white truncate max-w-[150px]" title={res.fileName}>{res.fileName}</p>
-                                            <p className="text-[9px] font-bold text-black/40 dark:text-slate-500">{format(res.date instanceof Date ? res.date : (res.date as any).toDate(), "dd/MM/yyyy")}</p>
-                                          </div>
-                                        </div>
-                                        {!isSelectionMode && (
-                                          <button 
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              onDeleteQuiz(res.id);
-                                            }}
-                                            className="p-2 text-black/10 dark:text-white/10 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                                    {subjectQuizzes
+                                      .slice()
+                                      .reverse()
+                                      .map((res, idx) => {
+                                        const isQuizSelected =
+                                          selectedQuizzes.includes(res.id);
+                                        return (
+                                          <div
+                                            key={idx}
+                                            onClick={() =>
+                                              isSelectionMode &&
+                                              toggleQuizSelection(res.id)
+                                            }
+                                            className={cn(
+                                              "flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-white/5 border transition-all group cursor-pointer",
+                                              isQuizSelected
+                                                ? "border-blue-500 bg-blue-500/5"
+                                                : "border-transparent hover:border-black/5 dark:hover:border-white/5",
+                                            )}
                                           >
-                                            <Trash2 size={14} />
-                                          </button>
-                                        )}
+                                            <div className="flex items-center gap-3">
+                                              {isSelectionMode && (
+                                                <div
+                                                  className={cn(
+                                                    "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
+                                                    isQuizSelected
+                                                      ? "bg-blue-500 border-blue-500 text-white"
+                                                      : "border-black/10 dark:border-white/10",
+                                                  )}
+                                                >
+                                                  {isQuizSelected && (
+                                                    <Check size={12} />
+                                                  )}
+                                                </div>
+                                              )}
+                                              <div
+                                                className={cn(
+                                                  "w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs shadow-sm",
+                                                  res.correct / res.total >= 0.8
+                                                    ? "bg-emerald-500/10 text-emerald-600"
+                                                    : res.correct / res.total >=
+                                                        0.6
+                                                      ? "bg-amber-500/10 text-amber-600"
+                                                      : "bg-rose-500/10 text-rose-600",
+                                                )}
+                                              >
+                                                {Math.round(
+                                                  (res.correct / res.total) *
+                                                    100,
+                                                )}
+                                                %
+                                              </div>
+                                              <div>
+                                                <p
+                                                  className="text-xs font-black dark:text-white truncate max-w-[150px]"
+                                                  title={res.fileName}
+                                                >
+                                                  {res.fileName}
+                                                </p>
+                                                <p className="text-[9px] font-bold text-black/40 dark:text-slate-500">
+                                                  {format(
+                                                    res.date instanceof Date
+                                                      ? res.date
+                                                      : (
+                                                          res.date as any
+                                                        ).toDate(),
+                                                    "dd/MM/yyyy",
+                                                  )}
+                                                </p>
+                                              </div>
+                                            </div>
+                                            {!isSelectionMode && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  onDeleteQuiz(res.id);
+                                                }}
+                                                className="p-2 text-black/10 dark:text-white/10 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                                              >
+                                                <Trash2 size={14} />
+                                              </button>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    {subjectQuizzes.length === 0 && (
+                                      <div className="col-span-full py-8 text-center bg-black/5 dark:bg-white/5 rounded-2xl border border-dashed border-black/10 dark:border-white/10">
+                                        <p className="text-xs font-bold text-black/30 dark:text-slate-500">
+                                          Nenhum quiz realizado nesta matéria
+                                          ainda.
+                                        </p>
                                       </div>
-                                    );
-                                  })}
-                                  {subjectQuizzes.length === 0 && (
-                                    <div className="col-span-full py-8 text-center bg-black/5 dark:bg-white/5 rounded-2xl border border-dashed border-black/10 dark:border-white/10">
-                                      <p className="text-xs font-bold text-black/30 dark:text-slate-500">Nenhum quiz realizado nesta matéria ainda.</p>
-                                    </div>
-                                  )}
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </motion.div>
                     );
                   })}
                 </div>
+              </div>
             </div>
 
-        </div>
-
-        {/* Side Column */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Streak Card */}
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-gradient-to-br from-orange-500 to-rose-600 p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden group"
-          >
-            <div className="absolute top-0 right-0 p-4 opacity-20 group-hover:scale-110 transition-transform">
-              <Flame size={80} />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
-                  <Flame size={20} className="text-white" />
-                </div>
-                <h3 className="text-xs font-bold uppercase tracking-widest opacity-80">Sua Ofensiva</h3>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-black">{userProfile?.streak || 0}</span>
-                <span className="text-lg font-bold opacity-80">Dias</span>
-              </div>
-              <p className="mt-3 text-[11px] font-medium opacity-90 leading-tight">
-                {userProfile?.streak > 0 ? "Continue assim! Você está no caminho certo." : "Comece sua jornada hoje!"}
-              </p>
-            </div>
-          </motion.div>
-
-          {/* Study Schedule Card */}
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            onClick={() => onOpenStudySchedule()}
-            className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[180px] transition-all cursor-pointer hover:border-emerald-500/30 hover:shadow-md"
-          >
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-1.5 bg-emerald-500/10 rounded-lg">
-                  <Clock size={18} className="text-emerald-500" />
-                </div>
-                <h3 className="text-base font-bold dark:text-white">Cronograma de Estudos</h3>
-              </div>
-              <p className="text-[11px] text-black/60 dark:text-slate-400 mb-4 leading-tight">
-                Acompanhe seu histórico de matérias e materiais estudados automaticamente.
-              </p>
-            </div>
-            
-            <div className="flex items-center justify-between mt-auto">
-              <div>
-                <span className="text-xl font-black dark:text-white">
-                  {new Set(history.map(h => `${h.subject}-${h.fileName}`)).size}
-                </span>
-                <span className="text-[9px] font-bold text-black/40 dark:text-slate-500 ml-2">Materiais</span>
-              </div>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenStudySchedule();
-                }}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95 shadow-lg shadow-emerald-500/20",
-                  theme.primary, theme.contrastText
-                )}
+            {/* Side Column */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* Streak Card */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-gradient-to-br from-orange-500 to-rose-600 p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden group"
               >
-                Ver Tudo
-              </button>
-            </div>
-          </motion.div>
-
-          {/* Flashcards Card */}
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            onClick={() => onOpenFlashcards()}
-            className={cn(
-              "bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[180px] transition-all cursor-pointer hover:border-indigo-500/30 hover:shadow-md"
-            )}
-          >
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-1.5 bg-emerald-500/10 rounded-lg">
-                  <BrainCircuit size={18} className="text-emerald-500" />
+                <div className="absolute top-0 right-0 p-4 opacity-20 group-hover:scale-110 transition-transform">
+                  <Flame size={80} />
                 </div>
-                <h3 className="text-base font-bold dark:text-white">Flashcards</h3>
-              </div>
-              <p className="text-[11px] text-black/60 dark:text-slate-400 mb-4 leading-tight">
-                Revise conceitos-chave gerados automaticamente a partir dos seus erros.
-              </p>
-            </div>
-            
-            <div className="flex items-center justify-between mt-auto">
-              <div>
-                <span className="text-xl font-black dark:text-white">
-                  {flashcards.filter((c: any) => !c.nextReviewDate || new Date() >= c.nextReviewDate).length}
-                </span>
-                <span className="text-[9px] font-bold text-black/40 dark:text-slate-500 ml-2">Para Revisar</span>
-              </div>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenFlashcards();
-                }}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95 shadow-lg shadow-emerald-500/20",
-                  theme.primary, theme.contrastText
-                )}
-              >
-                Estudar
-              </button>
-            </div>
-          </motion.div>
-
-          {/* SRS Review Card */}
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            onClick={() => itemsDue.length > 0 && onStartSRSReview()}
-            className={cn(
-              "bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[180px] transition-all",
-              itemsDue.length > 0 ? "cursor-pointer hover:border-indigo-500/30 hover:shadow-md" : "opacity-80"
-            )}
-          >
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-1.5 bg-indigo-500/10 rounded-lg">
-                  <RotateCcw size={18} className="text-indigo-500" />
-                </div>
-                <h3 className="text-base font-bold dark:text-white">Repetição Espaçada</h3>
-              </div>
-              <p className="text-[11px] text-black/60 dark:text-slate-400 mb-4 leading-tight">
-                Revise questões no momento ideal para fixar o conhecimento.
-              </p>
-            </div>
-            
-            <div className="flex items-center justify-between mt-auto">
-              <div>
-                <span className="text-xl font-black dark:text-white">{itemsDue.length}</span>
-                <span className="text-[9px] font-bold text-black/40 dark:text-slate-500 ml-2">Pendentes</span>
-              </div>
-              <button 
-                disabled={itemsDue.length === 0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStartSRSReview();
-                }}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95",
-                  itemsDue.length > 0 
-                    ? cn(theme.primary, theme.contrastText, "shadow-lg shadow-indigo-500/20") 
-                    : "bg-black/5 text-black/20 cursor-not-allowed"
-                )}
-              >
-                Revisar
-              </button>
-            </div>
-          </motion.div>
-
-          {/* Quick Action Summary (Focus Topics) */}
-          {stats.focusTopics.length > 0 && (
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm">
-              <h3 className="text-xs font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest mb-4">Focar Agora</h3>
-              <div className="space-y-3">
-                {stats.focusTopics.map((topic, idx) => (
-                  <div 
-                    key={idx} 
-                    onClick={() => onPracticeTopic(topic.name)}
-                    className="flex items-center justify-between group cursor-pointer p-1 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-500 text-[10px] font-bold">
-                        {topic.accuracy}%
-                      </div>
-                      <span className="text-xs font-bold dark:text-white truncate max-w-[80px]">{topic.name}</span>
+                <div className="relative z-10">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
+                      <Flame size={20} className="text-white" />
                     </div>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPracticeTopic(topic.name);
-                      }}
-                      className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-black/20 dark:text-slate-600 hover:text-blue-500 transition-all"
-                    >
-                      <Play size={14} fill="currentColor" />
-                    </button>
+                    <h3 className="text-xs font-bold uppercase tracking-widest opacity-80">
+                      Sua Ofensiva
+                    </h3>
                   </div>
-                ))}
-              </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-black">
+                      {userProfile?.streak || 0}
+                    </span>
+                    <span className="text-lg font-bold opacity-80">Dias</span>
+                  </div>
+                  <p className="mt-3 text-[11px] font-medium opacity-90 leading-tight">
+                    {userProfile?.streak > 0
+                      ? "Continue assim! Você está no caminho certo."
+                      : "Comece sua jornada hoje!"}
+                  </p>
+                </div>
+              </motion.div>
+
+              {/* Study Schedule Card */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                onClick={() => onOpenStudySchedule()}
+                className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[180px] transition-all cursor-pointer hover:border-emerald-500/30 hover:shadow-md"
+              >
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                      <Clock size={18} className="text-emerald-500" />
+                    </div>
+                    <h3 className="text-base font-bold dark:text-white">
+                      Cronograma de Estudos
+                    </h3>
+                  </div>
+                  <p className="text-[11px] text-black/60 dark:text-slate-400 mb-4 leading-tight">
+                    Acompanhe seu histórico de matérias e materiais estudados
+                    automaticamente.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between mt-auto">
+                  <div>
+                    <span className="text-xl font-black dark:text-white">
+                      {
+                        new Set(
+                          history.map((h) => `${h.subject}-${h.fileName}`),
+                        ).size
+                      }
+                    </span>
+                    <span className="text-[9px] font-bold text-black/40 dark:text-slate-500 ml-2">
+                      Materiais
+                    </span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenStudySchedule();
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95 shadow-lg shadow-emerald-500/20",
+                      theme.primary,
+                      theme.contrastText,
+                    )}
+                  >
+                    Ver Tudo
+                  </button>
+                </div>
+              </motion.div>
+
+              {/* Flashcards Card */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                onClick={() => onOpenFlashcards()}
+                className={cn(
+                  "bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[180px] transition-all cursor-pointer hover:border-indigo-500/30 hover:shadow-md",
+                )}
+              >
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                      <BrainCircuit size={18} className="text-emerald-500" />
+                    </div>
+                    <h3 className="text-base font-bold dark:text-white">
+                      Flashcards
+                    </h3>
+                  </div>
+                  <p className="text-[11px] text-black/60 dark:text-slate-400 mb-4 leading-tight">
+                    Revise conceitos-chave gerados automaticamente a partir dos
+                    seus erros.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between mt-auto">
+                  <div>
+                    <span className="text-xl font-black dark:text-white">
+                      {
+                        flashcards.filter(
+                          (c: any) =>
+                            !c.nextReviewDate || new Date() >= c.nextReviewDate,
+                        ).length
+                      }
+                    </span>
+                    <span className="text-[9px] font-bold text-black/40 dark:text-slate-500 ml-2">
+                      Para Revisar
+                    </span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenFlashcards();
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95 shadow-lg shadow-emerald-500/20",
+                      theme.primary,
+                      theme.contrastText,
+                    )}
+                  >
+                    Estudar
+                  </button>
+                </div>
+              </motion.div>
+
+              {/* SRS Review Card */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                onClick={() => itemsDue.length > 0 && onStartSRSReview()}
+                className={cn(
+                  "bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[180px] transition-all",
+                  itemsDue.length > 0
+                    ? "cursor-pointer hover:border-indigo-500/30 hover:shadow-md"
+                    : "opacity-80",
+                )}
+              >
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-1.5 bg-indigo-500/10 rounded-lg">
+                      <RotateCcw size={18} className="text-indigo-500" />
+                    </div>
+                    <h3 className="text-base font-bold dark:text-white">
+                      Repetição Espaçada
+                    </h3>
+                  </div>
+                  <p className="text-[11px] text-black/60 dark:text-slate-400 mb-4 leading-tight">
+                    Revise questões no momento ideal para fixar o conhecimento.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between mt-auto">
+                  <div>
+                    <span className="text-xl font-black dark:text-white">
+                      {itemsDue.length}
+                    </span>
+                    <span className="text-[9px] font-bold text-black/40 dark:text-slate-500 ml-2">
+                      Pendentes
+                    </span>
+                  </div>
+                  <button
+                    disabled={itemsDue.length === 0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStartSRSReview();
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95",
+                      itemsDue.length > 0
+                        ? cn(
+                            theme.primary,
+                            theme.contrastText,
+                            "shadow-lg shadow-indigo-500/20",
+                          )
+                        : "bg-black/5 text-black/20 cursor-not-allowed",
+                    )}
+                  >
+                    Revisar
+                  </button>
+                </div>
+              </motion.div>
+
+              {/* Quick Action Summary (Focus Topics) */}
+              {stats.focusTopics.length > 0 && (
+                <div className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm">
+                  <h3 className="text-xs font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest mb-4">
+                    Focar Agora
+                  </h3>
+                  <div className="space-y-3">
+                    {stats.focusTopics.map((topic, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => onPracticeTopic(topic.name)}
+                        className="flex items-center justify-between group cursor-pointer p-1 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-500 text-[10px] font-bold">
+                            {topic.accuracy}%
+                          </div>
+                          <span className="text-xs font-bold dark:text-white truncate max-w-[80px]">
+                            {topic.name}
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onPracticeTopic(topic.name);
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-black/20 dark:text-slate-600 hover:text-blue-500 transition-all"
+                        >
+                          <Play size={14} fill="currentColor" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-          </div>
           </>
         ) : (
           <div className="lg:col-span-4 flex flex-col items-center justify-center p-24 text-center space-y-6 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-black/5 dark:border-slate-800 shadow-sm">
@@ -2188,12 +2743,25 @@ const Dashboard = ({
               <Search size={40} className="text-black/20 dark:text-white/20" />
             </div>
             <div className="space-y-2">
-              <h3 className="text-xl font-bold dark:text-white">Nenhum resultado encontrado</h3>
-              <p className="text-xs text-black/40 dark:text-slate-400 max-w-xs mx-auto">Não encontramos dados para os filtros selecionados. Tente ajustar o período ou a matéria.</p>
+              <h3 className="text-xl font-bold dark:text-white">
+                Nenhum resultado encontrado
+              </h3>
+              <p className="text-xs text-black/40 dark:text-slate-400 max-w-xs mx-auto">
+                Não encontramos dados para os filtros selecionados. Tente
+                ajustar o período ou a matéria.
+              </p>
             </div>
-            <button 
-              onClick={() => { setDateFilter(['all']); setSubjectFilter('all'); }}
-              className={cn("px-6 py-2 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg", theme.primary, theme.contrastText, theme.shadow)}
+            <button
+              onClick={() => {
+                setDateFilter(["all"]);
+                setSubjectFilter("all");
+              }}
+              className={cn(
+                "px-6 py-2 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg",
+                theme.primary,
+                theme.contrastText,
+                theme.shadow,
+              )}
             >
               Limpar Filtros
             </button>
@@ -2203,99 +2771,120 @@ const Dashboard = ({
 
       {/* Floating Action Bar for Selection */}
       <AnimatePresence>
-        {(isSelectionMode && (selectedQuizzes.length > 0 || selectedSubjects.length > 0)) && (
-          <motion.div 
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-2xl"
-          >
-            <div className="bg-slate-900/90 dark:bg-white/90 backdrop-blur-xl p-4 rounded-3xl border border-white/10 dark:border-black/10 shadow-2xl flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4 ml-2">
-                <div className="w-10 h-10 rounded-2xl bg-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-                  <Zap size={20} />
+        {isSelectionMode &&
+          (selectedQuizzes.length > 0 || selectedSubjects.length > 0) && (
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-2xl"
+            >
+              <div className="bg-slate-900/90 dark:bg-white/90 backdrop-blur-xl p-4 rounded-3xl border border-white/10 dark:border-black/10 shadow-2xl flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4 ml-2">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                    <Zap size={20} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-white/40 dark:text-black/40 uppercase tracking-widest">
+                      Ações em Massa
+                    </p>
+                    <p className="text-sm font-black text-white dark:text-black">
+                      {selectedQuizzes.length > 0 && selectedSubjects.length > 0
+                        ? `${selectedSubjects.length} matérias e ${selectedQuizzes.length} quizzes`
+                        : selectedQuizzes.length > 0
+                          ? `${selectedQuizzes.length} quizzes selecionados`
+                          : `${selectedSubjects.length} matérias selecionadas`}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-black text-white/40 dark:text-black/40 uppercase tracking-widest">Ações em Massa</p>
-                  <p className="text-sm font-black text-white dark:text-black">
-                    {selectedQuizzes.length > 0 && selectedSubjects.length > 0 
-                      ? `${selectedSubjects.length} matérias e ${selectedQuizzes.length} quizzes`
-                      : selectedQuizzes.length > 0 
-                        ? `${selectedQuizzes.length} quizzes selecionados` 
-                        : `${selectedSubjects.length} matérias selecionadas`}
-                  </p>
-                </div>
-              </div>
 
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={handleDeepenSelected}
-                  className={cn(
-                    "px-6 py-3 rounded-2xl font-black text-xs transition-all active:scale-95 flex items-center gap-2 shadow-lg",
-                    theme.primary, theme.contrastText
-                  )}
-                >
-                  <Zap size={16} />
-                  APROFUNDAR SELECIONADOS
-                </button>
-                
-                <button 
-                  onClick={() => {
-                    if (selectedQuizzes.length > 0) {
-                      onDeleteQuizzes(selectedQuizzes);
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleDeepenSelected}
+                    className={cn(
+                      "px-6 py-3 rounded-2xl font-black text-xs transition-all active:scale-95 flex items-center gap-2 shadow-lg",
+                      theme.primary,
+                      theme.contrastText,
+                    )}
+                  >
+                    <Zap size={16} />
+                    APROFUNDAR SELECIONADOS
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (selectedQuizzes.length > 0) {
+                        onDeleteQuizzes(selectedQuizzes);
+                        setSelectedQuizzes([]);
+                      }
+                      if (selectedSubjects.length > 0) {
+                        onDeleteSubjectsHistory(selectedSubjects);
+                        setSelectedSubjects([]);
+                      }
+                    }}
+                    className="p-3 rounded-2xl bg-rose-500 text-white hover:bg-rose-600 transition-all active:scale-95 shadow-lg shadow-rose-500/20"
+                    title="Excluir Selecionados"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+
+                  <button
+                    onClick={() => {
                       setSelectedQuizzes([]);
-                    }
-                    if (selectedSubjects.length > 0) {
-                      onDeleteSubjectsHistory(selectedSubjects);
                       setSelectedSubjects([]);
-                    }
-                  }}
-                  className="p-3 rounded-2xl bg-rose-500 text-white hover:bg-rose-600 transition-all active:scale-95 shadow-lg shadow-rose-500/20"
-                  title="Excluir Selecionados"
-                >
-                  <Trash2 size={20} />
-                </button>
-
-                <button 
-                  onClick={() => {
-                    setSelectedQuizzes([]);
-                    setSelectedSubjects([]);
-                    setIsSelectionMode(false);
-                  }}
-                  className="p-3 rounded-2xl bg-white/10 dark:bg-black/10 text-white dark:text-black hover:bg-white/20 dark:hover:bg-black/20 transition-all active:scale-95"
-                >
-                  <X size={20} />
-                </button>
+                      setIsSelectionMode(false);
+                    }}
+                    className="p-3 rounded-2xl bg-white/10 dark:bg-black/10 text-white dark:text-black hover:bg-white/20 dark:hover:bg-black/20 transition-all active:scale-95"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
       </AnimatePresence>
     </motion.div>
   );
 };
 
-const PerformanceTimeline = ({ history, theme, title = "Desempenho no Tempo" }: { history: QuizResult[], theme: any, title?: string }) => {
+const PerformanceTimeline = ({
+  history,
+  theme,
+  title = "Desempenho no Tempo",
+}: {
+  history: QuizResult[];
+  theme: any;
+  title?: string;
+}) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const timelineData = React.useMemo(() => {
-    const grouped: { [key: string]: { date: string, displayDate: string, correct: number, incorrect: number, total: number } } = {};
-    
-    history.forEach(res => {
-      const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
-      const dateKey = format(date, 'yyyy-MM-dd');
-      
+    const grouped: {
+      [key: string]: {
+        date: string;
+        displayDate: string;
+        correct: number;
+        incorrect: number;
+        total: number;
+      };
+    } = {};
+
+    history.forEach((res) => {
+      const date =
+        res.date instanceof Date ? res.date : (res.date as any).toDate();
+      const dateKey = format(date, "yyyy-MM-dd");
+
       if (!grouped[dateKey]) {
-        grouped[dateKey] = { 
+        grouped[dateKey] = {
           date: dateKey,
-          displayDate: format(date, 'dd/MM'), 
-          correct: 0, 
-          incorrect: 0, 
-          total: 0 
+          displayDate: format(date, "dd/MM"),
+          correct: 0,
+          incorrect: 0,
+          total: 0,
         };
       }
-      
+
       grouped[dateKey].correct += res.correct;
-      grouped[dateKey].incorrect += (res.total - res.correct);
+      grouped[dateKey].incorrect += res.total - res.correct;
       grouped[dateKey].total += res.total;
     });
 
@@ -2306,7 +2895,7 @@ const PerformanceTimeline = ({ history, theme, title = "Desempenho no Tempo" }: 
 
   return (
     <div className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 dark:border-slate-800/50 shadow-2xl space-y-6 overflow-hidden transition-all">
-      <div 
+      <div
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between cursor-pointer group"
       >
@@ -2316,13 +2905,19 @@ const PerformanceTimeline = ({ history, theme, title = "Desempenho no Tempo" }: 
           </div>
           <div>
             <h3 className="text-xl font-bold dark:text-white">{title}</h3>
-            <p className="text-[10px] uppercase tracking-widest text-black/40 dark:text-slate-500 font-bold">Evolução de acertos e erros</p>
+            <p className="text-[10px] uppercase tracking-widest text-black/40 dark:text-slate-500 font-bold">
+              Evolução de acertos e erros
+            </p>
           </div>
         </div>
-        <div className={cn(
-          "p-2 rounded-full transition-all",
-          isExpanded ? "bg-blue-500/10 text-blue-500 rotate-180" : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-600"
-        )}>
+        <div
+          className={cn(
+            "p-2 rounded-full transition-all",
+            isExpanded
+              ? "bg-blue-500/10 text-blue-500 rotate-180"
+              : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-600",
+          )}
+        >
           <ChevronDown size={20} />
         </div>
       </div>
@@ -2331,62 +2926,100 @@ const PerformanceTimeline = ({ history, theme, title = "Desempenho no Tempo" }: 
         {isExpanded && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
           >
             <div className="h-[300px] w-full mt-4 pt-6 border-t border-black/5 dark:border-white/5">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={timelineData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis 
-                    dataKey="displayDate" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                <LineChart
+                  data={timelineData}
+                  margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#e2e8f0"
+                  />
+                  <XAxis
+                    dataKey="displayDate"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fontWeight: 600, fill: "#94a3b8" }}
                     dy={10}
                   />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fontWeight: 600, fill: "#94a3b8" }}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
-                      borderRadius: '16px', 
-                      border: 'none', 
-                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                      backdropFilter: 'blur(4px)'
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: "16px",
+                      border: "none",
+                      boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                      backgroundColor: "rgba(255, 255, 255, 0.9)",
+                      backdropFilter: "blur(4px)",
                     }}
-                    itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
-                    labelStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}
+                    itemStyle={{ fontSize: "12px", fontWeight: "bold" }}
+                    labelStyle={{
+                      fontSize: "10px",
+                      fontWeight: "bold",
+                      color: "#64748b",
+                      marginBottom: "4px",
+                    }}
                   />
-                  <Legend 
-                    verticalAlign="top" 
-                    align="right" 
+                  <Legend
+                    verticalAlign="top"
+                    align="right"
                     iconType="circle"
-                    wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                    wrapperStyle={{
+                      paddingBottom: "20px",
+                      fontSize: "10px",
+                      fontWeight: "bold",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.1em",
+                    }}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="correct" 
-                    name="Acertos" 
-                    stroke="#10b981" 
-                    strokeWidth={4} 
-                    dot={{ r: 6, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
+                  <Line
+                    type="monotone"
+                    dataKey="correct"
+                    name="Acertos"
+                    stroke="#10b981"
+                    strokeWidth={4}
+                    dot={{
+                      r: 6,
+                      fill: "#10b981",
+                      strokeWidth: 2,
+                      stroke: "#fff",
+                    }}
                     activeDot={{ r: 8, strokeWidth: 0 }}
-                    label={{ position: 'top', fontSize: 10, fontWeight: 800, fill: '#10b981' }}
+                    label={{
+                      position: "top",
+                      fontSize: 10,
+                      fontWeight: 800,
+                      fill: "#10b981",
+                    }}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="incorrect" 
-                    name="Erros" 
-                    stroke="#f43f5e" 
-                    strokeWidth={4} 
-                    dot={{ r: 6, fill: '#f43f5e', strokeWidth: 2, stroke: '#fff' }}
+                  <Line
+                    type="monotone"
+                    dataKey="incorrect"
+                    name="Erros"
+                    stroke="#f43f5e"
+                    strokeWidth={4}
+                    dot={{
+                      r: 6,
+                      fill: "#f43f5e",
+                      strokeWidth: 2,
+                      stroke: "#fff",
+                    }}
                     activeDot={{ r: 8, strokeWidth: 0 }}
-                    label={{ position: 'bottom', fontSize: 10, fontWeight: 800, fill: '#f43f5e' }}
+                    label={{
+                      position: "bottom",
+                      fontSize: 10,
+                      fontWeight: 800,
+                      fill: "#f43f5e",
+                    }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -2398,15 +3031,21 @@ const PerformanceTimeline = ({ history, theme, title = "Desempenho no Tempo" }: 
   );
 };
 
-const SubjectPerformanceBarChart = ({ subjectStats, theme }: { subjectStats: any[], theme: any }) => {
+const SubjectPerformanceBarChart = ({
+  subjectStats,
+  theme,
+}: {
+  subjectStats: any[];
+  theme: any;
+}) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const data = React.useMemo(() => {
     return subjectStats
-      .filter(s => s.total > 0)
-      .map(s => ({
+      .filter((s) => s.total > 0)
+      .map((s) => ({
         name: s.name,
         acertos: s.correct,
-        erros: s.total - s.correct
+        erros: s.total - s.correct,
       }));
   }, [subjectStats]);
 
@@ -2414,7 +3053,7 @@ const SubjectPerformanceBarChart = ({ subjectStats, theme }: { subjectStats: any
 
   return (
     <div className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 dark:border-slate-800/50 shadow-2xl space-y-6 overflow-hidden transition-all">
-      <div 
+      <div
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between cursor-pointer group"
       >
@@ -2423,14 +3062,22 @@ const SubjectPerformanceBarChart = ({ subjectStats, theme }: { subjectStats: any
             <BarChart2 size={24} className="text-indigo-500" />
           </div>
           <div>
-            <h3 className="text-xl font-bold dark:text-white">Desempenho Geral por Matéria</h3>
-            <p className="text-[10px] uppercase tracking-widest text-black/40 dark:text-slate-500 font-bold">Comparativo de acertos e erros</p>
+            <h3 className="text-xl font-bold dark:text-white">
+              Desempenho Geral por Matéria
+            </h3>
+            <p className="text-[10px] uppercase tracking-widest text-black/40 dark:text-slate-500 font-bold">
+              Comparativo de acertos e erros
+            </p>
           </div>
         </div>
-        <div className={cn(
-          "p-2 rounded-full transition-all",
-          isExpanded ? "bg-indigo-500/10 text-indigo-500 rotate-180" : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-600"
-        )}>
+        <div
+          className={cn(
+            "p-2 rounded-full transition-all",
+            isExpanded
+              ? "bg-indigo-500/10 text-indigo-500 rotate-180"
+              : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-600",
+          )}
+        >
           <ChevronDown size={20} />
         </div>
       </div>
@@ -2439,44 +3086,69 @@ const SubjectPerformanceBarChart = ({ subjectStats, theme }: { subjectStats: any
         {isExpanded && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
           >
             <div className="h-[300px] w-full mt-4 pt-6 border-t border-black/5 dark:border-white/5">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                <BarChart
+                  data={data}
+                  margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#e2e8f0"
+                  />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fontWeight: 600, fill: "#94a3b8" }}
                     dy={10}
                   />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fontWeight: 600, fill: "#94a3b8" }}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
-                      borderRadius: '16px', 
-                      border: 'none', 
-                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                      backdropFilter: 'blur(4px)'
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: "16px",
+                      border: "none",
+                      boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                      backgroundColor: "rgba(255, 255, 255, 0.9)",
+                      backdropFilter: "blur(4px)",
                     }}
-                    cursor={{ fill: 'rgba(0,0,0,0.02)' }}
+                    cursor={{ fill: "rgba(0,0,0,0.02)" }}
                   />
-                  <Legend 
-                    verticalAlign="top" 
-                    align="right" 
+                  <Legend
+                    verticalAlign="top"
+                    align="right"
                     iconType="circle"
-                    wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                    wrapperStyle={{
+                      paddingBottom: "20px",
+                      fontSize: "10px",
+                      fontWeight: "bold",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.1em",
+                    }}
                   />
-                  <Bar dataKey="acertos" name="Acertos" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30} />
-                  <Bar dataKey="erros" name="Erros" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={30} />
+                  <Bar
+                    dataKey="acertos"
+                    name="Acertos"
+                    fill="#10b981"
+                    radius={[4, 4, 0, 0]}
+                    barSize={30}
+                  />
+                  <Bar
+                    dataKey="erros"
+                    name="Erros"
+                    fill="#f43f5e"
+                    radius={[4, 4, 0, 0]}
+                    barSize={30}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -2487,9 +3159,17 @@ const SubjectPerformanceBarChart = ({ subjectStats, theme }: { subjectStats: any
   );
 };
 
-const TaskDeleteButton = ({ taskId, onDelete, onDeletedFromModal }: { taskId: string, onDelete: (id: string) => void, onDeletedFromModal: () => void }) => {
+const TaskDeleteButton = ({
+  taskId,
+  onDelete,
+  onDeletedFromModal,
+}: {
+  taskId: string;
+  onDelete: (id: string) => void;
+  onDeletedFromModal: () => void;
+}) => {
   const [isConfirming, setIsConfirming] = useState(false);
-  
+
   useEffect(() => {
     if (isConfirming) {
       const timer = setTimeout(() => setIsConfirming(false), 3000);
@@ -2525,70 +3205,87 @@ const TaskDeleteButton = ({ taskId, onDelete, onDeletedFromModal }: { taskId: st
   );
 };
 
-const RevisionAgenda = ({ 
-  tasks, 
-  theme, 
-  onClose, 
+const RevisionAgenda = ({
+  tasks,
+  theme,
+  onClose,
   onCompleteTask,
   onDeleteTask,
-  onPracticeQuiz
-}: { 
-  tasks: RevisionTask[], 
-  theme: any, 
-  onClose: () => void,
-  onCompleteTask: (taskId: string) => void,
-  onDeleteTask: (taskId: string) => void,
-  onPracticeQuiz: (quizId: string, taskId: string) => void
+  onPracticeQuiz,
+}: {
+  tasks: RevisionTask[];
+  theme: any;
+  onClose: () => void;
+  onCompleteTask: (taskId: string) => void;
+  onDeleteTask: (taskId: string) => void;
+  onPracticeQuiz: (quizId: string, taskId: string) => void;
 }) => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
-  
+
   const tasksByDate = React.useMemo(() => {
     const grouped: { [key: string]: RevisionTask[] } = {};
-    tasks.forEach(task => {
-      const dateKey = format(task.dueDate, 'yyyy-MM-dd');
+    tasks.forEach((task) => {
+      const dateKey = format(task.dueDate, "yyyy-MM-dd");
       if (!grouped[dateKey]) grouped[dateKey] = [];
       grouped[dateKey].push(task);
     });
     return grouped;
   }, [tasks]);
 
-  const currentDayTasks = tasksByDate[format(selectedDate, 'yyyy-MM-dd')] || [];
-  
+  const currentDayTasks = tasksByDate[format(selectedDate, "yyyy-MM-dd")] || [];
+
   const currentTasksInModal = React.useMemo(() => {
     if (!selectedSubject) return [];
-    return currentDayTasks.filter(t => (t.subject || 'Geral') === selectedSubject);
+    return currentDayTasks.filter(
+      (t) => (t.subject || "Geral") === selectedSubject,
+    );
   }, [currentDayTasks, selectedSubject]);
-  
+
   const groupedTasksBySubject = React.useMemo(() => {
     const grouped: { [subject: string]: RevisionTask[] } = {};
-    currentDayTasks.forEach(task => {
-      const subject = task.subject || 'Geral';
+    currentDayTasks.forEach((task) => {
+      const subject = task.subject || "Geral";
       if (!grouped[subject]) grouped[subject] = [];
       grouped[subject].push(task);
     });
-    return Object.entries(grouped).map(([subject, tasks]) => ({ subject, tasks }));
+    return Object.entries(grouped).map(([subject, tasks]) => ({
+      subject,
+      tasks,
+    }));
   }, [currentDayTasks]);
 
-  const pendingTasksCount = tasks.filter(t => !t.completed && isBefore(t.dueDate, addDays(new Date(), 1))).length;
+  const pendingTasksCount = tasks.filter(
+    (t) => !t.completed && isBefore(t.dueDate, addDays(new Date(), 1)),
+  ).length;
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-[96%] mx-auto"
     >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2.5rem] border border-white/20 dark:border-slate-800/50 shadow-2xl">
         <div className="flex items-center gap-4">
-          <div className={cn("p-4 rounded-3xl shadow-lg transform -rotate-3", theme.primary, theme.contrastText)}>
+          <div
+            className={cn(
+              "p-4 rounded-3xl shadow-lg transform -rotate-3",
+              theme.primary,
+              theme.contrastText,
+            )}
+          >
             <Calendar size={28} />
           </div>
           <div>
-            <h2 className="text-2xl font-bold dark:text-white tracking-tight">Agenda de Revisão Ativa</h2>
-            <p className="text-xs text-black/40 dark:text-slate-400 font-medium">Baseado em Neurociência e Repetição Espaçada</p>
+            <h2 className="text-2xl font-bold dark:text-white tracking-tight">
+              Agenda de Revisão Ativa
+            </h2>
+            <p className="text-xs text-black/40 dark:text-slate-400 font-medium">
+              Baseado em Neurociência e Repetição Espaçada
+            </p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-3">
           {pendingTasksCount > 0 && (
             <div className="px-4 py-2 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center gap-2">
@@ -2596,8 +3293,8 @@ const RevisionAgenda = ({
               <span>{pendingTasksCount} Revisões Pendentes</span>
             </div>
           )}
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all font-bold text-sm dark:text-white active:scale-95"
           >
             <ChevronLeft size={18} />
@@ -2610,64 +3307,89 @@ const RevisionAgenda = ({
         {/* Calendar Sidebar */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 dark:border-slate-800/50 shadow-xl">
-             <div className="flex items-center justify-between mb-6">
-                <h3 className="font-bold dark:text-white flex items-center gap-2">
-                   <Calendar size={18} className={theme.text} />
-                   Calendário
-                </h3>
-                <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-widest uppercase">Selecione o Dia</span>
-             </div>
-             
-             <div className="grid grid-cols-7 gap-1">
-                {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
-                  <div key={`${d}-${i}`} className="text-center text-[10px] font-bold text-black/20 dark:text-slate-600 py-2">{d}</div>
-                ))}
-                {(() => {
-                  const start = startOfWeek(startOfMonth(selectedDate));
-                  const end = endOfWeek(endOfMonth(selectedDate));
-                  const days = eachDayOfInterval({ start, end });
-                  
-                  return days.map(day => {
-                    const isSelected = isSameDay(day, selectedDate);
-                    const isCurrentMonth = day.getMonth() === selectedDate.getMonth();
-                    const hasTasks = tasksByDate[format(day, 'yyyy-MM-dd')]?.length > 0;
-                    const allCompleted = hasTasks && tasksByDate[format(day, 'yyyy-MM-dd')].every(t => t.completed);
-                    
-                    return (
-                      <button
-                        key={day.toISOString()}
-                        onClick={() => setSelectedDate(day)}
-                        className={cn(
-                          "relative aspect-square flex flex-col items-center justify-center rounded-xl text-xs font-bold transition-all",
-                          isSelected 
-                            ? cn(theme.primary, theme.contrastText, "shadow-md scale-110 z-10")
-                            : isCurrentMonth 
-                              ? "hover:bg-black/5 dark:hover:bg-white/5 dark:text-white" 
-                              : "text-black/10 dark:text-slate-700",
-                          isToday(day) && !isSelected && "ring-2 ring-blue-500/30"
-                        )}
-                      >
-                        {day.getDate()}
-                        {hasTasks && !isSelected && (
-                          <div className={cn(
-                            "absolute bottom-1.5 w-1 h-1 rounded-full",
-                            allCompleted ? "bg-emerald-500" : "bg-rose-500"
-                          )} />
-                        )}
-                      </button>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold dark:text-white flex items-center gap-2">
+                <Calendar size={18} className={theme.text} />
+                Calendário
+              </h3>
+              <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-widest uppercase">
+                Selecione o Dia
+              </span>
+            </div>
+
+            <div className="grid grid-cols-7 gap-1">
+              {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
+                <div
+                  key={`${d}-${i}`}
+                  className="text-center text-[10px] font-bold text-black/20 dark:text-slate-600 py-2"
+                >
+                  {d}
+                </div>
+              ))}
+              {(() => {
+                const start = startOfWeek(startOfMonth(selectedDate));
+                const end = endOfWeek(endOfMonth(selectedDate));
+                const days = eachDayOfInterval({ start, end });
+
+                return days.map((day) => {
+                  const isSelected = isSameDay(day, selectedDate);
+                  const isCurrentMonth =
+                    day.getMonth() === selectedDate.getMonth();
+                  const hasTasks =
+                    tasksByDate[format(day, "yyyy-MM-dd")]?.length > 0;
+                  const allCompleted =
+                    hasTasks &&
+                    tasksByDate[format(day, "yyyy-MM-dd")].every(
+                      (t) => t.completed,
                     );
-                  });
-                })()}
-             </div>
+
+                  return (
+                    <button
+                      key={day.toISOString()}
+                      onClick={() => setSelectedDate(day)}
+                      className={cn(
+                        "relative aspect-square flex flex-col items-center justify-center rounded-xl text-xs font-bold transition-all",
+                        isSelected
+                          ? cn(
+                              theme.primary,
+                              theme.contrastText,
+                              "shadow-md scale-110 z-10",
+                            )
+                          : isCurrentMonth
+                            ? "hover:bg-black/5 dark:hover:bg-white/5 dark:text-white"
+                            : "text-black/10 dark:text-slate-700",
+                        isToday(day) &&
+                          !isSelected &&
+                          "ring-2 ring-blue-500/30",
+                      )}
+                    >
+                      {day.getDate()}
+                      {hasTasks && !isSelected && (
+                        <div
+                          className={cn(
+                            "absolute bottom-1.5 w-1 h-1 rounded-full",
+                            allCompleted ? "bg-emerald-500" : "bg-rose-500",
+                          )}
+                        />
+                      )}
+                    </button>
+                  );
+                });
+              })()}
+            </div>
           </div>
 
           <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 p-6 rounded-[2rem] space-y-4">
             <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400">
               <Lightbulb size={20} />
-              <h4 className="font-bold uppercase tracking-widest text-[10px]">Dica Neurocientífica</h4>
+              <h4 className="font-bold uppercase tracking-widest text-[10px]">
+                Dica Neurocientífica
+              </h4>
             </div>
             <p className="text-xs text-amber-800/80 dark:text-amber-200/80 font-medium leading-relaxed">
-              A curva do esquecimento de Ebbinghaus mostra que perdemos 70% do que aprendemos em 24h. Revisar em intervalos de 1, 3, 7 e 30 dias fixa a informação na memória de longo prazo.
+              A curva do esquecimento de Ebbinghaus mostra que perdemos 70% do
+              que aprendemos em 24h. Revisar em intervalos de 1, 3, 7 e 30 dias
+              fixa a informação na memória de longo prazo.
             </p>
           </div>
         </div>
@@ -2677,7 +3399,8 @@ const RevisionAgenda = ({
           <div className="flex items-center justify-between px-4">
             <h3 className="text-xl font-bold dark:text-white flex items-center gap-3">
               <Hash size={24} className={theme.text} />
-              Revisões para {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
+              Revisões para{" "}
+              {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
             </h3>
             <span className="px-3 py-1 bg-black/5 dark:bg-white/5 rounded-full text-[10px] font-black text-black/40 dark:text-slate-500 uppercase tracking-widest">
               {groupedTasksBySubject.length} Matérias
@@ -2687,9 +3410,11 @@ const RevisionAgenda = ({
           {groupedTasksBySubject.length > 0 ? (
             <div className="grid grid-cols-1 gap-4">
               {groupedTasksBySubject.map((group, groupIdx) => {
-                const allCompleted = group.tasks.every(t => t.completed);
-                const completedCount = group.tasks.filter(t => t.completed).length;
-                
+                const allCompleted = group.tasks.every((t) => t.completed);
+                const completedCount = group.tasks.filter(
+                  (t) => t.completed,
+                ).length;
+
                 return (
                   <motion.div
                     key={`${group.subject}-${groupIdx}`}
@@ -2697,26 +3422,40 @@ const RevisionAgenda = ({
                     onClick={() => setSelectedSubject(group.subject)}
                     className={cn(
                       "group flex items-center justify-between p-6 rounded-[2.5rem] border transition-all cursor-pointer",
-                      allCompleted 
-                        ? "bg-emerald-500/5 border-emerald-500/20 opacity-80" 
-                        : "bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl border-white/20 dark:border-slate-800/50 shadow-lg hover:border-emerald-500/30 hover:shadow-emerald-500/5"
+                      allCompleted
+                        ? "bg-emerald-500/5 border-emerald-500/20 opacity-80"
+                        : "bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl border-white/20 dark:border-slate-800/50 shadow-lg hover:border-emerald-500/30 hover:shadow-emerald-500/5",
                     )}
                   >
                     <div className="flex items-center gap-6">
-                      <div className={cn(
-                        "w-12 h-12 rounded-3xl flex items-center justify-center transition-all shadow-lg",
-                        allCompleted ? "bg-emerald-500/10 text-emerald-500" : "bg-blue-500/10 text-blue-500"
-                      )}>
-                        {allCompleted ? <CheckCircle2 size={24} /> : <BookOpen size={24} />}
+                      <div
+                        className={cn(
+                          "w-12 h-12 rounded-3xl flex items-center justify-center transition-all shadow-lg",
+                          allCompleted
+                            ? "bg-emerald-500/10 text-emerald-500"
+                            : "bg-blue-500/10 text-blue-500",
+                        )}
+                      >
+                        {allCompleted ? (
+                          <CheckCircle2 size={24} />
+                        ) : (
+                          <BookOpen size={24} />
+                        )}
                       </div>
-                      
+
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={cn(
-                            "px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider",
-                            allCompleted ? "bg-emerald-500/10 text-emerald-600" : "bg-blue-500/10 text-blue-600"
-                          )}>
-                            {allCompleted ? 'Revisão Concluída' : 'Revisão Pendente'}
+                          <span
+                            className={cn(
+                              "px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider",
+                              allCompleted
+                                ? "bg-emerald-500/10 text-emerald-600"
+                                : "bg-blue-500/10 text-blue-600",
+                            )}
+                          >
+                            {allCompleted
+                              ? "Revisão Concluída"
+                              : "Revisão Pendente"}
                           </span>
                           <span className="text-[10px] font-bold text-black/20 dark:text-slate-600 italic">
                             {completedCount}/{group.tasks.length} sessões
@@ -2727,14 +3466,17 @@ const RevisionAgenda = ({
                         </h4>
                         <div className="flex flex-wrap gap-2 mt-2">
                           {group.tasks.slice(0, 2).map((t, tid) => (
-                             <span key={tid} className="text-[10px] text-black/40 dark:text-slate-500 bg-black/5 dark:bg-white/5 px-2 py-1 rounded-lg truncate max-w-[150px]">
-                               {t.fileName}
-                             </span>
+                            <span
+                              key={tid}
+                              className="text-[10px] text-black/40 dark:text-slate-500 bg-black/5 dark:bg-white/5 px-2 py-1 rounded-lg truncate max-w-[150px]"
+                            >
+                              {t.fileName}
+                            </span>
                           ))}
                           {group.tasks.length > 2 && (
-                             <span className="text-[10px] text-emerald-600 font-bold bg-emerald-500/10 px-2 py-1 rounded-lg">
-                               +{group.tasks.length - 2} mais
-                             </span>
+                            <span className="text-[10px] text-emerald-600 font-bold bg-emerald-500/10 px-2 py-1 rounded-lg">
+                              +{group.tasks.length - 2} mais
+                            </span>
                           )}
                         </div>
                       </div>
@@ -2744,7 +3486,8 @@ const RevisionAgenda = ({
                       <button
                         className={cn(
                           "px-6 py-2.5 rounded-xl font-bold text-xs shadow-lg active:scale-95 transition-all group-hover:scale-105",
-                          theme.primary, theme.contrastText
+                          theme.primary,
+                          theme.contrastText,
                         )}
                       >
                         Abrir Sessões
@@ -2757,10 +3500,17 @@ const RevisionAgenda = ({
           ) : (
             <div className="flex flex-col items-center justify-center py-20 bg-white/20 dark:bg-slate-900/20 rounded-[3rem] border-2 border-dashed border-black/5 dark:border-white/5">
               <div className="p-6 bg-black/5 dark:bg-white/5 rounded-full mb-4">
-                <Calendar size={40} className="text-black/10 dark:text-white/10" />
+                <Calendar
+                  size={40}
+                  className="text-black/10 dark:text-white/10"
+                />
               </div>
-              <p className="text-sm font-bold text-black/40 dark:text-slate-500">Nenhuma revisão agendada para este dia.</p>
-              <p className="text-[10px] text-black/20 dark:text-slate-600 mt-1 uppercase tracking-widest font-black">Aproveite para descansar ou estudar novos conteúdos!</p>
+              <p className="text-sm font-bold text-black/40 dark:text-slate-500">
+                Nenhuma revisão agendada para este dia.
+              </p>
+              <p className="text-[10px] text-black/20 dark:text-slate-600 mt-1 uppercase tracking-widest font-black">
+                Aproveite para descansar ou estudar novos conteúdos!
+              </p>
             </div>
           )}
         </div>
@@ -2786,15 +3536,25 @@ const RevisionAgenda = ({
               <div className="p-8 space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className={cn("p-4 rounded-3xl shadow-lg", theme.primary, theme.contrastText)}>
+                    <div
+                      className={cn(
+                        "p-4 rounded-3xl shadow-lg",
+                        theme.primary,
+                        theme.contrastText,
+                      )}
+                    >
                       <BookOpen size={24} />
                     </div>
                     <div>
-                      <h3 className="text-2xl font-bold dark:text-white">{selectedSubject}</h3>
-                      <p className="text-xs font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">Sessões de Revisão para hoje</p>
+                      <h3 className="text-2xl font-bold dark:text-white">
+                        {selectedSubject}
+                      </h3>
+                      <p className="text-xs font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">
+                        Sessões de Revisão para hoje
+                      </p>
                     </div>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setSelectedSubject(null)}
                     className="p-3 bg-black/5 dark:bg-white/5 rounded-2xl hover:bg-black/10 dark:hover:bg-white/10 transition-all"
                   >
@@ -2803,40 +3563,47 @@ const RevisionAgenda = ({
                 </div>
 
                 <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
-                  {currentTasksInModal.map(task => (
+                  {currentTasksInModal.map((task) => (
                     <motion.div
                       key={task.id}
                       className={cn(
                         "flex items-center justify-between p-5 rounded-2xl border transition-all",
-                        task.completed 
-                          ? "bg-emerald-500/5 border-emerald-500/20" 
-                          : "bg-black/5 dark:bg-white/5 border-transparent"
+                        task.completed
+                          ? "bg-emerald-500/5 border-emerald-500/20"
+                          : "bg-black/5 dark:bg-white/5 border-transparent",
                       )}
                     >
                       <div className="flex items-center gap-4 min-w-0">
-                        <button 
+                        <button
                           onClick={() => onCompleteTask(task.id)}
                           className={cn(
                             "w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all shrink-0",
-                            task.completed 
-                              ? "bg-emerald-500 border-emerald-500 text-white" 
-                              : "border-black/10 dark:border-white/10 hover:border-emerald-500/50"
+                            task.completed
+                              ? "bg-emerald-500 border-emerald-500 text-white"
+                              : "border-black/10 dark:border-white/10 hover:border-emerald-500/50",
                           )}
                         >
                           {task.completed && <Check size={18} />}
                         </button>
                         <div className="min-w-0">
-                          <p className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">Revisão de {task.intervalDays} dias</p>
-                          <h4 className={cn("text-sm font-bold dark:text-white truncate", task.completed && "line-through opacity-50")}>
+                          <p className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">
+                            Revisão de {task.intervalDays} dias
+                          </p>
+                          <h4
+                            className={cn(
+                              "text-sm font-bold dark:text-white truncate",
+                              task.completed && "line-through opacity-50",
+                            )}
+                          >
                             {task.fileName}
                           </h4>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <TaskDeleteButton 
-                          taskId={task.id} 
-                          onDelete={onDeleteTask} 
+                        <TaskDeleteButton
+                          taskId={task.id}
+                          onDelete={onDeleteTask}
                           onDeletedFromModal={() => {
                             if (currentTasksInModal.length === 1) {
                               setSelectedSubject(null);
@@ -2851,7 +3618,8 @@ const RevisionAgenda = ({
                             }}
                             className={cn(
                               "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs shadow-md transition-all active:scale-95",
-                              theme.primary, theme.contrastText
+                              theme.primary,
+                              theme.contrastText,
                             )}
                           >
                             <RotateCcw size={14} />
@@ -2864,9 +3632,11 @@ const RevisionAgenda = ({
                 </div>
 
                 <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl">
-                   <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold leading-relaxed text-center">
-                     Ao completar todas as sessões desta matéria, você reforça consideravelmente a fixação dos temas em sua memória de longo prazo.
-                   </p>
+                  <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold leading-relaxed text-center">
+                    Ao completar todas as sessões desta matéria, você reforça
+                    consideravelmente a fixação dos temas em sua memória de
+                    longo prazo.
+                  </p>
                 </div>
               </div>
             </motion.div>
@@ -2883,69 +3653,83 @@ const StudySchedule = ({
   onClose,
   onPracticeSubject,
   onViewResult,
-  onRedoQuiz
+  onRedoQuiz,
 }: {
-  history: QuizResult[],
-  theme: any,
-  onClose: () => void,
-  onPracticeSubject: (subject: string, fileName: string) => void,
-  onViewResult: (res: QuizResult) => void,
-  onRedoQuiz: (res: QuizResult) => void
+  history: QuizResult[];
+  theme: any;
+  onClose: () => void;
+  onPracticeSubject: (subject: string, fileName: string) => void;
+  onViewResult: (res: QuizResult) => void;
+  onRedoQuiz: (res: QuizResult) => void;
 }) => {
   const [selectedItemDetails, setSelectedItemDetails] = React.useState<{
-    subject: string,
-    fileNames: string[],
-    results: QuizResult[],
-    totalCorrect: number,
-    totalQuestions: number
+    subject: string;
+    fileNames: string[];
+    results: QuizResult[];
+    totalCorrect: number;
+    totalQuestions: number;
   } | null>(null);
 
   const [currentPage, setCurrentPage] = React.useState(1);
   const [itemsPerPage, setItemsPerPage] = React.useState(20);
 
   // Filters
-  const [filterSubject, setFilterSubject] = React.useState('all');
-  const [filterFileName, setFilterFileName] = React.useState('');
-  const [filterDateStart, setFilterDateStart] = React.useState('');
-  const [filterDateEnd, setFilterDateEnd] = React.useState('');
+  const [filterSubject, setFilterSubject] = React.useState("all");
+  const [filterFileName, setFilterFileName] = React.useState("");
+  const [filterDateStart, setFilterDateStart] = React.useState("");
+  const [filterDateEnd, setFilterDateEnd] = React.useState("");
 
   const studyItems = React.useMemo(() => {
-    const groups: { 
-      subject: string, 
-      count: number, 
-      avgPerformance: number,
-      results: QuizResult[],
-      totalCorrect: number,
-      totalQuestions: number,
-      date: Date,
-      dateKey: string
+    const groups: {
+      subject: string;
+      count: number;
+      avgPerformance: number;
+      results: QuizResult[];
+      totalCorrect: number;
+      totalQuestions: number;
+      date: Date;
+      dateKey: string;
     }[] = [];
-    
+
     // Filter history first
-    const filteredHistory = history.filter(res => {
+    const filteredHistory = history.filter((res) => {
       let subject = res.subject;
-      if (!subject || subject === 'Geral' || subject === 'Não Identificada' || subject === 'Sem Matéria') {
+      if (
+        !subject ||
+        subject === "Geral" ||
+        subject === "Não Identificada" ||
+        subject === "Sem Matéria"
+      ) {
         subject = normalizeSubject(res.fileName);
       }
-      if (!subject) subject = 'Geral';
+      if (!subject) subject = "Geral";
 
-      const fileName = res.fileName || 'Documento';
-      const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
+      const fileName = res.fileName || "Documento";
+      const date =
+        res.date instanceof Date ? res.date : (res.date as any).toDate();
 
       // Subject Filter
-      if (filterSubject !== 'all' && !subject.toLowerCase().includes(filterSubject.toLowerCase())) return false;
+      if (
+        filterSubject !== "all" &&
+        !subject.toLowerCase().includes(filterSubject.toLowerCase())
+      )
+        return false;
 
       // File Name Filter
-      if (filterFileName && !fileName.toLowerCase().includes(filterFileName.toLowerCase())) return false;
+      if (
+        filterFileName &&
+        !fileName.toLowerCase().includes(filterFileName.toLowerCase())
+      )
+        return false;
 
       // Date Filters
       if (filterDateStart) {
-        const [year, month, day] = filterDateStart.split('-').map(Number);
+        const [year, month, day] = filterDateStart.split("-").map(Number);
         const start = new Date(year, month - 1, day, 0, 0, 0, 0);
         if (date < start) return false;
       }
       if (filterDateEnd) {
-        const [year, month, day] = filterDateEnd.split('-').map(Number);
+        const [year, month, day] = filterDateEnd.split("-").map(Number);
         const end = new Date(year, month - 1, day, 23, 59, 59, 999);
         if (date > end) return false;
       }
@@ -2953,38 +3737,104 @@ const StudySchedule = ({
       return true;
     });
 
-    const groupMap = new Map<string, typeof groups[0]>();
+    const groupMap = new Map<string, (typeof groups)[0]>();
 
-    filteredHistory.forEach(res => {
+    filteredHistory.forEach((res) => {
       let subjectRaw = res.subject;
-      if (!subjectRaw || subjectRaw === 'Geral' || subjectRaw === 'Não Identificada' || subjectRaw === 'Sem Matéria') {
+      if (
+        !subjectRaw ||
+        subjectRaw === "Geral" ||
+        subjectRaw === "Não Identificada" ||
+        subjectRaw === "Sem Matéria"
+      ) {
         subjectRaw = normalizeSubject(res.fileName);
       }
-      if (!subjectRaw) subjectRaw = 'Geral';
+      if (!subjectRaw) subjectRaw = "Geral";
 
-      const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
-      const dateKey = format(date, 'yyyy-MM-dd');
-      
+      const date =
+        res.date instanceof Date ? res.date : (res.date as any).toDate();
+      const dateKey = format(date, "yyyy-MM-dd");
+
       // Smart Subject Normalization: Group things that look like the same subject
       let normalizedSubj = subjectRaw.toUpperCase().trim();
       const mappings = [
-        { keywords: ['PORTUGUÊS', 'PORTUGUES', 'GRAMÁTICA', 'REDAÇÃO', 'LÍNGUA PORTUGUESA', 'PORQUÊS', 'MORFOLOGIA', 'VERBOS', 'SINTAXE', 'ORTOGRAFIA'], result: 'PORTUGUÊS' },
-        { keywords: ['MATEMÁTICA', 'MATEMATICA', 'RACIOCÍNIO LÓGICO', 'RLM', 'ÁLGEBRA', 'GEOMETRIA'], result: 'MATEMÁTICA / RLM' },
-        { keywords: ['CONSTITUCIONAL', 'DIREITO CONSTITUCIONAL', 'ART. 5', 'PODER EXECUTIVO', 'PODER JUDICIÁRIO'], result: 'DIREITO CONSTITUCIONAL' },
-        { keywords: ['ADMINISTRATIVO', 'DIREITO ADMINISTRATIVO', 'ATOS ADMINISTRATIVOS', 'LICITAÇÃO'], result: 'DIREITO ADMINISTRATIVO' },
-        { keywords: ['PENAL', 'DIREITO PENAL', 'PROCESSO PENAL'], result: 'DIREITO PENAL' },
-        { keywords: ['INFORMÁTICA', 'INFORMATICA', 'WINDOWS', 'HARDWARE', 'EXCEL', 'WORD'], result: 'INFORMÁTICA' },
-        { keywords: ['SEGURIDADE SOCIAL', 'PREVIDENCIÁRIO', 'LOAS', 'INSS'], result: 'SEGURIDADE SOCIAL' },
-        { keywords: ['SIMULADO GERAL', 'TODAS AS MATÉRIAS', 'SIMULADO'], result: 'SIMULADO GERAL' }
+        {
+          keywords: [
+            "PORTUGUÊS",
+            "PORTUGUES",
+            "GRAMÁTICA",
+            "REDAÇÃO",
+            "LÍNGUA PORTUGUESA",
+            "PORQUÊS",
+            "MORFOLOGIA",
+            "VERBOS",
+            "SINTAXE",
+            "ORTOGRAFIA",
+          ],
+          result: "PORTUGUÊS",
+        },
+        {
+          keywords: [
+            "MATEMÁTICA",
+            "MATEMATICA",
+            "RACIOCÍNIO LÓGICO",
+            "RLM",
+            "ÁLGEBRA",
+            "GEOMETRIA",
+          ],
+          result: "MATEMÁTICA / RLM",
+        },
+        {
+          keywords: [
+            "CONSTITUCIONAL",
+            "DIREITO CONSTITUCIONAL",
+            "ART. 5",
+            "PODER EXECUTIVO",
+            "PODER JUDICIÁRIO",
+          ],
+          result: "DIREITO CONSTITUCIONAL",
+        },
+        {
+          keywords: [
+            "ADMINISTRATIVO",
+            "DIREITO ADMINISTRATIVO",
+            "ATOS ADMINISTRATIVOS",
+            "LICITAÇÃO",
+          ],
+          result: "DIREITO ADMINISTRATIVO",
+        },
+        {
+          keywords: ["PENAL", "DIREITO PENAL", "PROCESSO PENAL"],
+          result: "DIREITO PENAL",
+        },
+        {
+          keywords: [
+            "INFORMÁTICA",
+            "INFORMATICA",
+            "WINDOWS",
+            "HARDWARE",
+            "EXCEL",
+            "WORD",
+          ],
+          result: "INFORMÁTICA",
+        },
+        {
+          keywords: ["SEGURIDADE SOCIAL", "PREVIDENCIÁRIO", "LOAS", "INSS"],
+          result: "SEGURIDADE SOCIAL",
+        },
+        {
+          keywords: ["SIMULADO GERAL", "TODAS AS MATÉRIAS", "SIMULADO"],
+          result: "SIMULADO GERAL",
+        },
       ];
 
       for (const mapping of mappings) {
-        if (mapping.keywords.some(k => normalizedSubj.includes(k))) {
+        if (mapping.keywords.some((k) => normalizedSubj.includes(k))) {
           normalizedSubj = mapping.result;
           break;
         }
       }
-      
+
       const key = `${dateKey}-${normalizedSubj}`;
       const performance = res.total > 0 ? (res.correct / res.total) * 100 : 0;
 
@@ -2994,53 +3844,76 @@ const StudySchedule = ({
         existing.totalCorrect += res.correct;
         existing.totalQuestions += res.total;
         existing.results.push(res);
-        existing.avgPerformance = existing.totalQuestions > 0 ? (existing.totalCorrect / existing.totalQuestions) * 100 : 0;
+        existing.avgPerformance =
+          existing.totalQuestions > 0
+            ? (existing.totalCorrect / existing.totalQuestions) * 100
+            : 0;
       } else {
         groupMap.set(key, {
-            subject: normalizedSubj,
-            count: 1,
-            avgPerformance: performance,
-            results: [res],
-            totalCorrect: res.correct,
-            totalQuestions: res.total,
-            date,
-            dateKey
+          subject: normalizedSubj,
+          count: 1,
+          avgPerformance: performance,
+          results: [res],
+          totalCorrect: res.correct,
+          totalQuestions: res.total,
+          date,
+          dateKey,
         });
       }
     });
 
-    return Array.from(groupMap.values()).sort((a, b) => b.date.getTime() - a.date.getTime());
+    return Array.from(groupMap.values()).sort(
+      (a, b) => b.date.getTime() - a.date.getTime(),
+    );
   }, [history, filterSubject, filterFileName, filterDateStart, filterDateEnd]);
 
   const uniqueSubjects = React.useMemo(() => {
     const s = new Set<string>();
-    history.forEach(res => {
+    history.forEach((res) => {
       let sub = res.subject;
-      if (!sub || sub === 'Geral' || sub === 'Não Identificada' || sub === 'Sem Matéria') {
+      if (
+        !sub ||
+        sub === "Geral" ||
+        sub === "Não Identificada" ||
+        sub === "Sem Matéria"
+      ) {
         sub = normalizeSubject(res.fileName);
       }
       if (sub) s.add(sub);
-      else s.add('Não Identificada');
+      else s.add("Não Identificada");
     });
     return Array.from(s).sort();
   }, [history]);
 
   const totalPages = Math.ceil(studyItems.length / itemsPerPage);
-  const paginatedItems = studyItems.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const paginatedItems = studyItems.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
 
-  const hasActiveFilters = filterSubject !== 'all' || filterFileName !== '' || filterDateStart !== '' || filterDateEnd !== '';
+  const hasActiveFilters =
+    filterSubject !== "all" ||
+    filterFileName !== "" ||
+    filterDateStart !== "" ||
+    filterDateEnd !== "";
 
   const clearFilters = () => {
-    setFilterSubject('all');
-    setFilterFileName('');
-    setFilterDateStart('');
-    setFilterDateEnd('');
+    setFilterSubject("all");
+    setFilterFileName("");
+    setFilterDateStart("");
+    setFilterDateEnd("");
   };
 
   // Reset to page 1 when itemsPerPage or filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [itemsPerPage, filterSubject, filterFileName, filterDateStart, filterDateEnd]);
+  }, [
+    itemsPerPage,
+    filterSubject,
+    filterFileName,
+    filterDateStart,
+    filterDateEnd,
+  ]);
 
   return (
     <motion.div
@@ -3052,18 +3925,27 @@ const StudySchedule = ({
       <AnimatePresence>
         {selectedItemDetails && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="bg-white dark:bg-slate-900 rounded-[2rem] border border-black/10 dark:border-slate-800 shadow-2xl w-full max-w-[98vw] overflow-hidden max-h-[98vh] flex flex-col"
             >
-              <div className={cn("px-6 py-4 flex items-center justify-between shrink-0", theme.bg, theme.text)}>
+              <div
+                className={cn(
+                  "px-6 py-4 flex items-center justify-between shrink-0",
+                  theme.bg,
+                  theme.text,
+                )}
+              >
                 <div className="flex items-center gap-3">
                   <BarChart2 size={20} />
                   <h3 className="font-bold">Detalhes de Desempenho</h3>
                 </div>
-                <button onClick={() => setSelectedItemDetails(null)} className="p-1 hover:bg-white/10 rounded-lg transition-colors">
+                <button
+                  onClick={() => setSelectedItemDetails(null)}
+                  className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+                >
                   <X size={20} />
                 </button>
               </div>
@@ -3071,38 +3953,69 @@ const StudySchedule = ({
               <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="p-6 bg-black/5 dark:bg-white/5 rounded-[1.5rem]">
-                    <p className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest mb-2">Matéria / Conteúdo</p>
+                    <p className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest mb-2">
+                      Matéria / Conteúdo
+                    </p>
                     <p className="text-lg font-bold dark:text-white flex items-center gap-3">
-                       <Folder className={theme.text} size={22} />
-                       {selectedItemDetails.subject}
+                      <Folder className={theme.text} size={22} />
+                      {selectedItemDetails.subject}
                     </p>
                   </div>
                   <div className="p-6 bg-emerald-500/10 rounded-[1.5rem]">
-                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2">Data da Atividade</p>
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2">
+                      Data da Atividade
+                    </p>
                     <p className="text-lg font-bold dark:text-white flex items-center gap-3 text-emerald-600">
-                       <Calendar size={22} />
-                       {format(selectedItemDetails.results[0].date instanceof Date ? selectedItemDetails.results[0].date : (selectedItemDetails.results[0].date as any).toDate(), "dd/MM/yyyy")}
+                      <Calendar size={22} />
+                      {format(
+                        selectedItemDetails.results[0].date instanceof Date
+                          ? selectedItemDetails.results[0].date
+                          : (
+                              selectedItemDetails.results[0].date as any
+                            ).toDate(),
+                        "dd/MM/yyyy",
+                      )}
                     </p>
                   </div>
                   <div className="p-6 bg-blue-500/10 rounded-[1.5rem] flex flex-col justify-center">
-                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-2">Média de Acertos</p>
+                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-2">
+                      Média de Acertos
+                    </p>
                     <div className="flex items-end justify-between gap-4">
                       <p className="text-4xl font-black text-blue-600">
-                        {Math.round((selectedItemDetails.totalCorrect / selectedItemDetails.totalQuestions) * 100)}%
+                        {Math.round(
+                          (selectedItemDetails.totalCorrect /
+                            selectedItemDetails.totalQuestions) *
+                            100,
+                        )}
+                        %
                       </p>
                       <div className="flex flex-col items-end border-l border-blue-500/20 pl-4">
                         <div className="flex gap-3">
                           <div className="text-center">
-                            <p className="text-[10px] font-bold text-emerald-600 uppercase">Certas</p>
-                            <p className="text-sm font-bold text-emerald-600">{selectedItemDetails.totalCorrect}</p>
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase">
+                              Certas
+                            </p>
+                            <p className="text-sm font-bold text-emerald-600">
+                              {selectedItemDetails.totalCorrect}
+                            </p>
                           </div>
                           <div className="text-center">
-                            <p className="text-[10px] font-bold text-rose-600 uppercase">Erradas</p>
-                            <p className="text-sm font-bold text-rose-600">{selectedItemDetails.totalQuestions - selectedItemDetails.totalCorrect}</p>
+                            <p className="text-[10px] font-bold text-rose-600 uppercase">
+                              Erradas
+                            </p>
+                            <p className="text-sm font-bold text-rose-600">
+                              {selectedItemDetails.totalQuestions -
+                                selectedItemDetails.totalCorrect}
+                            </p>
                           </div>
                           <div className="text-center">
-                            <p className="text-[10px] font-bold text-blue-600 uppercase">Total</p>
-                            <p className="text-sm font-bold text-blue-600">{selectedItemDetails.totalQuestions}</p>
+                            <p className="text-[10px] font-bold text-blue-600 uppercase">
+                              Total
+                            </p>
+                            <p className="text-sm font-bold text-blue-600">
+                              {selectedItemDetails.totalQuestions}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -3111,74 +4024,116 @@ const StudySchedule = ({
                 </div>
 
                 <div className="space-y-4">
-                  <p className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest px-1">Sessões deste Dia</p>
+                  <p className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest px-1">
+                    Sessões deste Dia
+                  </p>
                   <div className="grid gap-3">
-                    {selectedItemDetails.results.sort((a, b) => {
-                      const da = a.date instanceof Date ? a.date : (a.date as any).toDate();
-                      const db = b.date instanceof Date ? b.date : (b.date as any).toDate();
-                      return db.getTime() - da.getTime();
-                    }).map((res, i) => {
-                      const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
-                      const performance = Math.round((res.correct / res.total) * 100);
-                      return (
-                        <div key={i} className="flex items-center justify-between p-4 bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 rounded-2xl group hover:border-emerald-500/30 transition-all">
-                          <div className="flex flex-col min-w-0 flex-1 mr-4">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold dark:text-white shrink-0">{format(date, "HH:mm")}</span>
-                              <span className="text-xs font-medium text-black/40 dark:text-slate-500 truncate">{res.fileName}</span>
+                    {selectedItemDetails.results
+                      .sort((a, b) => {
+                        const da =
+                          a.date instanceof Date
+                            ? a.date
+                            : (a.date as any).toDate();
+                        const db =
+                          b.date instanceof Date
+                            ? b.date
+                            : (b.date as any).toDate();
+                        return db.getTime() - da.getTime();
+                      })
+                      .map((res, i) => {
+                        const date =
+                          res.date instanceof Date
+                            ? res.date
+                            : (res.date as any).toDate();
+                        const performance = Math.round(
+                          (res.correct / res.total) * 100,
+                        );
+                        return (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between p-4 bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 rounded-2xl group hover:border-emerald-500/30 transition-all"
+                          >
+                            <div className="flex flex-col min-w-0 flex-1 mr-4">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold dark:text-white shrink-0">
+                                  {format(date, "HH:mm")}
+                                </span>
+                                <span className="text-xs font-medium text-black/40 dark:text-slate-500 truncate">
+                                  {res.fileName}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] font-bold text-emerald-500">
+                                  {res.correct} acertos
+                                </span>
+                                <span className="text-[10px] font-bold text-rose-500">
+                                  {res.total - res.correct} erros
+                                </span>
+                                <span className="text-[10px] font-bold text-black/40 dark:text-slate-500">
+                                  Total: {res.total}
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] font-bold text-emerald-500">{res.correct} acertos</span>
-                              <span className="text-[10px] font-bold text-rose-500">{res.total - res.correct} erros</span>
-                              <span className="text-[10px] font-bold text-black/40 dark:text-slate-500">Total: {res.total}</span>
+                            <div className="flex items-center gap-4">
+                              <span
+                                className={cn(
+                                  "text-sm font-black w-12 text-right",
+                                  performance >= 70
+                                    ? "text-emerald-500"
+                                    : performance >= 50
+                                      ? "text-amber-500"
+                                      : "text-rose-500",
+                                )}
+                              >
+                                {performance}%
+                              </span>
+
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => {
+                                    onViewResult(res);
+                                    setSelectedItemDetails(null);
+                                  }}
+                                  className={cn(
+                                    "p-2 rounded-lg",
+                                    theme.bg,
+                                    theme.text,
+                                  )}
+                                  title="Ver Resultado"
+                                >
+                                  <ArrowUpRight size={14} />
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    onRedoQuiz(res);
+                                    setSelectedItemDetails(null);
+                                  }}
+                                  className="p-2 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                                  title="Refazer Mesmo Quiz"
+                                >
+                                  <RotateCcw size={14} />
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    onPracticeSubject(
+                                      res.subject ||
+                                        selectedItemDetails.subject,
+                                      res.fileName,
+                                    );
+                                    setSelectedItemDetails(null);
+                                  }}
+                                  className="p-2 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+                                  title="Gerar Novo Quiz deste Material"
+                                >
+                                  <Zap size={14} />
+                                </button>
+                              </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <span className={cn("text-sm font-black w-12 text-right", 
-                              performance >= 70 ? "text-emerald-500" : 
-                              performance >= 50 ? "text-amber-500" : "text-rose-500"
-                            )}>
-                              {performance}%
-                            </span>
-                            
-                            <div className="flex items-center gap-1">
-                              <button 
-                                onClick={() => {
-                                  onViewResult(res);
-                                  setSelectedItemDetails(null);
-                                }}
-                                className={cn("p-2 rounded-lg", theme.bg, theme.text)}
-                                title="Ver Resultado"
-                              >
-                                <ArrowUpRight size={14} />
-                              </button>
-                              
-                              <button 
-                                onClick={() => {
-                                  onRedoQuiz(res);
-                                  setSelectedItemDetails(null);
-                                }}
-                                className="p-2 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-                                title="Refazer Mesmo Quiz"
-                              >
-                                <RotateCcw size={14} />
-                              </button>
-  
-                              <button 
-                                onClick={() => {
-                                  onPracticeSubject(res.subject || selectedItemDetails.subject, res.fileName);
-                                  setSelectedItemDetails(null);
-                                }}
-                                className="p-2 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
-                                title="Gerar Novo Quiz deste Material"
-                              >
-                                <Zap size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
                   </div>
                 </div>
               </div>
@@ -3189,14 +4144,22 @@ const StudySchedule = ({
 
       {/* Header Spreadsheet Style */}
       <div className="bg-white dark:bg-slate-900 border border-black/10 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
-        <div className={cn("px-6 py-4 border-b border-black/10 dark:border-slate-800 flex items-center justify-between", theme.bg, theme.text)}>
+        <div
+          className={cn(
+            "px-6 py-4 border-b border-black/10 dark:border-slate-800 flex items-center justify-between",
+            theme.bg,
+            theme.text,
+          )}
+        >
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/20 rounded-lg">
               <Table size={20} />
             </div>
-            <h2 className="text-lg font-bold tracking-tight">Cronograma de Estudos (Planilha de Controle)</h2>
+            <h2 className="text-lg font-bold tracking-tight">
+              Cronograma de Estudos (Planilha de Controle)
+            </h2>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
           >
@@ -3209,17 +4172,24 @@ const StudySchedule = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Subject Filter */}
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest ml-1">Filtrar por Matéria</label>
+              <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest ml-1">
+                Filtrar por Matéria
+              </label>
               <div className="relative">
-                <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30 dark:text-slate-500" />
+                <Filter
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30 dark:text-slate-500"
+                />
                 <select
                   value={filterSubject}
                   onChange={(e) => setFilterSubject(e.target.value)}
                   className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-black/10 dark:border-slate-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all appearance-none"
                 >
                   <option value="all">Todas as Matérias</option>
-                  {uniqueSubjects.map(s => (
-                    <option key={s} value={s}>{s}</option>
+                  {uniqueSubjects.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -3227,9 +4197,14 @@ const StudySchedule = ({
 
             {/* File Name Filter */}
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest ml-1">Buscar Arquivo</label>
+              <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest ml-1">
+                Buscar Arquivo
+              </label>
               <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30 dark:text-slate-500" />
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30 dark:text-slate-500"
+                />
                 <input
                   type="text"
                   placeholder="Nome do arquivo..."
@@ -3242,9 +4217,14 @@ const StudySchedule = ({
 
             {/* Date Start Filter */}
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest ml-1">De (Data)</label>
+              <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest ml-1">
+                De (Data)
+              </label>
               <div className="relative">
-                <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30 dark:text-slate-500" />
+                <Calendar
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30 dark:text-slate-500"
+                />
                 <input
                   type="date"
                   value={filterDateStart}
@@ -3256,9 +4236,14 @@ const StudySchedule = ({
 
             {/* Date End Filter */}
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest ml-1">Até (Data)</label>
+              <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest ml-1">
+                Até (Data)
+              </label>
               <div className="relative">
-                <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30 dark:text-slate-500" />
+                <Calendar
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30 dark:text-slate-500"
+                />
                 <input
                   type="date"
                   value={filterDateEnd}
@@ -3286,69 +4271,106 @@ const StudySchedule = ({
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-black/[0.02] dark:bg-white/[0.02] border-b border-black/10 dark:border-slate-800">
-                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider border-r border-black/5 dark:border-white/5">Pasta / Matéria</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider border-r border-black/5 dark:border-white/5 text-center">Última Atividade</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider border-r border-black/5 dark:border-white/5 text-center">Desempenho Médio</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider border-r border-black/5 dark:border-white/5 text-center">Sessões</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider text-right">Ações</th>
+                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider border-r border-black/5 dark:border-white/5">
+                  Pasta / Matéria
+                </th>
+                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider border-r border-black/5 dark:border-white/5 text-center">
+                  Última Atividade
+                </th>
+                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider border-r border-black/5 dark:border-white/5 text-center">
+                  Desempenho Médio
+                </th>
+                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider border-r border-black/5 dark:border-white/5 text-center">
+                  Sessões
+                </th>
+                <th className="px-6 py-3 text-[11px] font-bold text-black/50 dark:text-slate-400 uppercase tracking-wider text-right">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5 dark:divide-white/5">
               {(() => {
                 const rows: React.ReactNode[] = [];
-                let currentMonthStr = '';
-                let currentDateStr = '';
+                let currentMonthStr = "";
+                let currentDateStr = "";
 
                 paginatedItems.forEach((item, idx) => {
                   const dateStr = format(item.date, "dd/MM/yyyy");
-                  const monthStr = format(item.date, "MMMM yyyy", { locale: ptBR });
+                  const monthStr = format(item.date, "MMMM yyyy", {
+                    locale: ptBR,
+                  });
 
                   if (monthStr !== currentMonthStr) {
                     rows.push(
-                      <tr key={`month-${monthStr}`} className="bg-black/[0.05] dark:bg-white/5">
-                        <td colSpan={5} className="px-6 py-2 border-b border-black/10 dark:border-white/10">
+                      <tr
+                        key={`month-${monthStr}`}
+                        className="bg-black/[0.05] dark:bg-white/5"
+                      >
+                        <td
+                          colSpan={5}
+                          className="px-6 py-2 border-b border-black/10 dark:border-white/10"
+                        >
                           <span className="text-[11px] font-black uppercase tracking-[0.2em] text-black/60 dark:text-slate-400">
                             {monthStr}
                           </span>
                         </td>
-                      </tr>
+                      </tr>,
                     );
                     currentMonthStr = monthStr;
                   }
 
                   if (dateStr !== currentDateStr) {
                     rows.push(
-                      <tr key={`date-${dateStr}`} className="bg-black/[0.02] dark:bg-white/[0.02]">
-                        <td colSpan={5} className="px-6 py-2 border-b border-black/5 dark:border-white/5">
+                      <tr
+                        key={`date-${dateStr}`}
+                        className="bg-black/[0.02] dark:bg-white/[0.02]"
+                      >
+                        <td
+                          colSpan={5}
+                          className="px-6 py-2 border-b border-black/5 dark:border-white/5"
+                        >
                           <div className="flex items-center gap-2">
-                             <Calendar size={12} className="text-black/30 dark:text-slate-500" />
-                             <span className="text-[10px] font-black uppercase tracking-widest text-black/40 dark:text-slate-500">
-                               {dateStr}
-                             </span>
+                            <Calendar
+                              size={12}
+                              className="text-black/30 dark:text-slate-500"
+                            />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-black/40 dark:text-slate-500">
+                              {dateStr}
+                            </span>
                           </div>
                         </td>
-                      </tr>
+                      </tr>,
                     );
                     currentDateStr = dateStr;
                   }
 
                   rows.push(
-                    <tr 
-                      key={`item-${idx}`} 
+                    <tr
+                      key={`item-${idx}`}
                       className="hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors group cursor-pointer"
-                      onClick={() => setSelectedItemDetails({
-                        subject: item.subject,
-                        fileNames: Array.from(new Set(item.results.map(r => r.fileName))),
-                        results: item.results,
-                        totalCorrect: item.totalCorrect,
-                        totalQuestions: item.totalQuestions
-                      })}
+                      onClick={() =>
+                        setSelectedItemDetails({
+                          subject: item.subject,
+                          fileNames: Array.from(
+                            new Set(item.results.map((r) => r.fileName)),
+                          ),
+                          results: item.results,
+                          totalCorrect: item.totalCorrect,
+                          totalQuestions: item.totalQuestions,
+                        })
+                      }
                     >
                       <td className="px-6 py-5 border-r border-black/5 dark:border-white/5 pl-12">
                         <div className="flex items-center gap-4">
-                          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-transform group-hover:scale-110", 
-                            item.subject === 'SIMULADO GERAL' || item.subject === 'GERAL' ? 'bg-slate-100 text-slate-400' : cn(theme.bgLight, theme.text)
-                          )}>
+                          <div
+                            className={cn(
+                              "w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-transform group-hover:scale-110",
+                              item.subject === "SIMULADO GERAL" ||
+                                item.subject === "GERAL"
+                                ? "bg-slate-100 text-slate-400"
+                                : cn(theme.bgLight, theme.text),
+                            )}
+                          >
                             <Folder size={20} />
                           </div>
                           <div className="flex flex-col">
@@ -3356,7 +4378,12 @@ const StudySchedule = ({
                               {item.subject}
                             </span>
                             <span className="text-[10px] font-medium text-black/30 dark:text-slate-500">
-                              {Array.from(new Set(item.results.map(r => r.fileName))).length} materiais diferentes
+                              {
+                                Array.from(
+                                  new Set(item.results.map((r) => r.fileName)),
+                                ).length
+                              }{" "}
+                              materiais diferentes
                             </span>
                           </div>
                         </div>
@@ -3368,17 +4395,27 @@ const StudySchedule = ({
                       </td>
                       <td className="px-6 py-5 border-r border-black/5 dark:border-white/5 text-center">
                         <div className="flex flex-col items-center gap-1">
-                          <span className={cn("text-sm font-black", 
-                            item.avgPerformance >= 70 ? "text-emerald-500" : 
-                            item.avgPerformance >= 50 ? "text-amber-500" : "text-rose-500"
-                          )}>
+                          <span
+                            className={cn(
+                              "text-sm font-black",
+                              item.avgPerformance >= 70
+                                ? "text-emerald-500"
+                                : item.avgPerformance >= 50
+                                  ? "text-amber-500"
+                                  : "text-rose-500",
+                            )}
+                          >
                             {Math.round(item.avgPerformance)}%
                           </span>
                           <div className="w-16 h-1 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
-                            <div 
-                              className={cn("h-full transition-all duration-1000", 
-                                item.avgPerformance >= 70 ? "bg-emerald-500" : 
-                                item.avgPerformance >= 50 ? "bg-amber-500" : "bg-rose-500"
+                            <div
+                              className={cn(
+                                "h-full transition-all duration-1000",
+                                item.avgPerformance >= 70
+                                  ? "bg-emerald-500"
+                                  : item.avgPerformance >= 50
+                                    ? "bg-amber-500"
+                                    : "bg-rose-500",
                               )}
                               style={{ width: `${item.avgPerformance}%` }}
                             />
@@ -3394,18 +4431,22 @@ const StudySchedule = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            onPracticeSubject(item.subject, item.results[0].fileName);
+                            onPracticeSubject(
+                              item.subject,
+                              item.results[0].fileName,
+                            );
                           }}
                           className={cn(
                             "p-2 rounded-lg transition-all active:scale-90 hover:shadow-md",
-                            theme.primary, theme.contrastText
+                            theme.primary,
+                            theme.contrastText,
                           )}
                           title="Gerar Novo Quiz desta Matéria"
                         >
                           <Zap size={16} />
                         </button>
                       </td>
-                    </tr>
+                    </tr>,
                   );
                 });
 
@@ -3416,7 +4457,9 @@ const StudySchedule = ({
                   <td colSpan={5} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center gap-4 opacity-20">
                       <Table size={48} />
-                      <p className="text-sm font-bold uppercase tracking-widest">Nenhum registro encontrado</p>
+                      <p className="text-sm font-bold uppercase tracking-widest">
+                        Nenhum registro encontrado
+                      </p>
                     </div>
                   </td>
                 </tr>
@@ -3424,19 +4467,32 @@ const StudySchedule = ({
             </tbody>
           </table>
         </div>
-        
+
         {/* Spreadsheet Footer */}
         <div className="px-6 py-3 bg-black/[0.02] dark:bg-white/[0.02] border-t border-black/10 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-6 text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">
             <span>Total de Materiais: {studyItems.length}</span>
-            <span>Média Geral: {studyItems.length > 0 ? Math.round(studyItems.reduce((acc, curr) => acc + curr.avgPerformance, 0) / studyItems.length) : 0}%</span>
+            <span>
+              Média Geral:{" "}
+              {studyItems.length > 0
+                ? Math.round(
+                    studyItems.reduce(
+                      (acc, curr) => acc + curr.avgPerformance,
+                      0,
+                    ) / studyItems.length,
+                  )
+                : 0}
+              %
+            </span>
           </div>
 
           <div className="flex items-center gap-4">
             {/* Items per page selector */}
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">Linhas:</span>
-              <select 
+              <span className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">
+                Linhas:
+              </span>
+              <select
                 value={itemsPerPage}
                 onChange={(e) => setItemsPerPage(Number(e.target.value))}
                 className="bg-transparent border border-black/10 dark:border-white/10 rounded-md text-[10px] font-bold dark:text-slate-400 outline-none px-1 py-0.5"
@@ -3453,19 +4509,29 @@ const StudySchedule = ({
               <div className="flex items-center gap-1">
                 <button
                   disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(1, prev - 1))
+                  }
                   className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-20 transition-all"
                 >
                   <ChevronLeft size={14} />
                 </button>
                 <div className="flex items-center gap-1 px-2">
-                  <span className="text-[10px] font-bold text-black/60 dark:text-slate-300">{currentPage}</span>
-                  <span className="text-[10px] font-bold text-black/20 dark:text-slate-600">/</span>
-                  <span className="text-[10px] font-bold text-black/40 dark:text-slate-500">{totalPages}</span>
+                  <span className="text-[10px] font-bold text-black/60 dark:text-slate-300">
+                    {currentPage}
+                  </span>
+                  <span className="text-[10px] font-bold text-black/20 dark:text-slate-600">
+                    /
+                  </span>
+                  <span className="text-[10px] font-bold text-black/40 dark:text-slate-500">
+                    {totalPages}
+                  </span>
                 </div>
                 <button
                   disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                  }
                   className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-20 transition-all"
                 >
                   <ChevronRight size={14} />
@@ -3487,138 +4553,175 @@ const StudyLogSpreadsheet = ({
   onClose,
   onAddLog,
   onUpdateLog,
-  onDeleteLog
+  onDeleteLog,
 }: {
-  logs: StudyLog[],
-  history: QuizResult[],
-  subjects: string[],
-  theme: any,
-  onClose: () => void,
-  onAddLog: (subject: string, fileNames: string) => void,
-  onUpdateLog: (id: string, updates: Partial<StudyLog>) => void,
-  onDeleteLog: (id: string) => void
+  logs: StudyLog[];
+  history: QuizResult[];
+  subjects: string[];
+  theme: any;
+  onClose: () => void;
+  onAddLog: (subject: string, fileNames: string) => void;
+  onUpdateLog: (id: string, updates: Partial<StudyLog>) => void;
+  onDeleteLog: (id: string) => void;
 }) => {
-  const [newEntry, setNewEntry] = useState({ subject: '', fileNames: '' });
+  const [newEntry, setNewEntry] = useState({ subject: "", fileNames: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Filter States
-  const [filterDate, setFilterDate] = useState('');
-  const [filterSubject, setFilterSubject] = useState('');
-  const [filterFile, setFilterFile] = useState('');
+  const [filterDate, setFilterDate] = useState("");
+  const [filterSubject, setFilterSubject] = useState("");
+  const [filterFile, setFilterFile] = useState("");
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Calculate stats per subject from history for a specific date
-  const getSubjectStats = useCallback((subjectName: string, targetDate: Date, fileNameFilter?: string) => {
-    let correct = 0;
-    let total = 0;
-    
-    // Normalize subject name for comparison
-    const normalizedTarget = subjectName.toUpperCase().trim();
-    
-    history.forEach(res => {
-      // EXCLUSÃO: No Controle Pessoal (Estatísticas), apenas quizzes novos de arquivos.
-      // Filtramos simulados, redos (refeitos) e revisões de flashcards/erros.
-      if (res.isSimulado || res.isRedoing || res.isReview) return;
+  const getSubjectStats = useCallback(
+    (subjectName: string, targetDate: Date, fileNameFilter?: string) => {
+      let correct = 0;
+      let total = 0;
 
-      const resDate = res.date instanceof Date ? res.date : (res.date as any).toDate();
-      
-      // Filter by the specific date
-      if (!isSameDay(resDate, targetDate)) return;
+      // Normalize subject name for comparison
+      const normalizedTarget = subjectName.toUpperCase().trim();
 
-      // Find if this quiz belongs to the subject
-      const hasSubject = res.questions.some(q => {
-        const qSub = normalizeSubject(q.subject || res.fileName || res.subject || "").toUpperCase().trim();
-        return qSub === normalizedTarget || normalizedTarget.includes(qSub) || qSub.includes(normalizedTarget);
+      history.forEach((res) => {
+        // EXCLUSÃO: No Controle Pessoal (Estatísticas), apenas quizzes novos de arquivos.
+        // Filtramos simulados, redos (refeitos) e revisões de flashcards/erros.
+        if (res.isSimulado || res.isRedoing || res.isReview) return;
+
+        const resDate =
+          res.date instanceof Date ? res.date : (res.date as any).toDate();
+
+        // Filter by the specific date
+        if (!isSameDay(resDate, targetDate)) return;
+
+        // Find if this quiz belongs to the subject
+        const hasSubject = res.questions.some((q) => {
+          const qSub = normalizeSubject(
+            q.subject || res.fileName || res.subject || "",
+          )
+            .toUpperCase()
+            .trim();
+          return (
+            qSub === normalizedTarget ||
+            normalizedTarget.includes(qSub) ||
+            qSub.includes(normalizedTarget)
+          );
+        });
+
+        // Special handling for 'GERAL' or when we have a specific file name filter
+        const isGeral = normalizedTarget === "GERAL";
+        const resSubjectNormalized = (res.subject || "").toUpperCase().trim();
+        const matchesSubject =
+          hasSubject ||
+          normalizeSubject(res.fileName).toUpperCase().trim() ===
+            normalizedTarget ||
+          resSubjectNormalized === normalizedTarget ||
+          resSubjectNormalized.includes(normalizedTarget) ||
+          normalizedTarget.includes(resSubjectNormalized);
+
+        // If fileNameFilter is provided, we check if this specific quiz matches that filter
+        let matchesFile = false;
+        if (fileNameFilter) {
+          const normalizedFilter = fileNameFilter.toUpperCase().trim();
+          const normalizedFile = res.fileName.toUpperCase().trim();
+
+          // Match if the filter includes the filename, or vice-versa, or if normalized subjects match
+          matchesFile =
+            normalizedFilter.includes(normalizedFile) ||
+            normalizedFile.includes(normalizedFilter) ||
+            normalizeSubject(res.fileName).toUpperCase().trim() ===
+              normalizeSubject(fileNameFilter).toUpperCase().trim();
+        }
+
+        // We count if:
+        // 1. It matches the file name specifically (highest priority for simulated results)
+        // 2. OR it matches the subject AND we don't have a conflicting file filter
+        if (
+          (fileNameFilter && matchesFile) ||
+          (!fileNameFilter && matchesSubject) ||
+          (isGeral && fileNameFilter && matchesFile)
+        ) {
+          res.questions.forEach((q, idx) => {
+            // Se filtramos por arquivo E deu match no arquivo, contamos todas as questões desse quiz.
+            // Isso garante que os dados apareçam no Controle Pessoal conforme o registro do usuário.
+            const matchesByFileContext = fileNameFilter && matchesFile;
+
+            const qSub = normalizeSubject(
+              q.subject || res.fileName || res.subject || "",
+            )
+              .toUpperCase()
+              .trim();
+            const matchesThisSubject =
+              qSub === normalizedTarget ||
+              normalizedTarget.includes(qSub) ||
+              qSub.includes(normalizedTarget) ||
+              isGeral;
+
+            if (matchesThisSubject || matchesByFileContext) {
+              total += 1;
+              if (res.answers[idx] === q.correctAnswer) correct += 1;
+            }
+          });
+        }
       });
 
-      // Special handling for 'GERAL' or when we have a specific file name filter
-      const isGeral = normalizedTarget === "GERAL";
-      const resSubjectNormalized = (res.subject || "").toUpperCase().trim();
-      const matchesSubject = hasSubject || 
-                            normalizeSubject(res.fileName).toUpperCase().trim() === normalizedTarget ||
-                            resSubjectNormalized === normalizedTarget ||
-                            resSubjectNormalized.includes(normalizedTarget) ||
-                            normalizedTarget.includes(resSubjectNormalized);
-
-      // If fileNameFilter is provided, we check if this specific quiz matches that filter
-      let matchesFile = false;
-      if (fileNameFilter) {
-        const normalizedFilter = fileNameFilter.toUpperCase().trim();
-        const normalizedFile = res.fileName.toUpperCase().trim();
-        
-        // Match if the filter includes the filename, or vice-versa, or if normalized subjects match
-        matchesFile = normalizedFilter.includes(normalizedFile) || 
-                      normalizedFile.includes(normalizedFilter) ||
-                      normalizeSubject(res.fileName).toUpperCase().trim() === normalizeSubject(fileNameFilter).toUpperCase().trim();
-      }
-
-      // We count if:
-      // 1. It matches the file name specifically (highest priority for simulated results)
-      // 2. OR it matches the subject AND we don't have a conflicting file filter
-      if ((fileNameFilter && matchesFile) || (!fileNameFilter && matchesSubject) || (isGeral && fileNameFilter && matchesFile)) {
-        res.questions.forEach((q, idx) => {
-          // Se filtramos por arquivo E deu match no arquivo, contamos todas as questões desse quiz.
-          // Isso garante que os dados apareçam no Controle Pessoal conforme o registro do usuário.
-          const matchesByFileContext = fileNameFilter && matchesFile;
-          
-          const qSub = normalizeSubject(q.subject || res.fileName || res.subject || '').toUpperCase().trim();
-          const matchesThisSubject = qSub === normalizedTarget || 
-                                    normalizedTarget.includes(qSub) || 
-                                    qSub.includes(normalizedTarget) || 
-                                    isGeral;
-          
-          if (matchesThisSubject || matchesByFileContext) {
-            total += 1;
-            if (res.answers[idx] === q.correctAnswer) correct += 1;
-          }
-        });
-      }
-    });
-
-    const incorrect = total - correct;
-    return { correct, incorrect, total };
-  }, [history]);
+      const incorrect = total - correct;
+      return { correct, incorrect, total };
+    },
+    [history],
+  );
 
   // Filtered Logs
   const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
-      const dateMatch = !filterDate || format(log.date, 'yyyy-MM-dd') === filterDate;
-      const subjectMatch = !filterSubject || log.subject === filterSubject;
-      const fileMatch = !filterFile || log.fileNames.toLowerCase().includes(filterFile.toLowerCase());
-      
-      if (!(dateMatch && subjectMatch && fileMatch)) return false;
+    return logs
+      .filter((log) => {
+        const dateMatch =
+          !filterDate || format(log.date, "yyyy-MM-dd") === filterDate;
+        const subjectMatch = !filterSubject || log.subject === filterSubject;
+        const fileMatch =
+          !filterFile ||
+          log.fileNames.toLowerCase().includes(filterFile.toLowerCase());
 
-      // OCULTAR REGISTROS AUTOMÁTICOS SEM ESTATÍSTICAS
-      // Isso remove simulados e revisões que foram gerados automaticamente mas 
-      // cujos dados são excluídos do cálculo de desempenho do Controle Pessoal.
-      const stats = getSubjectStats(log.subject, log.date, log.fileNames);
-      
-      // Se for um log automático (novo) e não tem questões válidas, oculta.
-      if (log.isAutomatic && stats.total === 0) return false;
-      
-      // Para logs antigos (sem a flag isAutomatic), se o total é 0, 
-      // também ocultamos se existirem resultados "excluídos" (simulados) no histórico para este dia/matéria/arquivo.
-      if (log.isAutomatic === undefined && stats.total === 0) {
-        const hasExcludedMatch = history.some(res => {
-          if (!(res.isSimulado || res.isRedoing || res.isReview)) return false;
-          const resDate = res.date instanceof Date ? res.date : (res.date as any).toDate();
-          if (!isSameDay(resDate, log.date)) return false;
-          
-          const normalizedTarget = log.subject.toUpperCase().trim();
-          const resSubjectNormalized = (res.subject || "").toUpperCase().trim();
-          const matchesSubject = normalizeSubject(res.fileName).toUpperCase().trim() === normalizedTarget ||
-                                resSubjectNormalized === normalizedTarget;
-          
-          return matchesSubject;
-        });
-        if (hasExcludedMatch) return false;
-      }
+        if (!(dateMatch && subjectMatch && fileMatch)) return false;
 
-      return true;
-    }).sort((a, b) => b.date.getTime() - a.date.getTime());
+        // OCULTAR REGISTROS AUTOMÁTICOS SEM ESTATÍSTICAS
+        // Isso remove simulados e revisões que foram gerados automaticamente mas
+        // cujos dados são excluídos do cálculo de desempenho do Controle Pessoal.
+        const stats = getSubjectStats(log.subject, log.date, log.fileNames);
+
+        // Se for um log automático (novo) e não tem questões válidas, oculta.
+        // EXCETO se for um log de estudo de arquivo (fileNames preenchido)
+        if (log.isAutomatic && stats.total === 0 && !log.fileNames)
+          return false;
+
+        // Para logs antigos (sem a flag isAutomatic), se o total é 0,
+        // também ocultamos se existirem resultados "excluídos" (simulados) no histórico para este dia/matéria/arquivo.
+        if (log.isAutomatic === undefined && stats.total === 0) {
+          const hasExcludedMatch = history.some((res) => {
+            if (!(res.isSimulado || res.isRedoing || res.isReview))
+              return false;
+            const resDate =
+              res.date instanceof Date ? res.date : (res.date as any).toDate();
+            if (!isSameDay(resDate, log.date)) return false;
+
+            const normalizedTarget = log.subject.toUpperCase().trim();
+            const resSubjectNormalized = (res.subject || "")
+              .toUpperCase()
+              .trim();
+            const matchesSubject =
+              normalizeSubject(res.fileName).toUpperCase().trim() ===
+                normalizedTarget || resSubjectNormalized === normalizedTarget;
+
+            return matchesSubject;
+          });
+          if (hasExcludedMatch) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => b.date.getTime() - a.date.getTime());
   }, [logs, filterDate, filterSubject, filterFile, getSubjectStats, history]);
 
   // Paginated Logs
@@ -3634,41 +4737,53 @@ const StudyLogSpreadsheet = ({
   }, [filterDate, filterSubject, filterFile, itemsPerPage]);
 
   const clearFilters = () => {
-    setFilterDate('');
-    setFilterSubject('');
-    setFilterFile('');
+    setFilterDate("");
+    setFilterSubject("");
+    setFilterFile("");
   };
 
   const downloadCSV = () => {
     if (logs.length === 0) return;
-    
-    const headers = ['Data', 'Matéria', 'Arquivo/Títulos', 'Certas', 'Erradas', 'Total'];
-    const rows = logs.map(log => {
+
+    const headers = [
+      "Data",
+      "Matéria",
+      "Arquivo/Títulos",
+      "Certas",
+      "Erradas",
+      "Total",
+    ];
+    const rows = logs.map((log) => {
       const stats = getSubjectStats(log.subject, log.date, log.fileNames);
       return [
-        format(log.date, 'dd/MM/yyyy'),
+        format(log.date, "dd/MM/yyyy"),
         log.subject,
         `"${log.fileNames.replace(/"/g, '""')}"`,
         stats.correct,
         stats.incorrect,
-        stats.total
+        stats.total,
       ];
     });
-    
-    const csvContent = [headers, ...rows].map(e => e.join(';')).join('\n');
-    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
+
+    const csvContent = [headers, ...rows].map((e) => e.join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `registro-estudos-${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    link.style.visibility = 'hidden';
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `registro-estudos-${format(new Date(), "yyyy-MM-dd")}.csv`,
+    );
+    link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
@@ -3678,16 +4793,25 @@ const StudyLogSpreadsheet = ({
         {/* Header */}
         <div className="px-8 py-6 border-b border-black/5 dark:border-white/5 flex items-center justify-between bg-white/40 dark:bg-white/5 backdrop-blur-md">
           <div className="flex items-center gap-4">
-            <div className={cn("p-4 rounded-3xl text-white shadow-xl", theme.primary)}>
+            <div
+              className={cn(
+                "p-4 rounded-3xl text-white shadow-xl",
+                theme.primary,
+              )}
+            >
               <Table size={32} />
             </div>
             <div>
-              <h2 className="text-3xl font-black dark:text-white tracking-tight italic">Controle Pessoal de Estudos</h2>
-              <p className="text-xs font-bold text-black/30 dark:text-slate-500 uppercase tracking-widest mt-1">Planilha de Desempenho e Registros</p>
+              <h2 className="text-3xl font-black dark:text-white tracking-tight italic">
+                Controle Pessoal de Estudos
+              </h2>
+              <p className="text-xs font-bold text-black/30 dark:text-slate-500 uppercase tracking-widest mt-1">
+                Planilha de Desempenho e Registros
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button 
+            <button
               onClick={downloadCSV}
               className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl transition-all active:scale-95 text-[10px] font-black uppercase tracking-widest border border-emerald-500/20"
             >
@@ -3700,41 +4824,47 @@ const StudyLogSpreadsheet = ({
         {/* Filter Bar */}
         <div className="px-8 py-4 bg-black/5 dark:bg-white/5 flex flex-wrap items-center gap-4 border-b border-black/5 dark:border-white/5">
           <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-800/50 px-3 py-2 rounded-xl border border-black/5 dark:border-white/10 flex-1 min-w-[150px]">
-             <Calendar size={14} className="text-black/40 dark:text-slate-500" />
-             <input 
-               type="date"
-               value={filterDate}
-               onChange={(e) => setFilterDate(e.target.value)}
-               className="bg-transparent text-[10px] font-bold dark:text-white outline-none w-full cursor-pointer"
-             />
+            <Calendar size={14} className="text-black/40 dark:text-slate-500" />
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="bg-transparent text-[10px] font-bold dark:text-white outline-none w-full cursor-pointer"
+            />
           </div>
 
           <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-800/50 px-3 py-2 rounded-xl border border-black/5 dark:border-white/10 flex-1 min-w-[200px]">
-             <BookOpen size={14} className="text-black/40 dark:text-slate-500" />
-             <select 
-               value={filterSubject}
-               onChange={(e) => setFilterSubject(e.target.value)}
-               className="bg-transparent text-[10px] font-bold dark:text-white outline-none w-full cursor-pointer"
-             >
-               <option value="">Todas as Matérias</option>
-               {subjects.map(s => (
-                 <option key={s} value={s} className="bg-white dark:bg-slate-900">{s}</option>
-               ))}
-             </select>
+            <BookOpen size={14} className="text-black/40 dark:text-slate-500" />
+            <select
+              value={filterSubject}
+              onChange={(e) => setFilterSubject(e.target.value)}
+              className="bg-transparent text-[10px] font-bold dark:text-white outline-none w-full cursor-pointer"
+            >
+              <option value="">Todas as Matérias</option>
+              {subjects.map((s) => (
+                <option
+                  key={s}
+                  value={s}
+                  className="bg-white dark:bg-slate-900"
+                >
+                  {s}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-800/50 px-3 py-2 rounded-xl border border-black/5 dark:border-white/10 flex-1 min-w-[250px]">
-             <Search size={14} className="text-black/40 dark:text-slate-500" />
-             <input 
-               type="text"
-               placeholder="Filtrar por nome do arquivo..."
-               value={filterFile}
-               onChange={(e) => setFilterFile(e.target.value)}
-               className="bg-transparent text-[10px] font-bold dark:text-white outline-none w-full"
-             />
+            <Search size={14} className="text-black/40 dark:text-slate-500" />
+            <input
+              type="text"
+              placeholder="Filtrar por nome do arquivo..."
+              value={filterFile}
+              onChange={(e) => setFilterFile(e.target.value)}
+              className="bg-transparent text-[10px] font-bold dark:text-white outline-none w-full"
+            />
           </div>
 
-          <button 
+          <button
             onClick={clearFilters}
             className="flex items-center gap-2 px-4 py-2 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-black/60 dark:text-slate-300 rounded-xl transition-all active:scale-95 text-[10px] font-black uppercase tracking-widest disabled:opacity-30"
             disabled={!filterDate && !filterSubject && !filterFile}
@@ -3750,37 +4880,56 @@ const StudyLogSpreadsheet = ({
             <table className="w-full text-left border-collapse table-fixed">
               <thead>
                 <tr className="bg-black/5 dark:bg-white/5">
-                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 text-center w-[120px]">Data</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 w-[160px]">Matéria</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 w-auto">Nome do Arquivo / Títulos</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 text-center w-[300px]">Questões Resolvidas (Resultado do Dia)</th>
-                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 text-center w-[150px] px-4">Ações</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 text-center w-[120px]">
+                    Data
+                  </th>
+                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 w-[160px]">
+                    Matéria
+                  </th>
+                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 w-auto">
+                    Nome do Arquivo / Títulos
+                  </th>
+                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 text-center w-[300px]">
+                    Questões Resolvidas (Resultado do Dia)
+                  </th>
+                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 text-center w-[150px] px-4">
+                    Ações
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5 dark:divide-white/5">
                 {/* New Entry Row - Only show when no filters are active on subject/file search to keep it clean */}
-                {(!filterSubject && !filterFile && !filterDate) && (
+                {!filterSubject && !filterFile && !filterDate && (
                   <tr className="bg-emerald-500/10 dark:bg-emerald-500/20">
                     <td className="px-6 py-4 italic text-xs text-black/50 dark:text-slate-300 font-bold text-center">
-                      {format(new Date(), 'dd/MM/yyyy')}
+                      {format(new Date(), "dd/MM/yyyy")}
                     </td>
                     <td className="px-6 py-4">
-                      <select 
+                      <select
                         value={newEntry.subject}
-                        onChange={(e) => setNewEntry({ ...newEntry, subject: e.target.value })}
+                        onChange={(e) =>
+                          setNewEntry({ ...newEntry, subject: e.target.value })
+                        }
                         className="w-full bg-white/80 dark:bg-slate-900/80 border border-black/10 dark:border-white/10 rounded-xl px-4 py-2 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50 backdrop-blur-sm"
                       >
                         <option value="">Selecione a Matéria...</option>
-                        {subjects.map(s => (
-                          <option key={s} value={s}>{s}</option>
+                        {subjects.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
                         ))}
                       </select>
                     </td>
                     <td className="px-6 py-4">
-                      <textarea 
+                      <textarea
                         placeholder="Nomes dos arquivos, aulas, capítulos..."
                         value={newEntry.fileNames}
-                        onChange={(e) => setNewEntry({ ...newEntry, fileNames: e.target.value })}
+                        onChange={(e) =>
+                          setNewEntry({
+                            ...newEntry,
+                            fileNames: e.target.value,
+                          })
+                        }
                         className="w-full bg-white/80 dark:bg-slate-900/80 border border-black/10 dark:border-white/10 rounded-xl px-4 py-2 text-sm font-medium dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50 min-h-[60px] resize-none backdrop-blur-sm shadow-sm"
                       />
                     </td>
@@ -3788,39 +4937,55 @@ const StudyLogSpreadsheet = ({
                       {newEntry.subject && (
                         <div className="flex justify-center gap-4">
                           {(() => {
-                             const stats = getSubjectStats(newEntry.subject, new Date(), newEntry.fileNames);
-                             return (
-                               <>
-                                 <div className="flex flex-col items-center">
-                                   <span className="text-sm font-black text-emerald-600">{stats.correct}</span>
-                                   <span className="text-[7px] font-black text-black/40 dark:text-slate-500 uppercase">Certas</span>
-                                 </div>
-                                 <div className="flex flex-col items-center">
-                                   <span className="text-sm font-black text-rose-600">{stats.incorrect}</span>
-                                   <span className="text-[7px] font-black text-black/40 dark:text-slate-500 uppercase">Erradas</span>
-                                 </div>
-                                 <div className="flex flex-col items-center">
-                                   <span className="text-sm font-black text-blue-600">{stats.total}</span>
-                                   <span className="text-[7px] font-black text-black/40 dark:text-slate-500 uppercase">Total</span>
-                                 </div>
-                               </>
-                             );
+                            const stats = getSubjectStats(
+                              newEntry.subject,
+                              new Date(),
+                              newEntry.fileNames,
+                            );
+                            return (
+                              <>
+                                <div className="flex flex-col items-center">
+                                  <span className="text-sm font-black text-emerald-600">
+                                    {stats.correct}
+                                  </span>
+                                  <span className="text-[7px] font-black text-black/40 dark:text-slate-500 uppercase">
+                                    Certas
+                                  </span>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                  <span className="text-sm font-black text-rose-600">
+                                    {stats.incorrect}
+                                  </span>
+                                  <span className="text-[7px] font-black text-black/40 dark:text-slate-500 uppercase">
+                                    Erradas
+                                  </span>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                  <span className="text-sm font-black text-blue-600">
+                                    {stats.total}
+                                  </span>
+                                  <span className="text-[7px] font-black text-black/40 dark:text-slate-500 uppercase">
+                                    Total
+                                  </span>
+                                </div>
+                              </>
+                            );
                           })()}
                         </div>
                       )}
                     </td>
                     <td className="px-6 py-4 text-center px-4">
-                      <button 
+                      <button
                         onClick={() => {
                           if (newEntry.subject && newEntry.fileNames) {
                             onAddLog(newEntry.subject, newEntry.fileNames);
-                            setNewEntry({ subject: '', fileNames: '' });
+                            setNewEntry({ subject: "", fileNames: "" });
                           }
                         }}
                         disabled={!newEntry.subject || !newEntry.fileNames}
                         className={cn(
                           "p-4 rounded-2xl text-white transition-all active:scale-95 disabled:opacity-30 disabled:grayscale shadow-xl",
-                          theme.primary
+                          theme.primary,
                         )}
                       >
                         <Plus size={24} />
@@ -3830,72 +4995,109 @@ const StudyLogSpreadsheet = ({
                 )}
 
                 {/* Existing Logs */}
-                {paginatedLogs.map(log => {
-                  const stats = getSubjectStats(log.subject, log.date, log.fileNames);
+                {paginatedLogs.map((log) => {
+                  const stats = getSubjectStats(
+                    log.subject,
+                    log.date,
+                    log.fileNames,
+                  );
                   const isEditing = editingId === log.id;
-                  
+
                   return (
-                    <tr key={log.id} className="group hover:bg-white/20 dark:hover:bg-white/[0.05] transition-colors border-b border-black/5 dark:border-white/5">
+                    <tr
+                      key={log.id}
+                      className="group hover:bg-white/20 dark:hover:bg-white/[0.05] transition-colors border-b border-black/5 dark:border-white/5"
+                    >
                       <td className="px-6 py-8 text-xs font-bold text-black/70 dark:text-slate-300 text-center">
-                        {format(log.date, 'dd/MM/yyyy')}
+                        {format(log.date, "dd/MM/yyyy")}
                       </td>
                       <td className="px-6 py-8">
                         {isEditing ? (
-                          <select 
+                          <select
                             value={log.subject}
-                            onChange={(e) => onUpdateLog(log.id, { subject: e.target.value })}
+                            onChange={(e) =>
+                              onUpdateLog(log.id, { subject: e.target.value })
+                            }
                             className="w-full bg-white/90 dark:bg-slate-900/90 border border-blue-500/50 rounded-xl px-4 py-2 text-sm font-bold dark:text-white outline-none shadow-lg"
                           >
-                            {subjects.map(s => (
-                              <option key={s} value={s}>{s}</option>
+                            {subjects.map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
                             ))}
                           </select>
                         ) : (
-                          <span className="text-sm font-black dark:text-white uppercase tracking-tight break-words">{log.subject}</span>
+                          <span className="text-sm font-black dark:text-white uppercase tracking-tight break-words">
+                            {log.subject}
+                          </span>
                         )}
                       </td>
                       <td className="px-6 py-8">
                         {isEditing ? (
-                          <textarea 
+                          <textarea
                             value={log.fileNames}
-                            onChange={(e) => onUpdateLog(log.id, { fileNames: e.target.value })}
+                            onChange={(e) =>
+                              onUpdateLog(log.id, { fileNames: e.target.value })
+                            }
                             className="w-full bg-white/90 dark:bg-slate-900/90 border border-blue-500/50 rounded-xl px-4 py-3 text-sm font-medium dark:text-white outline-none min-h-[100px] resize-none shadow-2xl relative z-10"
                             autoFocus
                           />
                         ) : (
-                          <p className="text-sm font-medium text-black/70 dark:text-slate-300 whitespace-pre-wrap leading-relaxed break-words">{log.fileNames}</p>
+                          <p className="text-sm font-medium text-black/70 dark:text-slate-300 whitespace-pre-wrap leading-relaxed break-words">
+                            {log.fileNames}
+                          </p>
                         )}
                       </td>
                       <td className="px-6 py-8">
                         <div className="flex justify-center items-center gap-4">
-                           <div className="flex flex-col items-center">
-                             <span className="text-xl font-black text-emerald-500">{stats.correct}</span>
-                             <span className="text-[9px] font-black text-black/40 dark:text-slate-500 uppercase tracking-tighter">Certas</span>
-                           </div>
-                           <div className="w-[1px] h-10 bg-black/10 dark:bg-white/10" />
-                           <div className="flex flex-col items-center">
-                             <span className="text-xl font-black text-rose-500">{stats.incorrect}</span>
-                             <span className="text-[9px] font-black text-black/40 dark:text-slate-500 uppercase tracking-tighter">Erradas</span>
-                           </div>
-                           <div className="w-[1px] h-10 bg-black/10 dark:bg-white/10" />
-                           <div className="flex flex-col items-center">
-                             <span className="text-xl font-black text-blue-500">{stats.total}</span>
-                             <span className="text-[9px] font-black text-black/40 dark:text-slate-500 uppercase tracking-tighter">Total</span>
-                           </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-xl font-black text-emerald-500">
+                              {stats.correct}
+                            </span>
+                            <span className="text-[9px] font-black text-black/40 dark:text-slate-500 uppercase tracking-tighter">
+                              Certas
+                            </span>
+                          </div>
+                          <div className="w-[1px] h-10 bg-black/10 dark:bg-white/10" />
+                          <div className="flex flex-col items-center">
+                            <span className="text-xl font-black text-rose-500">
+                              {stats.incorrect}
+                            </span>
+                            <span className="text-[9px] font-black text-black/40 dark:text-slate-500 uppercase tracking-tighter">
+                              Erradas
+                            </span>
+                          </div>
+                          <div className="w-[1px] h-10 bg-black/10 dark:bg-white/10" />
+                          <div className="flex flex-col items-center">
+                            <span className="text-xl font-black text-blue-500">
+                              {stats.total}
+                            </span>
+                            <span className="text-[9px] font-black text-black/40 dark:text-slate-500 uppercase tracking-tighter">
+                              Total
+                            </span>
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-8">
                         <div className="flex items-center justify-center gap-3">
-                          <button 
-                            onClick={() => setEditingId(isEditing ? null : log.id)}
+                          <button
+                            onClick={() =>
+                              setEditingId(isEditing ? null : log.id)
+                            }
                             className={cn(
                               "p-3 rounded-xl transition-all active:scale-95 shadow-lg backdrop-blur-md border border-white/20",
-                              isEditing ? theme.primary + " text-white" : "bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 hover:bg-blue-500 hover:text-white"
+                              isEditing
+                                ? theme.primary + " text-white"
+                                : "bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 hover:bg-blue-500 hover:text-white",
                             )}
                           >
-                            {isEditing ? <Check size={18} /> : <FileText size={18} />}
+                            {isEditing ? (
+                              <Check size={18} />
+                            ) : (
+                              <FileText size={18} />
+                            )}
                           </button>
-                          <button 
+                          <button
                             onClick={() => onDeleteLog(log.id)}
                             className="p-3 rounded-xl bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all active:scale-95 shadow-lg backdrop-blur-md border border-white/20"
                           >
@@ -3912,8 +5114,13 @@ const StudyLogSpreadsheet = ({
                     <td colSpan={5} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-4 opacity-20">
                         <Table size={60} />
-                        <p className="text-lg font-black tracking-widest uppercase">Nenhum registro encontrado</p>
-                        <p className="text-xs font-bold -mt-2">Tente ajustar seus filtros ou adicione um novo registro.</p>
+                        <p className="text-lg font-black tracking-widest uppercase">
+                          Nenhum registro encontrado
+                        </p>
+                        <p className="text-xs font-bold -mt-2">
+                          Tente ajustar seus filtros ou adicione um novo
+                          registro.
+                        </p>
                       </div>
                     </td>
                   </tr>
@@ -3927,35 +5134,47 @@ const StudyLogSpreadsheet = ({
         <div className="px-8 py-4 bg-black/5 dark:bg-white/5 border-t border-black/5 dark:border-white/5">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-6 justify-center sm:justify-start">
-               <div className="flex items-center gap-2">
-                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                 <span className="text-[10px] font-black text-black/40 dark:text-slate-500 uppercase tracking-widest">Encontrados: {filteredLogs.length}</span>
-               </div>
-               <div className="flex items-center gap-2">
-                 <div className="w-2 h-2 rounded-full bg-blue-500" />
-                 <span className="text-[10px] font-black text-black/40 dark:text-slate-500 uppercase tracking-widest">Total Matérias: {new Set(logs.map(l => l.subject)).size}</span>
-               </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="text-[10px] font-black text-black/40 dark:text-slate-500 uppercase tracking-widest">
+                  Encontrados: {filteredLogs.length}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                <span className="text-[10px] font-black text-black/40 dark:text-slate-500 uppercase tracking-widest">
+                  Total Matérias: {new Set(logs.map((l) => l.subject)).size}
+                </span>
+              </div>
             </div>
 
             {/* Pagination Controls */}
             {totalPages > 0 && (
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 bg-white/30 dark:bg-white/5 px-3 py-1 rounded-xl border border-black/5 dark:border-white/10">
-                  <span className="text-[10px] font-black text-black/40 dark:text-slate-500 uppercase">Linhas:</span>
-                  <select 
+                  <span className="text-[10px] font-black text-black/40 dark:text-slate-500 uppercase">
+                    Linhas:
+                  </span>
+                  <select
                     value={itemsPerPage}
                     onChange={(e) => setItemsPerPage(Number(e.target.value))}
                     className="bg-transparent text-[10px] font-black dark:text-white outline-none cursor-pointer"
                   >
-                    {[5, 10, 20, 50].map(val => (
-                      <option key={val} value={val} className="bg-white dark:bg-slate-900">{val}</option>
+                    {[5, 10, 20, 50].map((val) => (
+                      <option
+                        key={val}
+                        value={val}
+                        className="bg-white dark:bg-slate-900"
+                      >
+                        {val}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
                     className="p-2 bg-white/30 dark:bg-white/5 rounded-xl hover:bg-white/50 dark:hover:bg-white/10 transition-all disabled:opacity-20 disabled:cursor-not-allowed border border-black/5 dark:border-white/10"
                   >
@@ -3964,8 +5183,10 @@ const StudyLogSpreadsheet = ({
                   <span className="text-[10px] font-black dark:text-white tracking-widest min-w-[60px] text-center">
                     {currentPage} / {totalPages}
                   </span>
-                  <button 
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  <button
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
                     disabled={currentPage === totalPages}
                     className="p-2 bg-white/30 dark:bg-white/5 rounded-xl hover:bg-white/50 dark:hover:bg-white/10 transition-all disabled:opacity-20 disabled:cursor-not-allowed border border-black/5 dark:border-white/10"
                   >
@@ -3985,19 +5206,19 @@ const FlashcardsView = ({
   flashcards,
   onClose,
   onUpdateSRS,
-  theme
+  theme,
 }: {
-  flashcards: any[],
-  onClose: () => void,
-  onUpdateSRS: (id: string, isCorrect: boolean) => void,
-  theme: any
+  flashcards: any[];
+  onClose: () => void;
+  onUpdateSRS: (id: string, isCorrect: boolean) => void;
+  theme: any;
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [showAll, setShowAll] = useState(false);
 
   const dueCards = React.useMemo(() => {
-    return flashcards.filter(card => {
+    return flashcards.filter((card) => {
       if (!card.nextReviewDate) return true;
       return new Date() >= card.nextReviewDate;
     });
@@ -4026,15 +5247,46 @@ const FlashcardsView = ({
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center space-y-6 min-h-[60vh]">
         <div className="w-24 h-24 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center">
-          <BrainCircuit size={48} className="text-black/20 dark:text-white/20" />
+          <BrainCircuit
+            size={48}
+            className="text-black/20 dark:text-white/20"
+          />
         </div>
-        <div className="space-y-2">
+        <div className="space-y-4">
           <h3 className="text-2xl font-bold dark:text-white">Tudo em dia!</h3>
-          <p className="text-black/40 dark:text-slate-400 max-w-xs mx-auto">Você não tem flashcards para revisar no momento. Volte mais tarde ou estude todos os seus cartões.</p>
+          <p className="text-black/40 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
+            Você não tem flashcards para revisar no momento.
+            <br />
+            <br />
+            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-500">
+              Dica Pro:
+            </span>
+            <br />
+            Pratique um quiz e clique no botão{" "}
+            <span className="font-bold text-black/60 dark:text-slate-200">
+              "Gerar Flashcards dos Erros"
+            </span>{" "}
+            para criar novos cartões automaticamente!
+          </p>
         </div>
         <div className="flex gap-4">
-          <button onClick={() => setShowAll(true)} className="px-6 py-2 rounded-xl font-bold border border-black/10 dark:border-white/10 dark:text-white">Ver Todos</button>
-          <button onClick={onClose} className={cn("px-8 py-3 rounded-2xl font-bold transition-all active:scale-95 shadow-lg", theme.primary, theme.contrastText, theme.shadow)}>Voltar</button>
+          <button
+            onClick={() => setShowAll(true)}
+            className="px-6 py-2 rounded-xl font-bold border border-black/10 dark:border-white/10 dark:text-white"
+          >
+            Ver Todos
+          </button>
+          <button
+            onClick={onClose}
+            className={cn(
+              "px-8 py-3 rounded-2xl font-bold transition-all active:scale-95 shadow-lg",
+              theme.primary,
+              theme.contrastText,
+              theme.shadow,
+            )}
+          >
+            Voltar
+          </button>
         </div>
       </div>
     );
@@ -4043,17 +5295,22 @@ const FlashcardsView = ({
   const currentCard = cardsToReview[currentIndex];
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-2xl mx-auto min-h-[80vh] flex flex-col"
     >
       <div className="flex items-center justify-between">
-        <button onClick={onClose} className="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 dark:text-white transition-all">
+        <button
+          onClick={onClose}
+          className="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 dark:text-white transition-all"
+        >
           <ChevronLeft size={24} />
         </button>
         <div className="text-center">
-          <h2 className="text-xl font-black dark:text-white">Flashcards de Revisão</h2>
+          <h2 className="text-xl font-black dark:text-white">
+            Flashcards de Revisão
+          </h2>
           <p className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">
             {currentIndex + 1} de {cardsToReview.length} • {currentCard.subject}
           </p>
@@ -4064,28 +5321,43 @@ const FlashcardsView = ({
       <div className="flex-1 flex flex-col items-center justify-center perspective-1000">
         <motion.div
           animate={{ rotateY: isFlipped ? 180 : 0 }}
-          transition={{ duration: 0.6, type: "spring", stiffness: 260, damping: 20 }}
+          transition={{
+            duration: 0.6,
+            type: "spring",
+            stiffness: 260,
+            damping: 20,
+          }}
           onClick={() => setIsFlipped(!isFlipped)}
           className="relative w-full aspect-[4/3] cursor-pointer preserve-3d"
         >
           {/* Front */}
-          <div className={cn(
-            "absolute inset-0 backface-hidden bg-white dark:bg-slate-900 rounded-[2.5rem] border-2 border-black/5 dark:border-slate-800 shadow-2xl p-8 flex flex-col items-center justify-center text-center",
-            isFlipped ? "pointer-events-none" : ""
-          )}>
-            <span className="text-[10px] font-black text-indigo-500 tracking-[0.3em] uppercase mb-4">CONCEITO / PERGUNTA</span>
+          <div
+            className={cn(
+              "absolute inset-0 backface-hidden bg-white dark:bg-slate-900 rounded-[2.5rem] border-2 border-black/5 dark:border-slate-800 shadow-2xl p-8 flex flex-col items-center justify-center text-center",
+              isFlipped ? "pointer-events-none" : "",
+            )}
+          >
+            <span className="text-[10px] font-black text-indigo-500 tracking-[0.3em] uppercase mb-4">
+              CONCEITO / PERGUNTA
+            </span>
             <h3 className="text-2xl sm:text-3xl font-bold dark:text-white leading-tight">
               {currentCard.front}
             </h3>
-            <p className="mt-8 text-xs text-black/20 dark:text-slate-600 font-bold animate-pulse">Clique para virar</p>
+            <p className="mt-8 text-xs text-black/20 dark:text-slate-600 font-bold animate-pulse">
+              Clique para virar
+            </p>
           </div>
 
           {/* Back */}
-          <div className={cn(
-            "absolute inset-0 backface-hidden bg-white dark:bg-slate-900 rounded-[2.5rem] border-2 border-indigo-500/30 dark:border-indigo-500/30 shadow-2xl p-8 flex flex-col items-center justify-center text-center rotate-y-180",
-            !isFlipped ? "pointer-events-none" : ""
-          )}>
-            <span className="text-[10px] font-black text-emerald-500 tracking-[0.3em] uppercase mb-4">RESPOSTA / EXPLICAÇÃO</span>
+          <div
+            className={cn(
+              "absolute inset-0 backface-hidden bg-white dark:bg-slate-900 rounded-[2.5rem] border-2 border-indigo-500/30 dark:border-indigo-500/30 shadow-2xl p-8 flex flex-col items-center justify-center text-center rotate-y-180",
+              !isFlipped ? "pointer-events-none" : "",
+            )}
+          >
+            <span className="text-[10px] font-black text-emerald-500 tracking-[0.3em] uppercase mb-4">
+              RESPOSTA / EXPLICAÇÃO
+            </span>
             <div className="max-h-full overflow-y-auto w-full custom-scrollbar">
               <p className="text-lg sm:text-xl font-medium dark:text-slate-200 leading-relaxed">
                 {currentCard.back}
@@ -4098,14 +5370,14 @@ const FlashcardsView = ({
       <div className="flex gap-4 justify-center">
         {isFlipped ? (
           <>
-            <button 
+            <button
               onClick={() => handleReview(false)}
               className="flex-1 max-w-[160px] py-4 rounded-2xl bg-rose-500 text-white font-black shadow-lg shadow-rose-500/20 active:scale-95 transition-all flex flex-col items-center gap-1"
             >
               <XCircle size={20} />
               <span>Errei</span>
             </button>
-            <button 
+            <button
               onClick={() => handleReview(true)}
               className="flex-1 max-w-[160px] py-4 rounded-2xl bg-emerald-500 text-white font-black shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex flex-col items-center gap-1"
             >
@@ -4114,9 +5386,13 @@ const FlashcardsView = ({
             </button>
           </>
         ) : (
-          <button 
+          <button
             onClick={() => setIsFlipped(true)}
-            className={cn("px-12 py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-all", theme.primary, theme.contrastText)}
+            className={cn(
+              "px-12 py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-all",
+              theme.primary,
+              theme.contrastText,
+            )}
           >
             Ver Resposta
           </button>
@@ -4126,10 +5402,10 @@ const FlashcardsView = ({
   );
 };
 
-const StudyMode = ({ 
-  history, 
-  theme, 
-  onClose, 
+const StudyMode = ({
+  history,
+  theme,
+  onClose,
   onPracticeIncorrect,
   dateFilter,
   setDateFilter,
@@ -4147,45 +5423,51 @@ const StudyMode = ({
   onOpenRecycleBin,
   recycleBinCount,
   selectedSubjects,
-  setSelectedSubjects
-}: { 
-  history: QuizResult[], 
-  theme: any, 
-  onClose: () => void,
-  onPracticeIncorrect: (questions: QuizQuestion[], fileName: string, subject?: string) => void,
-  dateFilter: string[],
-  setDateFilter: (val: string[]) => void,
-  subjectFilter: string,
-  setSubjectFilter: (val: string) => void,
-  subjects: string[],
-  handleAddSubject: (e: React.FormEvent) => void,
-  handleRemoveSubject: (subject: string) => void,
-  newSubjectInput: string,
-  setNewSubjectInput: (val: string) => void,
-  onDeleteSubjectHistory: (subject: string) => void,
-  onDeleteQuiz: (id: string) => void,
-  onDeleteQuizzes: (ids: string[]) => void,
-  onDeleteSubjectsHistory: (subjects: string[]) => void,
-  onOpenRecycleBin: () => void,
-  recycleBinCount: number,
-  selectedSubjects: string[],
-  setSelectedSubjects: React.Dispatch<React.SetStateAction<string[]>>
+  setSelectedSubjects,
+}: {
+  history: QuizResult[];
+  theme: any;
+  onClose: () => void;
+  onPracticeIncorrect: (
+    questions: QuizQuestion[],
+    fileName: string,
+    subject?: string,
+  ) => void;
+  dateFilter: string[];
+  setDateFilter: (val: string[]) => void;
+  subjectFilter: string;
+  setSubjectFilter: (val: string) => void;
+  subjects: string[];
+  handleAddSubject: (e: React.FormEvent) => void;
+  handleRemoveSubject: (subject: string) => void;
+  newSubjectInput: string;
+  setNewSubjectInput: (val: string) => void;
+  onDeleteSubjectHistory: (subject: string) => void;
+  onDeleteQuiz: (id: string) => void;
+  onDeleteQuizzes: (ids: string[]) => void;
+  onDeleteSubjectsHistory: (subjects: string[]) => void;
+  onOpenRecycleBin: () => void;
+  recycleBinCount: number;
+  selectedSubjects: string[];
+  setSelectedSubjects: React.Dispatch<React.SetStateAction<string[]>>;
 }) => {
   const [activeFolder, setActiveFolder] = React.useState<string | null>(null);
   const [selectedQuizzes, setSelectedQuizzes] = React.useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = React.useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
-  const [tempSelectedDates, setTempSelectedDates] = React.useState<string[]>([]);
+  const [tempSelectedDates, setTempSelectedDates] = React.useState<string[]>(
+    [],
+  );
 
   const toggleQuizSelection = (id: string) => {
-    setSelectedQuizzes(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    setSelectedQuizzes((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
     );
   };
 
   const toggleSubjectSelection = (name: string) => {
-    setSelectedSubjects(prev => 
-      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+    setSelectedSubjects((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
     );
   };
 
@@ -4196,35 +5478,41 @@ const StudyMode = ({
   };
 
   const filteredHistory = React.useMemo(() => {
-    return history.filter(res => {
-      const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
-      
+    return history.filter((res) => {
+      const date =
+        res.date instanceof Date ? res.date : (res.date as any).toDate();
+
       // Date filter
       let dateMatch = true;
-      if (dateFilter.includes('all')) {
+      if (dateFilter.includes("all")) {
         dateMatch = true;
-      } else if (dateFilter.includes('today')) {
+      } else if (dateFilter.includes("today")) {
         const today = new Date();
         dateMatch = date.toDateString() === today.toDateString();
-      } else if (dateFilter.includes('week')) {
+      } else if (dateFilter.includes("week")) {
         const lastWeek = new Date();
         lastWeek.setDate(lastWeek.getDate() - 7);
         dateMatch = date >= lastWeek;
-      } else if (dateFilter.includes('month')) {
+      } else if (dateFilter.includes("month")) {
         const lastMonth = new Date();
         lastMonth.setMonth(lastMonth.getMonth() - 1);
         dateMatch = date >= lastMonth;
       } else if (dateFilter.length > 0) {
-        dateMatch = dateFilter.some(df => {
+        dateMatch = dateFilter.some((df) => {
           const filterDate = new Date(df);
-          return !isNaN(filterDate.getTime()) && date.toDateString() === filterDate.toDateString();
+          return (
+            !isNaN(filterDate.getTime()) &&
+            date.toDateString() === filterDate.toDateString()
+          );
         });
       }
 
       // Subject filter
       let subjectMatch = true;
-      if (subjectFilter !== 'all') {
-        subjectMatch = res.questions.some(q => q.subject === subjectFilter) || (res.fileName === subjectFilter);
+      if (subjectFilter !== "all") {
+        subjectMatch =
+          res.questions.some((q) => q.subject === subjectFilter) ||
+          res.fileName === subjectFilter;
       }
 
       return dateMatch && subjectMatch;
@@ -4232,36 +5520,61 @@ const StudyMode = ({
   }, [history, dateFilter, subjectFilter]);
 
   const subjectStats = React.useMemo(() => {
-    const stats: { [key: string]: { correct: number, total: number, lastDate: Date, attempts: number, questions: QuizQuestion[], incorrectCount: number, quizzes: QuizResult[] } } = {};
-    
+    const stats: {
+      [key: string]: {
+        correct: number;
+        total: number;
+        lastDate: Date;
+        attempts: number;
+        questions: QuizQuestion[];
+        incorrectCount: number;
+        quizzes: QuizResult[];
+      };
+    } = {};
+
     const getCanonicalSubject = (raw: string) => {
-      if (!raw) return 'Outros';
+      if (!raw) return "Outros";
       const normalizedRaw = raw.toLowerCase().trim();
-      
+
       // Try to find a match in the subjects list
-      const match = subjects.find(s => 
-        normalizedRaw.includes(s.toLowerCase()) || 
-        s.toLowerCase().includes(normalizedRaw)
+      const match = subjects.find(
+        (s) =>
+          normalizedRaw.includes(s.toLowerCase()) ||
+          s.toLowerCase().includes(normalizedRaw),
       );
-      
-      return match || 'Outros';
+
+      return match || "Outros";
     };
 
-    filteredHistory.forEach(res => {
-      const date = res.date instanceof Date ? res.date : (res.date as any).toDate();
-      
+    filteredHistory.forEach((res) => {
+      const date =
+        res.date instanceof Date ? res.date : (res.date as any).toDate();
+
       // Group the entire quiz under one canonical subject
       const rawSubject = res.questions[0]?.subject || res.fileName;
       const topic = getCanonicalSubject(rawSubject);
 
-      if (!stats[topic]) stats[topic] = { correct: 0, total: 0, lastDate: date, attempts: 0, questions: [], incorrectCount: 0, quizzes: [] };
+      if (!stats[topic])
+        stats[topic] = {
+          correct: 0,
+          total: 0,
+          lastDate: date,
+          attempts: 0,
+          questions: [],
+          incorrectCount: 0,
+          quizzes: [],
+        };
 
       res.questions.forEach((q, idx) => {
         stats[topic].total += 1;
         if (res.answers[idx] === q.correctAnswer) {
           stats[topic].correct += 1;
         } else {
-          if (!stats[topic].questions.some(existing => existing.question === q.question)) {
+          if (
+            !stats[topic].questions.some(
+              (existing) => existing.question === q.question,
+            )
+          ) {
             stats[topic].questions.push(q);
             stats[topic].incorrectCount++;
           }
@@ -4269,42 +5582,51 @@ const StudyMode = ({
         if (date > stats[topic].lastDate) stats[topic].lastDate = date;
       });
 
-      if (!stats[topic].quizzes.some(quiz => quiz.id === res.id)) {
+      if (!stats[topic].quizzes.some((quiz) => quiz.id === res.id)) {
         stats[topic].quizzes.push(res);
       }
       stats[topic].attempts += 1;
     });
 
     // Ensure all subjects from settings are present
-    subjects.forEach(s => {
+    subjects.forEach((s) => {
       if (!stats[s]) {
-        stats[s] = { correct: 0, total: 0, lastDate: new Date(), attempts: 0, questions: [], incorrectCount: 0, quizzes: [] };
+        stats[s] = {
+          correct: 0,
+          total: 0,
+          lastDate: new Date(),
+          attempts: 0,
+          questions: [],
+          incorrectCount: 0,
+          quizzes: [],
+        };
       }
     });
 
     return Object.entries(stats)
       .map(([name, data]) => ({
         name,
-        accuracy: data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0,
+        accuracy:
+          data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0,
         incorrectCount: data.incorrectCount,
         questions: data.questions,
         total: data.total,
         correct: data.correct,
         attempts: data.attempts,
         lastDate: data.lastDate,
-        quizzes: data.quizzes
+        quizzes: data.quizzes,
       }))
       .sort((a, b) => {
-        if (a.name === 'Outros') return 1;
-        if (b.name === 'Outros') return -1;
+        if (a.name === "Outros") return 1;
+        if (b.name === "Outros") return -1;
         return a.name.localeCompare(b.name);
       });
   }, [filteredHistory, subjects]);
 
   const allSubjectsFromHistory = React.useMemo(() => {
     const set = new Set<string>();
-    history.forEach(res => {
-      res.questions.forEach(q => {
+    history.forEach((res) => {
+      res.questions.forEach((q) => {
         if (q.subject) set.add(normalizeSubject(q.subject));
       });
       if (res.fileName) set.add(normalizeSubject(res.fileName));
@@ -4312,36 +5634,61 @@ const StudyMode = ({
     return Array.from(set).sort();
   }, [history]);
 
-  const totalIncorrect = subjectStats.reduce((acc, s) => acc + s.incorrectCount, 0);
+  const totalIncorrect = subjectStats.reduce(
+    (acc, s) => acc + s.incorrectCount,
+    0,
+  );
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 max-w-[96%] mx-auto"
     >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-[2rem] border border-black/5 dark:border-slate-800 shadow-sm">
         <div className="flex items-center gap-3 sm:gap-4">
-          <div className={cn("p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-lg transform -rotate-3", theme.primary, theme.contrastText)}>
+          <div
+            className={cn(
+              "p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-lg transform -rotate-3",
+              theme.primary,
+              theme.contrastText,
+            )}
+          >
             <BookOpen size={20} className="sm:hidden" />
             <BookOpen size={28} className="hidden sm:block" />
           </div>
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold dark:text-white tracking-tight">Modo de Estudo</h2>
-            <p className="text-[10px] sm:text-xs text-black/40 dark:text-slate-400 font-medium">Revise seus erros e foque nos pontos de atenção</p>
+            <h2 className="text-xl sm:text-2xl font-bold dark:text-white tracking-tight">
+              Modo de Estudo
+            </h2>
+            <p className="text-[10px] sm:text-xs text-black/40 dark:text-slate-400 font-medium">
+              Revise seus erros e foque nos pontos de atenção
+            </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
           {/* Filters moved next to Voltar button */}
           <div className="flex flex-col gap-1 bg-black/5 dark:bg-white/5 p-1 sm:p-1.5 rounded-lg sm:rounded-xl border border-black/5 dark:border-white/5 flex-1 sm:flex-none min-w-[140px] relative">
             <div className="flex items-center gap-1.5">
-              <Calendar size={12} className="text-black/40 dark:text-slate-500 ml-1" />
+              <Calendar
+                size={12}
+                className="text-black/40 dark:text-slate-500 ml-1"
+              />
               <div className="flex items-center gap-1.5 w-full">
-                <select 
-                  value={dateFilter.length === 1 && ['all', 'today', 'week', 'month'].includes(dateFilter[0]) ? dateFilter[0] : 'specific'}
+                <select
+                  value={
+                    dateFilter.length === 1 &&
+                    ["all", "today", "week", "month"].includes(dateFilter[0])
+                      ? dateFilter[0]
+                      : "specific"
+                  }
                   onChange={(e) => {
-                    if (e.target.value === 'specific') {
-                      setTempSelectedDates(dateFilter.filter(d => !['all', 'today', 'week', 'month'].includes(d)));
+                    if (e.target.value === "specific") {
+                      setTempSelectedDates(
+                        dateFilter.filter(
+                          (d) => !["all", "today", "week", "month"].includes(d),
+                        ),
+                      );
                       setIsCalendarOpen(true);
                     } else {
                       setDateFilter([e.target.value]);
@@ -4350,16 +5697,48 @@ const StudyMode = ({
                   }}
                   className="bg-transparent text-[10px] sm:text-xs font-bold dark:text-white outline-none cursor-pointer pr-1"
                 >
-                  <option value="all" className="bg-white dark:bg-slate-900 dark:text-white">Todo Período</option>
-                  <option value="today" className="bg-white dark:bg-slate-900 dark:text-white">Hoje</option>
-                  <option value="week" className="bg-white dark:bg-slate-900 dark:text-white">Últimos 7 dias</option>
-                  <option value="month" className="bg-white dark:bg-slate-900 dark:text-white">Último mês</option>
-                  <option value="specific" className="bg-white dark:bg-slate-900 dark:text-white">Datas Específicas...</option>
+                  <option
+                    value="all"
+                    className="bg-white dark:bg-slate-900 dark:text-white"
+                  >
+                    Todo Período
+                  </option>
+                  <option
+                    value="today"
+                    className="bg-white dark:bg-slate-900 dark:text-white"
+                  >
+                    Hoje
+                  </option>
+                  <option
+                    value="week"
+                    className="bg-white dark:bg-slate-900 dark:text-white"
+                  >
+                    Últimos 7 dias
+                  </option>
+                  <option
+                    value="month"
+                    className="bg-white dark:bg-slate-900 dark:text-white"
+                  >
+                    Último mês
+                  </option>
+                  <option
+                    value="specific"
+                    className="bg-white dark:bg-slate-900 dark:text-white"
+                  >
+                    Datas Específicas...
+                  </option>
                 </select>
-                {(dateFilter.length === 0 || !['all', 'today', 'week', 'month'].includes(dateFilter[0])) && (
-                  <button 
+                {(dateFilter.length === 0 ||
+                  !["all", "today", "week", "month"].includes(
+                    dateFilter[0],
+                  )) && (
+                  <button
                     onClick={() => {
-                      setTempSelectedDates(dateFilter.filter(d => !['all', 'today', 'week', 'month'].includes(d)));
+                      setTempSelectedDates(
+                        dateFilter.filter(
+                          (d) => !["all", "today", "week", "month"].includes(d),
+                        ),
+                      );
                       setIsCalendarOpen(!isCalendarOpen);
                     }}
                     className="flex items-center gap-1 border-l border-black/10 dark:border-white/10 pl-1.5 hover:text-blue-500 transition-colors"
@@ -4372,18 +5751,20 @@ const StudyMode = ({
 
             <AnimatePresence>
               {isCalendarOpen && (
-                <MultiDateCalendar 
+                <MultiDateCalendar
                   selectedDates={tempSelectedDates}
                   onToggleDate={(date) => {
-                    setTempSelectedDates(prev => 
-                      prev.includes(date) ? prev.filter(d => d !== date) : [...prev, date]
+                    setTempSelectedDates((prev) =>
+                      prev.includes(date)
+                        ? prev.filter((d) => d !== date)
+                        : [...prev, date],
                     );
                   }}
                   onApply={() => {
                     if (tempSelectedDates.length > 0) {
                       setDateFilter(tempSelectedDates);
                     } else {
-                      setDateFilter(['all']);
+                      setDateFilter(["all"]);
                     }
                     setIsCalendarOpen(false);
                   }}
@@ -4393,36 +5774,59 @@ const StudyMode = ({
               )}
             </AnimatePresence>
 
-            {dateFilter.length > 0 && !['all', 'today', 'week', 'month'].includes(dateFilter[0]) && (
-              <div className="flex flex-wrap gap-1 px-1">
-                {dateFilter.map(date => (
-                  <span key={date} className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-md text-[8px] font-bold">
-                    {format(new Date(date + 'T12:00:00'), 'dd/MM')}
-                    <button onClick={() => setDateFilter(dateFilter.filter(d => d !== date))} className="hover:text-rose-500">
-                      <X size={8} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
+            {dateFilter.length > 0 &&
+              !["all", "today", "week", "month"].includes(dateFilter[0]) && (
+                <div className="flex flex-wrap gap-1 px-1">
+                  {dateFilter.map((date) => (
+                    <span
+                      key={date}
+                      className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-md text-[8px] font-bold"
+                    >
+                      {format(new Date(date + "T12:00:00"), "dd/MM")}
+                      <button
+                        onClick={() =>
+                          setDateFilter(dateFilter.filter((d) => d !== date))
+                        }
+                        className="hover:text-rose-500"
+                      >
+                        <X size={8} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
           </div>
 
           <div className="flex items-center gap-1.5 bg-black/5 dark:bg-white/5 p-1 sm:p-1.5 rounded-lg sm:rounded-xl border border-black/5 dark:border-white/5 flex-1 sm:flex-none">
-            <BookOpen size={12} className="text-black/40 dark:text-slate-500 ml-1" />
-            <select 
+            <BookOpen
+              size={12}
+              className="text-black/40 dark:text-slate-500 ml-1"
+            />
+            <select
               value={subjectFilter}
               onChange={(e) => setSubjectFilter(e.target.value)}
               className="bg-transparent text-[10px] sm:text-xs font-bold dark:text-white outline-none cursor-pointer pr-1 w-full max-w-[100px] sm:max-w-[130px]"
             >
-              <option value="all" className="bg-white dark:bg-slate-900 dark:text-white">Todas Matérias</option>
-              {allSubjectsFromHistory.map(s => (
-                <option key={s} value={s} className="bg-white dark:bg-slate-900 dark:text-white">{s}</option>
+              <option
+                value="all"
+                className="bg-white dark:bg-slate-900 dark:text-white"
+              >
+                Todas Matérias
+              </option>
+              {allSubjectsFromHistory.map((s) => (
+                <option
+                  key={s}
+                  value={s}
+                  className="bg-white dark:bg-slate-900 dark:text-white"
+                >
+                  {s}
+                </option>
               ))}
             </select>
           </div>
 
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all font-bold text-[10px] sm:text-xs dark:text-white active:scale-95 flex-1 sm:flex-none"
           >
             <ChevronLeft size={16} />
@@ -4431,17 +5835,21 @@ const StudyMode = ({
         </div>
       </div>
 
-      {(isSelectionMode || selectedQuizzes.length > 0 || selectedSubjects.length > 0) && (
-        <motion.div 
+      {(isSelectionMode ||
+        selectedQuizzes.length > 0 ||
+        selectedSubjects.length > 0) && (
+        <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center justify-between bg-white dark:bg-slate-800 border border-black/10 dark:border-white/10 p-4 rounded-2xl mb-6 shadow-lg sticky top-20 z-30"
         >
           <div className="flex items-center gap-4">
             <span className={cn("text-sm font-bold", theme.text)}>
-              {activeFolder ? `${selectedQuizzes.length} quizzes selecionados` : `${selectedSubjects.length} matérias selecionadas`}
+              {activeFolder
+                ? `${selectedQuizzes.length} quizzes selecionados`
+                : `${selectedSubjects.length} matérias selecionadas`}
             </span>
-            <button 
+            <button
               onClick={clearSelection}
               className="text-xs font-bold text-black/40 dark:text-slate-400 hover:text-black dark:hover:text-white transition-colors"
             >
@@ -4450,27 +5858,36 @@ const StudyMode = ({
           </div>
           <div className="flex items-center gap-3">
             {activeFolder && selectedQuizzes.length > 0 && (
-              <button 
+              <button
                 onClick={() => {
                   const selectedQuestions = filteredHistory
-                    .filter(res => selectedQuizzes.includes(res.id))
-                    .flatMap(res => res.questions.filter((q, idx) => res.answers[idx] !== q.correctAnswer));
-                  
+                    .filter((res) => selectedQuizzes.includes(res.id))
+                    .flatMap((res) =>
+                      res.questions.filter(
+                        (q, idx) => res.answers[idx] !== q.correctAnswer,
+                      ),
+                    );
+
                   if (selectedQuestions.length > 0) {
-                    onPracticeIncorrect(selectedQuestions, `Revisão: ${activeFolder} (Seleção)`, activeFolder || undefined);
+                    onPracticeIncorrect(
+                      selectedQuestions,
+                      `Revisão: ${activeFolder} (Seleção)`,
+                      activeFolder || undefined,
+                    );
                     clearSelection();
                   }
                 }}
                 className={cn(
                   "flex items-center gap-2 px-4 py-1.5 rounded-xl font-bold text-xs shadow-lg active:scale-95 transition-all",
-                  theme.primary, theme.contrastText
+                  theme.primary,
+                  theme.contrastText,
                 )}
               >
                 <RotateCcw size={16} />
                 Praticar Erros Selecionados
               </button>
             )}
-            <button 
+            <button
               onClick={() => {
                 if (activeFolder) {
                   onDeleteQuizzes(selectedQuizzes);
@@ -4479,7 +5896,11 @@ const StudyMode = ({
                 }
                 clearSelection();
               }}
-              disabled={activeFolder ? selectedQuizzes.length === 0 : selectedSubjects.length === 0}
+              disabled={
+                activeFolder
+                  ? selectedQuizzes.length === 0
+                  : selectedSubjects.length === 0
+              }
               className="flex items-center gap-2 px-6 py-2 rounded-xl bg-rose-500 text-white font-bold text-sm shadow-lg active:scale-95 disabled:opacity-50 disabled:scale-100 transition-all"
             >
               <Trash2 size={16} />
@@ -4498,21 +5919,29 @@ const StudyMode = ({
                 <div className="p-3 bg-rose-500/10 rounded-2xl">
                   <XCircle size={24} className="text-rose-500" />
                 </div>
-                <h3 className="text-xl font-bold dark:text-white">Total de Erros</h3>
+                <h3 className="text-xl font-bold dark:text-white">
+                  Total de Erros
+                </h3>
               </div>
               <div className="space-y-2">
-                <p className="text-4xl sm:text-5xl font-bold dark:text-white">{totalIncorrect}</p>
-                <p className="text-xs sm:text-sm text-black/40 dark:text-slate-400 font-medium">Questões que precisam de revisão</p>
+                <p className="text-4xl sm:text-5xl font-bold dark:text-white">
+                  {totalIncorrect}
+                </p>
+                <p className="text-xs sm:text-sm text-black/40 dark:text-slate-400 font-medium">
+                  Questões que precisam de revisão
+                </p>
               </div>
-              <button 
+              <button
                 disabled={totalIncorrect === 0}
                 onClick={() => {
-                  const allIncorrect = subjectStats.flatMap(s => s.questions);
+                  const allIncorrect = subjectStats.flatMap((s) => s.questions);
                   onPracticeIncorrect(allIncorrect, "Revisão Geral de Erros");
                 }}
                 className={cn(
                   "w-full py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2 text-sm sm:text-base",
-                  totalIncorrect === 0 ? "bg-black/5 text-black/20 cursor-not-allowed" : cn(theme.primary, theme.contrastText, theme.shadow)
+                  totalIncorrect === 0
+                    ? "bg-black/5 text-black/20 cursor-not-allowed"
+                    : cn(theme.primary, theme.contrastText, theme.shadow),
                 )}
               >
                 <RotateCcw size={20} />
@@ -4523,27 +5952,33 @@ const StudyMode = ({
             <div className="bg-amber-50 dark:bg-amber-900/10 p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] border border-amber-100 dark:border-amber-900/20 space-y-4">
               <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400">
                 <Zap size={20} />
-                <h4 className="font-bold uppercase tracking-widest text-[10px] sm:text-xs">Dica de Estudo</h4>
+                <h4 className="font-bold uppercase tracking-widest text-[10px] sm:text-xs">
+                  Dica de Estudo
+                </h4>
               </div>
               <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-200 font-medium leading-relaxed">
-                Focar nos erros é a forma mais rápida de evoluir. Tente explicar para si mesmo por que a resposta correta é a certa.
+                Focar nos erros é a forma mais rápida de evoluir. Tente explicar
+                para si mesmo por que a resposta correta é a certa.
               </p>
             </div>
           </div>
 
           {/* Topics List / Folders */}
           <div className="lg:col-span-2 space-y-6">
-            <SubjectPerformanceBarChart subjectStats={subjectStats} theme={theme} />
-            
+            <SubjectPerformanceBarChart
+              subjectStats={subjectStats}
+              theme={theme}
+            />
+
             {activeFolder ? (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] border border-white/20 dark:border-slate-800/50 shadow-2xl"
               >
                 <div className="flex items-center justify-between mb-8">
                   <div className="flex items-center gap-4">
-                    <button 
+                    <button
                       onClick={() => setActiveFolder(null)}
                       className="p-3 rounded-2xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all"
                     >
@@ -4555,151 +5990,204 @@ const StudyMode = ({
                         {activeFolder}
                       </h3>
                       <p className="text-sm text-black/40 dark:text-slate-500 font-medium">
-                        {subjectStats.find(s => s.name === activeFolder)?.quizzes.length || 0} arquivos encontrados
+                        {subjectStats.find((s) => s.name === activeFolder)
+                          ?.quizzes.length || 0}{" "}
+                        arquivos encontrados
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button 
-                      disabled={subjectStats.find(s => s.name === activeFolder)?.incorrectCount === 0}
+                    <button
+                      disabled={
+                        subjectStats.find((s) => s.name === activeFolder)
+                          ?.incorrectCount === 0
+                      }
                       onClick={() => {
-                        const s = subjectStats.find(s => s.name === activeFolder);
-                        if (s) onPracticeIncorrect(s.questions, `Revisão: ${s.name}`, s.name);
+                        const s = subjectStats.find(
+                          (s) => s.name === activeFolder,
+                        );
+                        if (s)
+                          onPracticeIncorrect(
+                            s.questions,
+                            `Revisão: ${s.name}`,
+                            s.name,
+                          );
                       }}
                       className={cn(
                         "px-6 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 shadow-lg",
-                        subjectStats.find(s => s.name === activeFolder)?.incorrectCount === 0 
-                          ? "bg-black/5 text-black/20 cursor-not-allowed" 
-                          : cn(theme.primary, theme.contrastText, theme.shadow)
+                        subjectStats.find((s) => s.name === activeFolder)
+                          ?.incorrectCount === 0
+                          ? "bg-black/5 text-black/20 cursor-not-allowed"
+                          : cn(theme.primary, theme.contrastText, theme.shadow),
                       )}
                     >
                       Praticar Todos os Erros
                     </button>
                   </div>
-              </div>
+                </div>
 
                 <div className="space-y-8">
                   {(() => {
-                    const subject = subjectStats.find(s => s.name === activeFolder);
+                    const subject = subjectStats.find(
+                      (s) => s.name === activeFolder,
+                    );
                     if (!subject) return null;
 
                     return (
                       <div className="mb-8">
-                        <PerformanceTimeline 
-                          history={subject.quizzes} 
-                          theme={theme} 
-                          title={`Desempenho: ${activeFolder}`} 
+                        <PerformanceTimeline
+                          history={subject.quizzes}
+                          theme={theme}
+                          title={`Desempenho: ${activeFolder}`}
                         />
                       </div>
                     );
                   })()}
 
                   {(() => {
-                    const subject = subjectStats.find(s => s.name === activeFolder);
+                    const subject = subjectStats.find(
+                      (s) => s.name === activeFolder,
+                    );
                     if (!subject) return null;
 
                     const grouped: { [key: string]: QuizResult[] } = {};
-                    subject.quizzes.sort((a, b) => b.date.getTime() - a.date.getTime()).forEach(q => {
-                      const dateStr = format(q.date, "dd.MM.yyyy", { locale: ptBR });
-                      if (!grouped[dateStr]) grouped[dateStr] = [];
-                      grouped[dateStr].push(q);
-                    });
+                    subject.quizzes
+                      .sort((a, b) => b.date.getTime() - a.date.getTime())
+                      .forEach((q) => {
+                        const dateStr = format(q.date, "dd.MM.yyyy", {
+                          locale: ptBR,
+                        });
+                        if (!grouped[dateStr]) grouped[dateStr] = [];
+                        grouped[dateStr].push(q);
+                      });
 
-                    return Object.entries(grouped).map(([date, dateQuizzes]) => (
-                      <div key={date} className="space-y-4">
-                        <div className="flex items-center gap-2 ml-2">
-                          <Folder size={16} className="text-amber-500" />
-                          <h4 className="text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">
-                            {date}
-                          </h4>
-                        </div>
-                        <div className="grid grid-cols-1 gap-3 ml-6">
-                          {dateQuizzes.map((res) => {
-                            const isSelected = selectedQuizzes.includes(res.id);
-                            const incorrectInThisQuiz = res.questions.filter((q, idx) => res.answers[idx] !== q.correctAnswer);
-                            return (
-                              <div 
-                                key={res.id} 
-                                onClick={() => toggleQuizSelection(res.id)}
-                                className={cn(
-                                  "group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer gap-4",
-                                  isSelected 
-                                    ? "bg-rose-500/5 border-rose-500/20 shadow-sm" 
-                                    : "bg-white/40 dark:bg-slate-800/40 backdrop-blur-md border-white/20 dark:border-slate-700/50 hover:border-white/40 dark:hover:border-slate-600/50"
-                                )}
-                              >
-                                <div className="flex items-center gap-4">
-                                  <div className={cn(
-                                    "w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0",
-                                    isSelected ? "bg-rose-500 border-rose-500" : "border-black/10 dark:border-white/10"
-                                  )}>
-                                    {isSelected && <Check size={12} className="text-white" />}
-                                  </div>
-                                  <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500 shrink-0">
-                                    <FileText size={20} />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <h4 className="text-sm font-bold dark:text-white truncate max-w-[200px] sm:max-w-[300px]" title={res.fileName}>
-                                      {res.fileName}
-                                    </h4>
-                                    <div className="flex items-center gap-3 mt-1">
-                                      <p className="text-[10px] text-black/40 dark:text-slate-500 font-medium">
-                                        {res.total} questões
-                                      </p>
-                                      <div className="flex items-center gap-1">
-                                        <span className="w-1 h-1 rounded-full bg-black/10 dark:bg-white/10" />
-                                        <span className={cn(
-                                          "text-[10px] font-bold",
-                                          incorrectInThisQuiz.length === 0 ? "text-emerald-500" : "text-rose-500"
-                                        )}>
-                                          {incorrectInThisQuiz.length} erros
-                                        </span>
+                    return Object.entries(grouped).map(
+                      ([date, dateQuizzes]) => (
+                        <div key={date} className="space-y-4">
+                          <div className="flex items-center gap-2 ml-2">
+                            <Folder size={16} className="text-amber-500" />
+                            <h4 className="text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">
+                              {date}
+                            </h4>
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 ml-6">
+                            {dateQuizzes.map((res) => {
+                              const isSelected = selectedQuizzes.includes(
+                                res.id,
+                              );
+                              const incorrectInThisQuiz = res.questions.filter(
+                                (q, idx) =>
+                                  res.answers[idx] !== q.correctAnswer,
+                              );
+                              return (
+                                <div
+                                  key={res.id}
+                                  onClick={() => toggleQuizSelection(res.id)}
+                                  className={cn(
+                                    "group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer gap-4",
+                                    isSelected
+                                      ? "bg-rose-500/5 border-rose-500/20 shadow-sm"
+                                      : "bg-white/40 dark:bg-slate-800/40 backdrop-blur-md border-white/20 dark:border-slate-700/50 hover:border-white/40 dark:hover:border-slate-600/50",
+                                  )}
+                                >
+                                  <div className="flex items-center gap-4">
+                                    <div
+                                      className={cn(
+                                        "w-5 h-5 rounded border-2 flex items-center justify-center transition-all shrink-0",
+                                        isSelected
+                                          ? "bg-rose-500 border-rose-500"
+                                          : "border-black/10 dark:border-white/10",
+                                      )}
+                                    >
+                                      {isSelected && (
+                                        <Check
+                                          size={12}
+                                          className="text-white"
+                                        />
+                                      )}
+                                    </div>
+                                    <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500 shrink-0">
+                                      <FileText size={20} />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <h4
+                                        className="text-sm font-bold dark:text-white truncate max-w-[200px] sm:max-w-[300px]"
+                                        title={res.fileName}
+                                      >
+                                        {res.fileName}
+                                      </h4>
+                                      <div className="flex items-center gap-3 mt-1">
+                                        <p className="text-[10px] text-black/40 dark:text-slate-500 font-medium">
+                                          {res.total} questões
+                                        </p>
+                                        <div className="flex items-center gap-1">
+                                          <span className="w-1 h-1 rounded-full bg-black/10 dark:bg-white/10" />
+                                          <span
+                                            className={cn(
+                                              "text-[10px] font-bold",
+                                              incorrectInThisQuiz.length === 0
+                                                ? "text-emerald-500"
+                                                : "text-rose-500",
+                                            )}
+                                          >
+                                            {incorrectInThisQuiz.length} erros
+                                          </span>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
-                                </div>
-                                <div className="flex items-center gap-2 ml-9 sm:ml-0">
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onPracticeIncorrect(res.questions, res.fileName, res.subject);
-                                    }}
-                                    className={cn(
-                                      "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95 flex items-center gap-1.5",
-                                      theme.primary, theme.contrastText
-                                    )}
-                                  >
-                                    <RotateCcw size={12} />
-                                    Refazer Tudo
-                                  </button>
-                                  {incorrectInThisQuiz.length > 0 && (
-                                    <button 
+                                  <div className="flex items-center gap-2 ml-9 sm:ml-0">
+                                    <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        onPracticeIncorrect(incorrectInThisQuiz, `Erros: ${res.fileName}`, res.subject);
+                                        onPracticeIncorrect(
+                                          res.questions,
+                                          res.fileName,
+                                          res.subject,
+                                        );
                                       }}
-                                      className="px-3 py-1.5 rounded-lg font-bold text-[10px] bg-rose-500 text-white transition-all active:scale-95 flex items-center gap-1.5 shadow-lg shadow-rose-500/20"
+                                      className={cn(
+                                        "px-3 py-1.5 rounded-lg font-bold text-[10px] transition-all active:scale-95 flex items-center gap-1.5",
+                                        theme.primary,
+                                        theme.contrastText,
+                                      )}
                                     >
-                                      <XCircle size={12} />
-                                      Praticar Erros
+                                      <RotateCcw size={12} />
+                                      Refazer Tudo
                                     </button>
-                                  )}
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onDeleteQuiz(res.id);
-                                    }}
-                                    className="p-2 text-black/10 dark:text-white/10 hover:text-rose-500 transition-colors"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
+                                    {incorrectInThisQuiz.length > 0 && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onPracticeIncorrect(
+                                            incorrectInThisQuiz,
+                                            `Erros: ${res.fileName}`,
+                                            res.subject,
+                                          );
+                                        }}
+                                        className="px-3 py-1.5 rounded-lg font-bold text-[10px] bg-rose-500 text-white transition-all active:scale-95 flex items-center gap-1.5 shadow-lg shadow-rose-500/20"
+                                      >
+                                        <XCircle size={12} />
+                                        Praticar Erros
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDeleteQuiz(res.id);
+                                      }}
+                                      className="p-2 text-black/10 dark:text-white/10 hover:text-rose-500 transition-colors"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    ));
+                      ),
+                    );
                   })()}
                 </div>
               </motion.div>
@@ -4707,24 +6195,30 @@ const StudyMode = ({
               <>
                 <div className="flex items-center justify-between px-2">
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-[0.3em] uppercase mb-1">EXERCÍCIOS</span>
+                    <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-[0.3em] uppercase mb-1">
+                      EXERCÍCIOS
+                    </span>
                     <h3 className="text-2xl font-black dark:text-white flex items-center gap-3">
                       <FolderOpen size={28} className={theme.text} />
                       Pastas por Matéria
                     </h3>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button 
+                    <button
                       onClick={() => setIsSelectionMode(!isSelectionMode)}
                       className={cn(
                         "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all",
-                        isSelectionMode ? "bg-rose-500 text-white" : "bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400"
+                        isSelectionMode
+                          ? "bg-rose-500 text-white"
+                          : "bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400",
                       )}
                     >
                       <CheckSquare size={16} />
-                      {isSelectionMode ? "Sair da Seleção" : "Selecionar Várias"}
+                      {isSelectionMode
+                        ? "Sair da Seleção"
+                        : "Selecionar Várias"}
                     </button>
-                    <button 
+                    <button
                       onClick={onOpenRecycleBin}
                       className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400 hover:bg-black/10 dark:hover:bg-white/10 transition-all relative"
                     >
@@ -4738,42 +6232,68 @@ const StudyMode = ({
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="flex flex-col gap-4">
                   {subjectStats.map((s) => {
                     const isSelected = selectedSubjects.includes(s.name);
                     return (
-                      <motion.div 
+                      <motion.div
                         key={s.name}
                         whileHover={{ x: 8, scale: 1.005 }}
-                        onClick={() => isSelectionMode ? toggleSubjectSelection(s.name) : setActiveFolder(s.name)}
+                        onClick={() =>
+                          isSelectionMode
+                            ? toggleSubjectSelection(s.name)
+                            : setActiveFolder(s.name)
+                        }
                         className={cn(
                           "group relative p-6 rounded-[2rem] border shadow-xl flex flex-col sm:flex-row sm:items-center gap-6 overflow-hidden transition-all backdrop-blur-2xl",
-                          isSelected 
-                            ? "bg-rose-500/10 border-rose-500/30" 
-                            : "bg-white/40 dark:bg-slate-900/40 border-white/20 dark:border-slate-800/50 hover:border-white/40 dark:hover:border-slate-700/50 shadow-black/5"
+                          isSelected
+                            ? "bg-rose-500/10 border-rose-500/30"
+                            : "bg-white/40 dark:bg-slate-900/40 border-white/20 dark:border-slate-800/50 hover:border-white/40 dark:hover:border-slate-700/50 shadow-black/5",
                         )}
                       >
                         {/* Folder Tab Effect (Vertical) */}
-                        <div className={cn("absolute top-6 left-0 w-1 h-12 rounded-r-xl", theme.primary)} />
-                        
+                        <div
+                          className={cn(
+                            "absolute top-6 left-0 w-1 h-12 rounded-r-xl",
+                            theme.primary,
+                          )}
+                        />
+
                         <div className="flex items-center gap-4 shrink-0">
                           {isSelectionMode ? (
-                            <div className={cn(
-                              "w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-all",
-                              isSelected ? "bg-rose-500 border-rose-500" : "border-black/10 dark:border-white/10"
-                            )}>
-                              {isSelected && <Check size={16} className="text-white" />}
+                            <div
+                              className={cn(
+                                "w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-all",
+                                isSelected
+                                  ? "bg-rose-500 border-rose-500"
+                                  : "border-black/10 dark:border-white/10",
+                              )}
+                            >
+                              {isSelected && (
+                                <Check size={16} className="text-white" />
+                              )}
                             </div>
                           ) : (
-                            <div className={cn("p-4 rounded-2xl bg-black/5 dark:bg-white/5", theme.text)}>
+                            <div
+                              className={cn(
+                                "p-4 rounded-2xl bg-black/5 dark:bg-white/5",
+                                theme.text,
+                              )}
+                            >
                               <Folder size={24} />
                             </div>
                           )}
                           <div className="flex flex-col">
-                            <h4 className="text-lg font-black dark:text-white leading-tight" title={s.name}>{s.name}</h4>
+                            <h4
+                              className="text-lg font-black dark:text-white leading-tight"
+                              title={s.name}
+                            >
+                              {s.name}
+                            </h4>
                             <span className="text-[10px] font-black text-black/30 dark:text-slate-500 uppercase tracking-widest">
-                              {s.quizzes.length} {s.quizzes.length === 1 ? 'Arquivo' : 'Arquivos'}
+                              {s.quizzes.length}{" "}
+                              {s.quizzes.length === 1 ? "Arquivo" : "Arquivos"}
                             </span>
                           </div>
                         </div>
@@ -4792,19 +6312,27 @@ const StudyMode = ({
 
                           <div className="flex items-center gap-4">
                             <div className="flex flex-col items-end">
-                              <p className={cn("text-xl font-black", 
-                                s.accuracy >= 80 ? "text-emerald-500" : 
-                                s.accuracy >= 60 ? "text-amber-500" : "text-rose-500"
-                              )}>
+                              <p
+                                className={cn(
+                                  "text-xl font-black",
+                                  s.accuracy >= 80
+                                    ? "text-emerald-500"
+                                    : s.accuracy >= 60
+                                      ? "text-amber-500"
+                                      : "text-rose-500",
+                                )}
+                              >
                                 {s.accuracy}%
                               </p>
-                              <span className="text-[8px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-widest">Precisão</span>
+                              <span className="text-[8px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-widest">
+                                Precisão
+                              </span>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-2">
                             {!isSelectionMode && (
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onDeleteSubjectHistory(s.name);
@@ -4816,7 +6344,10 @@ const StudyMode = ({
                               </button>
                             )}
                             <div className="flex items-center gap-1 text-emerald-500 font-bold text-[10px] uppercase ml-2">
-                              <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                              <ArrowRight
+                                size={18}
+                                className="group-hover:translate-x-1 transition-transform"
+                              />
                             </div>
                           </div>
                         </div>
@@ -4834,12 +6365,25 @@ const StudyMode = ({
             <Search size={40} className="text-black/20 dark:text-white/20" />
           </div>
           <div className="space-y-2">
-            <h3 className="text-xl font-bold dark:text-white">Nenhum erro encontrado</h3>
-            <p className="text-xs text-black/40 dark:text-slate-400 max-w-xs mx-auto">Não encontramos erros para os filtros selecionados. Tente ajustar o período ou a matéria.</p>
+            <h3 className="text-xl font-bold dark:text-white">
+              Nenhum erro encontrado
+            </h3>
+            <p className="text-xs text-black/40 dark:text-slate-400 max-w-xs mx-auto">
+              Não encontramos erros para os filtros selecionados. Tente ajustar
+              o período ou a matéria.
+            </p>
           </div>
-          <button 
-            onClick={() => { setDateFilter(['all']); setSubjectFilter('all'); }}
-            className={cn("px-6 py-2 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg", theme.primary, theme.contrastText, theme.shadow)}
+          <button
+            onClick={() => {
+              setDateFilter(["all"]);
+              setSubjectFilter("all");
+            }}
+            className={cn(
+              "px-6 py-2 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg",
+              theme.primary,
+              theme.contrastText,
+              theme.shadow,
+            )}
           >
             Limpar Filtros
           </button>
@@ -4849,29 +6393,29 @@ const StudyMode = ({
   );
 };
 
-const RecycleBin = ({ 
-  items, 
-  theme, 
-  onClose, 
-  onRestore, 
+const RecycleBin = ({
+  items,
+  theme,
+  onClose,
+  onRestore,
   onRestoreMultiple,
   onDelete,
-  onDeleteMultiple
-}: { 
-  items: QuizResult[], 
-  theme: any, 
-  onClose: () => void,
-  onRestore: (id: string) => void,
-  onRestoreMultiple: (ids: string[]) => void,
-  onDelete: (id: string) => void,
-  onDeleteMultiple: (ids: string[]) => void
+  onDeleteMultiple,
+}: {
+  items: QuizResult[];
+  theme: any;
+  onClose: () => void;
+  onRestore: (id: string) => void;
+  onRestoreMultiple: (ids: string[]) => void;
+  onDelete: (id: string) => void;
+  onDeleteMultiple: (ids: string[]) => void;
 }) => {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const toggleSelection = (id: string) => {
-    setSelectedItems(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    setSelectedItems((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
     );
   };
 
@@ -4881,7 +6425,7 @@ const RecycleBin = ({
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
@@ -4889,7 +6433,7 @@ const RecycleBin = ({
     >
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={onClose}
             className="p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all"
           >
@@ -4907,11 +6451,13 @@ const RecycleBin = ({
         </div>
         <div className="flex items-center gap-3">
           {items.length > 0 && (
-            <button 
+            <button
               onClick={() => setIsSelectionMode(!isSelectionMode)}
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all",
-                isSelectionMode ? "bg-rose-500 text-white" : "bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400"
+                isSelectionMode
+                  ? "bg-rose-500 text-white"
+                  : "bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400",
               )}
             >
               <CheckSquare size={16} />
@@ -4922,7 +6468,7 @@ const RecycleBin = ({
       </div>
 
       {isSelectionMode && selectedItems.length > 0 && (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center justify-between bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl mb-6"
@@ -4931,7 +6477,7 @@ const RecycleBin = ({
             <span className="text-sm font-bold text-rose-600">
               {selectedItems.length} itens selecionados
             </span>
-            <button 
+            <button
               onClick={clearSelection}
               className="text-xs font-bold text-black/40 dark:text-slate-400 hover:text-black dark:hover:text-white transition-colors"
             >
@@ -4939,7 +6485,7 @@ const RecycleBin = ({
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <button 
+            <button
               onClick={() => {
                 onRestoreMultiple(selectedItems);
                 clearSelection();
@@ -4949,7 +6495,7 @@ const RecycleBin = ({
               <RotateCcw size={14} />
               Restaurar
             </button>
-            <button 
+            <button
               onClick={() => {
                 onDeleteMultiple(selectedItems);
                 clearSelection();
@@ -4968,29 +6514,37 @@ const RecycleBin = ({
           <div className="w-20 h-20 bg-black/5 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto">
             <Trash2 size={40} className="text-black/10 dark:text-white/10" />
           </div>
-          <p className="text-black/40 dark:text-slate-500 font-medium">Sua lixeira está vazia.</p>
+          <p className="text-black/40 dark:text-slate-500 font-medium">
+            Sua lixeira está vazia.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {items.map((item) => (
-            <div 
+            <div
               key={item.id}
               onClick={() => isSelectionMode && toggleSelection(item.id)}
               className={cn(
                 "group flex items-center justify-between p-5 rounded-3xl border transition-all",
                 isSelectionMode ? "cursor-pointer" : "cursor-default",
                 selectedItems.includes(item.id)
-                  ? "bg-rose-500/10 border-rose-500/30" 
-                  : "bg-black/5 dark:bg-white/5 border-transparent hover:border-black/10 dark:hover:border-white/10"
+                  ? "bg-rose-500/10 border-rose-500/30"
+                  : "bg-black/5 dark:bg-white/5 border-transparent hover:border-black/10 dark:hover:border-white/10",
               )}
             >
               <div className="flex items-center gap-4">
                 {isSelectionMode ? (
-                  <div className={cn(
-                    "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
-                    selectedItems.includes(item.id) ? "bg-rose-500 border-rose-500" : "border-black/10 dark:border-white/10"
-                  )}>
-                    {selectedItems.includes(item.id) && <Check size={14} className="text-white" />}
+                  <div
+                    className={cn(
+                      "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
+                      selectedItems.includes(item.id)
+                        ? "bg-rose-500 border-rose-500"
+                        : "border-black/10 dark:border-white/10",
+                    )}
+                  >
+                    {selectedItems.includes(item.id) && (
+                      <Check size={14} className="text-white" />
+                    )}
                   </div>
                 ) : (
                   <div className="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center">
@@ -4998,24 +6552,30 @@ const RecycleBin = ({
                   </div>
                 )}
                 <div>
-                  <h4 className="text-sm font-bold dark:text-white truncate max-w-[200px]" title={item.fileName}>
+                  <h4
+                    className="text-sm font-bold dark:text-white truncate max-w-[200px]"
+                    title={item.fileName}
+                  >
                     {item.fileName}
                   </h4>
                   <p className="text-[10px] text-black/40 dark:text-slate-500 font-medium">
-                    Excluído em: {item.deletedAt ? format(item.deletedAt, "dd/MM/yyyy HH:mm") : 'Desconhecido'}
+                    Excluído em:{" "}
+                    {item.deletedAt
+                      ? format(item.deletedAt, "dd/MM/yyyy HH:mm")
+                      : "Desconhecido"}
                   </p>
                 </div>
               </div>
               {!isSelectionMode && (
                 <div className="flex items-center gap-2">
-                  <button 
+                  <button
                     onClick={() => onRestore(item.id)}
                     className="p-2 text-black/20 dark:text-white/20 hover:text-emerald-500 transition-colors"
                     title="Restaurar"
                   >
                     <RotateCcw size={16} />
                   </button>
-                  <button 
+                  <button
                     onClick={() => onDelete(item.id)}
                     className="p-2 text-black/20 dark:text-white/20 hover:text-rose-500 transition-colors"
                     title="Excluir Permanentemente"
@@ -5032,7 +6592,10 @@ const RecycleBin = ({
   );
 };
 
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, errorInfo: string | null }> {
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; errorInfo: string | null }
+> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false, errorInfo: null };
@@ -5051,7 +6614,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
       let isFirestoreError = false;
       let firestoreError: any = null;
       try {
-        firestoreError = JSON.parse(this.state.errorInfo || '');
+        firestoreError = JSON.parse(this.state.errorInfo || "");
         if (firestoreError.operationType) isFirestoreError = true;
       } catch (e) {}
 
@@ -5059,7 +6622,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 border border-red-100 dark:border-red-900/30 text-center space-y-6">
             <div className="w-20 h-20 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto">
-              {this.state.errorInfo?.includes('Quota Exceeded') ? (
+              {this.state.errorInfo?.includes("Quota Exceeded") ? (
                 <Clock className="text-amber-500" size={40} />
               ) : (
                 <AlertCircle className="text-red-500" size={40} />
@@ -5067,31 +6630,46 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
             </div>
             <div className="space-y-2">
               <h1 className="text-2xl font-bold dark:text-white">
-                {this.state.errorInfo?.includes('Quota Exceeded') ? "Limite de Uso Atingido" : "Ops! Algo deu errado"}
+                {this.state.errorInfo?.includes("Quota Exceeded")
+                  ? "Limite de Uso Atingido"
+                  : "Ops! Algo deu errado"}
               </h1>
               <p className="text-slate-500 dark:text-slate-400">
-                {this.state.errorInfo?.includes('Quota Exceeded') 
-                  ? "O limite diário gratuito do banco de dados foi atingido. O acesso será restaurado automaticamente amanhã." 
-                  : isFirestoreError 
-                    ? "Ocorreu um erro de permissão ou acesso ao banco de dados." 
+                {this.state.errorInfo?.includes("Quota Exceeded")
+                  ? "O limite diário gratuito do banco de dados foi atingido. O acesso será restaurado automaticamente amanhã."
+                  : isFirestoreError
+                    ? "Ocorreu um erro de permissão ou acesso ao banco de dados."
                     : "Ocorreu um erro inesperado na aplicação."}
               </p>
-              {this.state.errorInfo?.includes('Quota Exceeded') && (
+              {this.state.errorInfo?.includes("Quota Exceeded") && (
                 <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-4 leading-relaxed">
-                  Para mais informações sobre as cotas do plano gratuito (Spark), visite a <a href="https://firebase.google.com/pricing#cloud-firestore" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-500">página de preços do Firebase</a>.
+                  Para mais informações sobre as cotas do plano gratuito
+                  (Spark), visite a{" "}
+                  <a
+                    href="https://firebase.google.com/pricing#cloud-firestore"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-blue-500"
+                  >
+                    página de preços do Firebase
+                  </a>
+                  .
                 </p>
               )}
             </div>
-            
-            {this.state.errorInfo && !this.state.errorInfo.includes('Quota Exceeded') && (
-              <div className="p-4 bg-slate-50 dark:bg-black/20 rounded-xl text-left overflow-auto max-h-40">
-                <code className="text-xs text-red-600 dark:text-red-400 break-all">
-                  {isFirestoreError ? `Erro no Firestore (${firestoreError.operationType}): ${firestoreError.error}` : this.state.errorInfo}
-                </code>
-              </div>
-            )}
 
-            <button 
+            {this.state.errorInfo &&
+              !this.state.errorInfo.includes("Quota Exceeded") && (
+                <div className="p-4 bg-slate-50 dark:bg-black/20 rounded-xl text-left overflow-auto max-h-40">
+                  <code className="text-xs text-red-600 dark:text-red-400 break-all">
+                    {isFirestoreError
+                      ? `Erro no Firestore (${firestoreError.operationType}): ${firestoreError.error}`
+                      : this.state.errorInfo}
+                  </code>
+                </div>
+              )}
+
+            <button
               onClick={() => window.location.reload()}
               className="w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold hover:opacity-90 transition-opacity"
             >
@@ -5106,25 +6684,25 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   }
 }
 
-const ConfirmationModal = ({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
-  title, 
-  message, 
-  theme 
-}: { 
-  isOpen: boolean, 
-  onClose: () => void, 
-  onConfirm: () => void, 
-  title: string, 
-  message: string,
-  theme: any
+const ConfirmationModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  theme,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  theme: any;
 }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <motion.div 
+      <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 max-w-md w-full shadow-2xl border border-black/5 dark:border-white/10 space-y-6"
@@ -5139,15 +6717,18 @@ const ConfirmationModal = ({
           {message}
         </p>
         <div className="flex gap-3 pt-2">
-          <button 
+          <button
             onClick={onClose}
             className="flex-1 py-3 rounded-xl font-bold bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all dark:text-white"
           >
             Cancelar
           </button>
-          <button 
+          <button
             onClick={onConfirm}
-            className={cn("flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95", theme.primary)}
+            className={cn(
+              "flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95",
+              theme.primary,
+            )}
           >
             Confirmar
           </button>
@@ -5165,31 +6746,43 @@ export default function App() {
   );
 }
 
-const QuizSummary = ({ questions, answers, theme }: { questions: QuizQuestion[], answers: (string | null)[], theme: any }) => {
+const QuizSummary = ({
+  questions,
+  answers,
+  theme,
+}: {
+  questions: QuizQuestion[];
+  answers: (string | null)[];
+  theme: any;
+}) => {
   const results = questions.map((q, i) => ({
     ...q,
     userAnswer: answers[i],
-    isCorrect: answers[i] === q.correctAnswer
+    isCorrect: answers[i] === q.correctAnswer,
   }));
 
   // Difficulty data
-  const difficultyData = ['easy', 'medium', 'hard'].map(diff => {
-    const diffResults = results.filter(r => r.difficulty === diff);
-    const correct = diffResults.filter(r => r.isCorrect).length;
-    const incorrect = diffResults.length - correct;
-    return {
-      name: diff === 'easy' ? 'Fácil' : diff === 'medium' ? 'Médio' : 'Difícil',
-      correct,
-      incorrect,
-      total: diffResults.length
-    };
-  }).filter(d => d.total > 0);
+  const difficultyData = ["easy", "medium", "hard"]
+    .map((diff) => {
+      const diffResults = results.filter((r) => r.difficulty === diff);
+      const correct = diffResults.filter((r) => r.isCorrect).length;
+      const incorrect = diffResults.length - correct;
+      return {
+        name:
+          diff === "easy" ? "Fácil" : diff === "medium" ? "Médio" : "Difícil",
+        correct,
+        incorrect,
+        total: diffResults.length,
+      };
+    })
+    .filter((d) => d.total > 0);
 
   // Subject data
-  const subjectStats: Record<string, { correct: number, total: number }> = {};
+  const subjectStats: Record<string, { correct: number; total: number }> = {};
   results.forEach((r) => {
-    const subject = r.subject || 'Geral';
-    if (!subjectStats[subject]) subjectStats[subject] = { correct: 0, total: 0 };
+    const subject = r.subject || "Geral";
+    if (!subjectStats[subject])
+      subjectStats[subject] = { correct: 0, total: 0 };
     subjectStats[subject].total++;
     if (r.isCorrect) subjectStats[subject].correct++;
   });
@@ -5199,7 +6792,7 @@ const QuizSummary = ({ questions, answers, theme }: { questions: QuizQuestion[],
       name,
       accuracy: Math.round((stats.correct / stats.total) * 100),
       correct: stats.correct,
-      total: stats.total
+      total: stats.total,
     }))
     .sort((a, b) => b.accuracy - a.accuracy);
 
@@ -5215,16 +6808,43 @@ const QuizSummary = ({ questions, answers, theme }: { questions: QuizQuestion[],
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={difficultyData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#00000010" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  cursor={{ fill: '#00000005' }}
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="#00000010"
+                />
+                <XAxis
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12 }}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12 }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: "16px",
+                    border: "none",
+                    boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
+                  }}
+                  cursor={{ fill: "#00000005" }}
                 />
                 <Legend iconType="circle" />
-                <Bar dataKey="correct" name="Acertos" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="incorrect" name="Erros" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="correct"
+                  name="Acertos"
+                  fill="#10b981"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="incorrect"
+                  name="Erros"
+                  fill="#ef4444"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -5238,28 +6858,43 @@ const QuizSummary = ({ questions, answers, theme }: { questions: QuizQuestion[],
           </h3>
           <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
             {subjectRanking.map((item, idx) => (
-              <div key={item.name} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-black/5 dark:border-white/5">
+              <div
+                key={item.name}
+                className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-black/5 dark:border-white/5"
+              >
                 <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
-                    idx === 0 ? "bg-yellow-100 text-yellow-700" : 
-                    idx === subjectRanking.length - 1 ? "bg-rose-100 text-rose-700" : 
-                    "bg-slate-100 text-slate-700"
-                  )}>
+                  <div
+                    className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
+                      idx === 0
+                        ? "bg-yellow-100 text-yellow-700"
+                        : idx === subjectRanking.length - 1
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-slate-100 text-slate-700",
+                    )}
+                  >
                     {idx + 1}
                   </div>
                   <div>
-                    <p className="text-sm font-bold dark:text-white">{item.name}</p>
-                    <p className="text-[10px] text-black/40 dark:text-slate-500 font-medium">{item.correct}/{item.total} acertos</p>
+                    <p className="text-sm font-bold dark:text-white">
+                      {item.name}
+                    </p>
+                    <p className="text-[10px] text-black/40 dark:text-slate-500 font-medium">
+                      {item.correct}/{item.total} acertos
+                    </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={cn(
-                    "text-lg font-bold",
-                    item.accuracy >= 70 ? "text-emerald-600" : 
-                    item.accuracy >= 40 ? "text-amber-600" : 
-                    "text-rose-600"
-                  )}>
+                  <p
+                    className={cn(
+                      "text-lg font-bold",
+                      item.accuracy >= 70
+                        ? "text-emerald-600"
+                        : item.accuracy >= 40
+                          ? "text-amber-600"
+                          : "text-rose-600",
+                    )}
+                  >
                     {item.accuracy}%
                   </p>
                 </div>
@@ -5276,11 +6911,11 @@ function QuizApp() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [state, setState] = useState<QuizState>('idle');
+  const [state, setState] = useState<QuizState>("idle");
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const [loadingStatus, setLoadingStatus] = useState('');
+  const [loadingStatus, setLoadingStatus] = useState("");
   const [deepDiveProgress, setDeepDiveProgress] = useState(0);
-  const [deepDiveStatus, setDeepDiveStatus] = useState('');
+  const [deepDiveStatus, setDeepDiveStatus] = useState("");
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<(string | null)[]>([]);
@@ -5293,30 +6928,42 @@ function QuizApp() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isReviewMode, setIsReviewMode] = useState(false);
+  const [pendingSession, setPendingSession] = useState<any>(null);
+  const [isResuming, setIsResuming] = useState(false);
   const [isRedoing, setIsRedoing] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [isQuestionStarted, setIsQuestionStarted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [backgroundUrl, setBackgroundUrl] = useState<string>(() => localStorage.getItem('app_background') || 'none');
-  const [backgroundBlur, setBackgroundBlur] = useState<number>(() => Number(localStorage.getItem('app_background_blur')) || 8);
-  const [backgroundOpacity, setBackgroundOpacity] = useState<number>(() => Number(localStorage.getItem('app_background_opacity')) || 15);
+  const [backgroundUrl, setBackgroundUrl] = useState<string>(
+    () => localStorage.getItem("app_background") || "none",
+  );
+  const [backgroundBlur, setBackgroundBlur] = useState<number>(
+    () => Number(localStorage.getItem("app_background_blur")) || 8,
+  );
+  const [backgroundOpacity, setBackgroundOpacity] = useState<number>(
+    () => Number(localStorage.getItem("app_background_opacity")) || 15,
+  );
   const fileInputBackgroundRef = useRef<HTMLInputElement>(null);
 
-  const defaultBackgrounds = [
-    { id: 'none', name: 'Padrão', url: '' }
-  ];
+  const defaultBackgrounds = [{ id: "none", name: "Padrão", url: "" }];
 
-  const [customBackgrounds, setCustomBackgrounds] = useState<{id: string, name: string, url: string}[]>(() => {
-    const saved = localStorage.getItem('app_custom_backgrounds');
+  const [customBackgrounds, setCustomBackgrounds] = useState<
+    { id: string; name: string; url: string }[]
+  >(() => {
+    const saved = localStorage.getItem("app_custom_backgrounds");
     return saved ? JSON.parse(saved) : [];
   });
 
-  const handleCustomBackgroundUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCustomBackgroundUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = e.target.files?.[0];
     if (file) {
       if (customBackgrounds.length >= 15) {
-        alert("Você atingiu o limite máximo de 15 planos de fundo personalizados. Remova algum para adicionar um novo.");
+        alert(
+          "Você atingiu o limite máximo de 15 planos de fundo personalizados. Remova algum para adicionar um novo.",
+        );
         return;
       }
 
@@ -5324,10 +6971,10 @@ function QuizApp() {
       reader.onloadend = () => {
         const img = new Image();
         img.onload = () => {
-          const canvas = document.createElement('canvas');
+          const canvas = document.createElement("canvas");
           let width = img.width;
           let height = img.height;
-          
+
           // Max dimension 1024px to save space in Firestore
           const maxDim = 1024;
           if (width > maxDim || height > maxDim) {
@@ -5339,23 +6986,26 @@ function QuizApp() {
               height = maxDim;
             }
           }
-          
+
           canvas.width = width;
           canvas.height = height;
-          const ctx = canvas.getContext('2d');
+          const ctx = canvas.getContext("2d");
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
             // Compress as JPEG with 0.6 quality to stay under 1MB limit for 15 images
-            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
-            
+            const compressedBase64 = canvas.toDataURL("image/jpeg", 0.6);
+
             const newBg = {
               id: `custom-${Date.now()}`,
-              name: file.name.split('.')[0] || 'Personalizado',
-              url: compressedBase64
+              name: file.name.split(".")[0] || "Personalizado",
+              url: compressedBase64,
             };
             const updated = [...customBackgrounds, newBg];
             setCustomBackgrounds(updated);
-            localStorage.setItem('app_custom_backgrounds', JSON.stringify(updated));
+            localStorage.setItem(
+              "app_custom_backgrounds",
+              JSON.stringify(updated),
+            );
             setBackgroundUrl(compressedBase64);
           }
         };
@@ -5367,43 +7017,66 @@ function QuizApp() {
 
   const handleDeleteBackground = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = customBackgrounds.filter(bg => bg.id !== id);
+    const updated = customBackgrounds.filter((bg) => bg.id !== id);
     setCustomBackgrounds(updated);
-    localStorage.setItem('app_custom_backgrounds', JSON.stringify(updated));
-    if (backgroundUrl === customBackgrounds.find(bg => bg.id === id)?.url) {
-      setBackgroundUrl('none');
+    localStorage.setItem("app_custom_backgrounds", JSON.stringify(updated));
+    if (backgroundUrl === customBackgrounds.find((bg) => bg.id === id)?.url) {
+      setBackgroundUrl("none");
     }
   };
 
   // Sync background and theme settings with Firestore
   useEffect(() => {
     if (userProfile) {
-      if (userProfile.backgroundUrl !== undefined && userProfile.backgroundUrl !== backgroundUrl) {
+      if (
+        userProfile.backgroundUrl !== undefined &&
+        userProfile.backgroundUrl !== backgroundUrl
+      ) {
         setBackgroundUrl(userProfile.backgroundUrl);
       }
-      if (userProfile.backgroundBlur !== undefined && userProfile.backgroundBlur !== backgroundBlur) {
+      if (
+        userProfile.backgroundBlur !== undefined &&
+        userProfile.backgroundBlur !== backgroundBlur
+      ) {
         setBackgroundBlur(userProfile.backgroundBlur);
       }
-      if (userProfile.backgroundOpacity !== undefined && userProfile.backgroundOpacity !== backgroundOpacity) {
+      if (
+        userProfile.backgroundOpacity !== undefined &&
+        userProfile.backgroundOpacity !== backgroundOpacity
+      ) {
         setBackgroundOpacity(userProfile.backgroundOpacity);
       }
-      if (userProfile.themeColor !== undefined && userProfile.themeColor !== themeColor) {
+      if (
+        userProfile.themeColor !== undefined &&
+        userProfile.themeColor !== themeColor
+      ) {
         setThemeColor(userProfile.themeColor);
       }
-      if (userProfile.customThemeColor !== undefined && userProfile.customThemeColor !== customColor) {
+      if (
+        userProfile.customThemeColor !== undefined &&
+        userProfile.customThemeColor !== customColor
+      ) {
         setCustomColor(userProfile.customThemeColor);
       }
       if (userProfile.customBackgrounds !== undefined) {
         // Only update if different to avoid loops
-        const currentIds = customBackgrounds.map(b => b.id).sort().join(',');
-        const profileIds = (userProfile.customBackgrounds as any[]).map(b => b.id).sort().join(',');
+        const currentIds = customBackgrounds
+          .map((b) => b.id)
+          .sort()
+          .join(",");
+        const profileIds = (userProfile.customBackgrounds as any[])
+          .map((b) => b.id)
+          .sort()
+          .join(",");
         if (currentIds !== profileIds) {
           setCustomBackgrounds(userProfile.customBackgrounds);
         }
       }
       if (userProfile.subjects !== undefined) {
-        const currentSubjects = subjects.sort().join(',');
-        const profileSubjects = (userProfile.subjects as string[]).sort().join(',');
+        const currentSubjects = subjects.sort().join(",");
+        const profileSubjects = (userProfile.subjects as string[])
+          .sort()
+          .join(",");
         if (currentSubjects !== profileSubjects) {
           setSubjects(userProfile.subjects);
         }
@@ -5413,23 +7086,30 @@ function QuizApp() {
 
   // Debounced background settings sync
   useEffect(() => {
-    localStorage.setItem('app_background', backgroundUrl);
-    localStorage.setItem('app_background_blur', backgroundBlur.toString());
-    localStorage.setItem('app_background_opacity', backgroundOpacity.toString());
-    localStorage.setItem('app_custom_backgrounds', JSON.stringify(customBackgrounds));
-    localStorage.setItem('studySubjects', JSON.stringify(subjects));
-    
+    localStorage.setItem("app_background", backgroundUrl);
+    localStorage.setItem("app_background_blur", backgroundBlur.toString());
+    localStorage.setItem(
+      "app_background_opacity",
+      backgroundOpacity.toString(),
+    );
+    localStorage.setItem(
+      "app_custom_backgrounds",
+      JSON.stringify(customBackgrounds),
+    );
+    localStorage.setItem("studySubjects", JSON.stringify(subjects));
+
     if (!user) return;
 
     const timer = setTimeout(() => {
-      const userRef = doc(db, 'users', user.uid);
-      
+      const userRef = doc(db, "users", user.uid);
+
       // Only write if different from userProfile to avoid unnecessary writes
-      const hasChanges = 
+      const hasChanges =
         userProfile?.backgroundUrl !== backgroundUrl ||
         userProfile?.backgroundBlur !== backgroundBlur ||
         userProfile?.backgroundOpacity !== backgroundOpacity ||
-        JSON.stringify(userProfile?.customBackgrounds) !== JSON.stringify(customBackgrounds) ||
+        JSON.stringify(userProfile?.customBackgrounds) !==
+          JSON.stringify(customBackgrounds) ||
         JSON.stringify(userProfile?.subjects) !== JSON.stringify(subjects);
 
       if (!hasChanges) return;
@@ -5439,32 +7119,45 @@ function QuizApp() {
         backgroundBlur,
         backgroundOpacity,
         customBackgrounds,
-        subjects
+        subjects,
       };
-      
+
       const estimatedSize = JSON.stringify(settingsToSave).length;
-      
-      if (estimatedSize < 800000) { // 800KB safety margin
-        setDoc(userRef, settingsToSave, { merge: true })
-          .catch(e => {
-            if (e.message?.includes('Quota Exceeded')) {
-              setFirestoreQuotaExceeded(true);
-            } else if (e.code === 'unavailable' || e.message?.includes('unavailable')) {
-              setFirestoreUnavailable(true);
-            } else {
-              console.error("Error updating background in Firestore", e);
-            }
-          });
-      } else {
-        console.warn("Background settings too large to save to Firestore. Try removing some custom backgrounds.");
-        setDoc(userRef, {
-          backgroundUrl: backgroundUrl.length > 100000 ? 'none' : backgroundUrl,
-          backgroundBlur,
-          backgroundOpacity
-        }, { merge: true }).catch(e => {
-          if (e.message?.includes('Quota Exceeded')) {
+
+      if (estimatedSize < 800000) {
+        // 800KB safety margin
+        setDoc(userRef, settingsToSave, { merge: true }).catch((e) => {
+          if (e.message?.includes("Quota Exceeded")) {
             setFirestoreQuotaExceeded(true);
-          } else if (e.code === 'unavailable' || e.message?.includes('unavailable')) {
+          } else if (
+            e.code === "unavailable" ||
+            e.message?.includes("unavailable")
+          ) {
+            setFirestoreUnavailable(true);
+          } else {
+            console.error("Error updating background in Firestore", e);
+          }
+        });
+      } else {
+        console.warn(
+          "Background settings too large to save to Firestore. Try removing some custom backgrounds.",
+        );
+        setDoc(
+          userRef,
+          {
+            backgroundUrl:
+              backgroundUrl.length > 100000 ? "none" : backgroundUrl,
+            backgroundBlur,
+            backgroundOpacity,
+          },
+          { merge: true },
+        ).catch((e) => {
+          if (e.message?.includes("Quota Exceeded")) {
+            setFirestoreQuotaExceeded(true);
+          } else if (
+            e.code === "unavailable" ||
+            e.message?.includes("unavailable")
+          ) {
             setFirestoreUnavailable(true);
           } else {
             console.error("Error updating minimal background in Firestore", e);
@@ -5474,126 +7167,180 @@ function QuizApp() {
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(timer);
-  }, [backgroundUrl, backgroundBlur, backgroundOpacity, customBackgrounds, user, userProfile]);
-  const [lastContent, setLastContent] = useState<ContentItem | ContentItem[] | null>(null);
-  const [lastFileName, setLastFileName] = useState('');
-  const [pendingContent, setPendingContent] = useState<ContentItem | ContentItem[] | null>(null);
-  const [pendingFileName, setPendingFileName] = useState('');
-  const [selectedSubject, setSelectedSubject] = useState('');
-  const [urlInput, setUrlInput] = useState('');
+  }, [
+    backgroundUrl,
+    backgroundBlur,
+    backgroundOpacity,
+    customBackgrounds,
+    user,
+    userProfile,
+  ]);
+  const [lastContent, setLastContent] = useState<
+    ContentItem | ContentItem[] | null
+  >(null);
+  const [lastFileName, setLastFileName] = useState("");
+  const [pendingContent, setPendingContent] = useState<
+    ContentItem | ContentItem[] | null
+  >(null);
+  const [pendingFileName, setPendingFileName] = useState("");
+  const [selectedSubject, setSelectedSubject] = useState("");
+  const [urlInput, setUrlInput] = useState("");
   const [hasApiKey, setHasApiKey] = useState(true);
-  const [manualApiKey, setManualApiKey] = useState(localStorage.getItem('GEMINI_API_KEY') || '');
+  const [manualApiKey, setManualApiKey] = useState(
+    localStorage.getItem("GEMINI_API_KEY") || "",
+  );
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
-  
+
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
   const [srsItems, setSrsItems] = useState<any[]>([]);
   const [flashcards, setFlashcards] = useState<any[]>([]);
-  const [reviewFilter, setReviewFilter] = useState<'all' | 'incorrect'>('all');
+  const [reviewFilter, setReviewFilter] = useState<"all" | "incorrect">("all");
   const [showDashboard, setShowDashboard] = useState(false);
   const [showStudyMode, setShowStudyMode] = useState(false);
   const [showFlashcards, setShowFlashcards] = useState(false);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [showBancaDropdown, setShowBancaDropdown] = useState(false);
   const [showQuantityDropdown, setShowQuantityDropdown] = useState(false);
-  
+
   // Chat with Professor
-  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'model', text: string }[]>([]);
-  const [chatInput, setChatInput] = useState('');
+  const [chatHistory, setChatHistory] = useState<
+    { role: "user" | "model"; text: string }[]
+  >([]);
+  const [chatInput, setChatInput] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [isGeneratingFlashcards, setIsGeneratingFlashcards] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Helper to switch modules
-  const switchModule = (module: 'quiz' | 'study' | 'dashboard' | 'revision' | 'schedule' | 'personal') => {
+  const switchModule = (
+    module:
+      | "quiz"
+      | "study"
+      | "dashboard"
+      | "revision"
+      | "schedule"
+      | "personal",
+  ) => {
     // Reset all view states
-    setShowDashboard(module === 'dashboard');
-    setShowStudyMode(module === 'study');
-    setShowRevisionAgenda(module === 'revision');
-    setShowStudySchedule(module === 'schedule');
-    setShowPersonalControl(module === 'personal');
-    
+    setShowDashboard(module === "dashboard");
+    setShowStudyMode(module === "study");
+    setShowRevisionAgenda(module === "revision");
+    setShowStudySchedule(module === "schedule");
+    setShowPersonalControl(module === "personal");
+
     // Also reset sub-views
     setShowFlashcards(false);
     setShowRecycleBin(false);
     setActiveResultId(null);
-    
+
     // Ensure we are in idle state if switching modules
-    if (state !== 'idle') setState('idle');
-    
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (state !== "idle") setState("idle");
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const GlobalNav = () => {
-    const isModuleQuiz = (state === 'active' || state === 'finished') || (!showDashboard && !showStudyMode && !showStudySchedule && !showRevisionAgenda && !showPersonalControl && !showFlashcards && !showRecycleBin);
-    
+    const isModuleQuiz =
+      state === "active" ||
+      state === "finished" ||
+      (!showDashboard &&
+        !showStudyMode &&
+        !showStudySchedule &&
+        !showRevisionAgenda &&
+        !showPersonalControl &&
+        !showFlashcards &&
+        !showRecycleBin);
+
     return (
       <div className="flex justify-center mb-8 px-4 sticky top-0 z-[40] pt-2">
         <div className="flex flex-wrap justify-center gap-2 p-1.5 bg-white/80 dark:bg-slate-900/80 rounded-2xl w-fit shadow-xl backdrop-blur-xl border border-black/5 dark:border-white/10">
-          <button 
+          <button
             type="button"
-            onClick={() => switchModule('quiz')}
+            onClick={() => switchModule("quiz")}
             className={cn(
-              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap", 
-              isModuleQuiz ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap",
+              isModuleQuiz
+                ? cn(theme.primary, theme.contrastText, "shadow-md")
+                : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5",
             )}
           >
             <BrainCircuit size={16} />
             Modo Quiz
           </button>
-          <button 
+          <button
             type="button"
-            onClick={() => switchModule('study')}
+            onClick={() => switchModule("study")}
             className={cn(
-              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap", 
-              showStudyMode ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap",
+              showStudyMode
+                ? cn(theme.primary, theme.contrastText, "shadow-md")
+                : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5",
             )}
           >
             <BookOpen size={16} />
             Modo Estudo
           </button>
-          <button 
+          <button
             type="button"
-            onClick={() => switchModule('dashboard')}
+            onClick={() => switchModule("dashboard")}
             className={cn(
-              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap", 
-              showDashboard ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap",
+              showDashboard
+                ? cn(theme.primary, theme.contrastText, "shadow-md")
+                : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5",
             )}
           >
             <BarChart2 size={16} />
             Meu Dashboard
           </button>
-          <button 
+          <button
             type="button"
-            onClick={() => switchModule('revision')}
+            onClick={() => switchModule("revision")}
             className={cn(
-              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap", 
-              showRevisionAgenda ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap",
+              showRevisionAgenda
+                ? cn(theme.primary, theme.contrastText, "shadow-md")
+                : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5",
             )}
           >
             <Calendar size={16} />
             Agenda de Revisão
-            {revisionTasks.filter(t => !t.completed && isBefore(t.dueDate, addDays(new Date(), 1))).length > 0 && (
+            {revisionTasks.filter(
+              (t) =>
+                !t.completed && isBefore(t.dueDate, addDays(new Date(), 1)),
+            ).length > 0 && (
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900">
-                {revisionTasks.filter(t => !t.completed && isBefore(t.dueDate, addDays(new Date(), 1))).length}
+                {
+                  revisionTasks.filter(
+                    (t) =>
+                      !t.completed &&
+                      isBefore(t.dueDate, addDays(new Date(), 1)),
+                  ).length
+                }
               </span>
             )}
           </button>
-          <button 
+          <button
             type="button"
-            onClick={() => switchModule('schedule')}
+            onClick={() => switchModule("schedule")}
             className={cn(
-              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap", 
-              showStudySchedule ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap",
+              showStudySchedule
+                ? cn(theme.primary, theme.contrastText, "shadow-md")
+                : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5",
             )}
           >
             <Clock size={16} />
             Cronograma
           </button>
-          <button 
+          <button
             type="button"
-            onClick={() => switchModule('personal')}
+            onClick={() => switchModule("personal")}
             className={cn(
-              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap", 
-              showPersonalControl ? cn(theme.primary, theme.contrastText, "shadow-md") : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap",
+              showPersonalControl
+                ? cn(theme.primary, theme.contrastText, "shadow-md")
+                : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5",
             )}
           >
             <Table size={16} />
@@ -5606,13 +7353,19 @@ function QuizApp() {
 
   // Settings
   const [questionCount, setQuestionCount] = useState(20);
-  const [selectedExamBoards, setSelectedExamBoards] = useState<string[]>(['Geral']);
+  const [selectedExamBoards, setSelectedExamBoards] = useState<string[]>([
+    "Geral",
+  ]);
   const [isBancaMindset, setIsBancaMindset] = useState(false);
   const [hypotheticalCasesCount, setHypotheticalCasesCount] = useState(0);
   const [isSimulado, setIsSimulado] = useState(false);
-  const [selectedSimuladoSubjects, setSelectedSimuladoSubjects] = useState<string[]>([]);
+  const [selectedSimuladoSubjects, setSelectedSimuladoSubjects] = useState<
+    string[]
+  >([]);
   const [showRevisionAgenda, setShowRevisionAgenda] = useState(false);
-  const [activeRevisionTaskId, setActiveRevisionTaskId] = useState<string | null>(null);
+  const [activeRevisionTaskId, setActiveRevisionTaskId] = useState<
+    string | null
+  >(null);
   const [showStudySchedule, setShowStudySchedule] = useState(false);
   const [showPersonalControl, setShowPersonalControl] = useState(false);
   const [studyLogs, setStudyLogs] = useState<StudyLog[]>([]);
@@ -5621,37 +7374,58 @@ function QuizApp() {
   const [history, setHistory] = useState<QuizResult[]>([]);
   const [recycleBin, setRecycleBin] = useState<QuizResult[]>([]);
   const [showRecycleBin, setShowRecycleBin] = useState(false);
-  const [showExitQuizConfirmation, setShowExitQuizConfirmation] = useState(false);
+  const [showExitQuizConfirmation, setShowExitQuizConfirmation] =
+    useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [themeColor, setThemeColor] = useState<ThemeColor>(() => {
-    const saved = localStorage.getItem('themeColor') as ThemeColor;
-    return (saved && THEME_CONFIG[saved]) ? saved : 'emerald';
+    const saved = localStorage.getItem("themeColor") as ThemeColor;
+    return saved && THEME_CONFIG[saved] ? saved : "emerald";
   });
 
   const [customColor, setCustomColor] = useState<string>(() => {
-    return localStorage.getItem('customThemeColor') || '#6366f1';
+    return localStorage.getItem("customThemeColor") || "#6366f1";
   });
 
   useEffect(() => {
-    if (themeColor === 'custom') {
-      document.documentElement.style.setProperty('--theme-primary', customColor);
-      document.documentElement.style.setProperty('--theme-secondary', customColor);
+    if (themeColor === "custom") {
+      document.documentElement.style.setProperty(
+        "--theme-primary",
+        customColor,
+      );
+      document.documentElement.style.setProperty(
+        "--theme-secondary",
+        customColor,
+      );
       // Add opacity for background colors if it's a hex color
-      if (customColor.startsWith('#')) {
-        document.documentElement.style.setProperty('--theme-bg', customColor + '10');
-        document.documentElement.style.setProperty('--theme-bg-dark', customColor + '20');
+      if (customColor.startsWith("#")) {
+        document.documentElement.style.setProperty(
+          "--theme-bg",
+          customColor + "10",
+        );
+        document.documentElement.style.setProperty(
+          "--theme-bg-dark",
+          customColor + "20",
+        );
       } else {
-        document.documentElement.style.setProperty('--theme-bg', customColor);
-        document.documentElement.style.setProperty('--theme-bg-dark', customColor);
+        document.documentElement.style.setProperty("--theme-bg", customColor);
+        document.documentElement.style.setProperty(
+          "--theme-bg-dark",
+          customColor,
+        );
       }
-      localStorage.setItem('customThemeColor', customColor);
-      
+      localStorage.setItem("customThemeColor", customColor);
+
       if (user && userProfile?.customThemeColor !== customColor) {
         const timer = setTimeout(() => {
-          const userRef = doc(db, 'users', user.uid);
-          setDoc(userRef, { customThemeColor: customColor }, { merge: true })
-            .catch(e => console.error("Error updating customThemeColor in Firestore", e));
+          const userRef = doc(db, "users", user.uid);
+          setDoc(
+            userRef,
+            { customThemeColor: customColor },
+            { merge: true },
+          ).catch((e) =>
+            console.error("Error updating customThemeColor in Firestore", e),
+          );
         }, 2000);
         return () => clearTimeout(timer);
       }
@@ -5661,34 +7435,56 @@ function QuizApp() {
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Dashboard Filters
-  const [dashboardDateFilter, setDashboardDateFilter] = useState<string[]>(['all']);
-  const [dashboardSubjectFilter, setDashboardSubjectFilter] = useState<string>('all');
+  const [dashboardDateFilter, setDashboardDateFilter] = useState<string[]>([
+    "all",
+  ]);
+  const [dashboardSubjectFilter, setDashboardSubjectFilter] =
+    useState<string>("all");
 
   // Study Mode Filters
-  const [studyModeDateFilter, setStudyModeDateFilter] = useState<string[]>(['all']);
-  const [studyModeSubjectFilter, setStudyModeSubjectFilter] = useState<string>('all');
+  const [studyModeDateFilter, setStudyModeDateFilter] = useState<string[]>([
+    "all",
+  ]);
+  const [studyModeSubjectFilter, setStudyModeSubjectFilter] =
+    useState<string>("all");
 
   const [subjects, setSubjects] = useState<string[]>(() => {
-    const saved = localStorage.getItem('studySubjects');
+    const saved = localStorage.getItem("studySubjects");
     if (saved) return JSON.parse(saved);
     return [
-      'Seguridade Social',
-      'Direito Constitucional',
-      'Direito Administrativo',
-      'Ética no Serviço Público',
-      'Português',
-      'Raciocínio Lógico Matemático',
-      'Informática',
-      'Redação Oficial'
+      "Seguridade Social",
+      "Direito Constitucional",
+      "Direito Administrativo",
+      "Ética no Serviço Público",
+      "Português",
+      "Raciocínio Lógico Matemático",
+      "Informática",
+      "Redação Oficial",
     ];
   });
 
   useEffect(() => {
-    localStorage.setItem('studySubjects', JSON.stringify(subjects));
+    localStorage.setItem("studySubjects", JSON.stringify(subjects));
   }, [subjects]);
 
-  const [newSubjectInput, setNewSubjectInput] = useState('');
-  const [editingSubject, setEditingSubject] = useState<{ original: string, current: string } | null>(null);
+  useEffect(() => {
+    if (state === "active") {
+      const activeElement = document.getElementById(`q-nav-${currentIndex}`);
+      if (activeElement) {
+        activeElement.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center",
+        });
+      }
+    }
+  }, [currentIndex, state]);
+
+  const [newSubjectInput, setNewSubjectInput] = useState("");
+  const [editingSubject, setEditingSubject] = useState<{
+    original: string;
+    current: string;
+  } | null>(null);
   const [subjectToDelete, setSubjectToDelete] = useState<string | null>(null);
   const [quizToDelete, setQuizToDelete] = useState<string | null>(null);
 
@@ -5696,15 +7492,15 @@ function QuizApp() {
     e.preventDefault();
     if (!newSubjectInput.trim()) return;
     if (subjects.includes(newSubjectInput.trim())) {
-      setNewSubjectInput('');
+      setNewSubjectInput("");
       return;
     }
-    setSubjects(prev => [...prev, newSubjectInput.trim()].sort());
-    setNewSubjectInput('');
+    setSubjects((prev) => [...prev, newSubjectInput.trim()].sort());
+    setNewSubjectInput("");
   };
 
   const handleRemoveSubject = (subject: string) => {
-    setSubjects(prev => prev.filter(s => s !== subject));
+    setSubjects((prev) => prev.filter((s) => s !== subject));
   };
 
   const handleEditSubject = (originalName: string, newName: string) => {
@@ -5712,39 +7508,43 @@ function QuizApp() {
       setEditingSubject(null);
       return;
     }
-    
+
     if (subjects.includes(newName.trim())) {
       alert("Esta matéria já existe.");
       return;
     }
 
-    setSubjects(prev => prev.map(s => s === originalName ? newName.trim() : s).sort());
-    
-    // Also update history if needed? 
+    setSubjects((prev) =>
+      prev.map((s) => (s === originalName ? newName.trim() : s)).sort(),
+    );
+
+    // Also update history if needed?
     // Usually, history records store the subject name at the time of the quiz.
     // If we want to keep them in sync, we'd need to update all history records.
     // However, the user request is just about the "lista de gestão de matérias".
-    
+
     setEditingSubject(null);
   };
 
   const handleDeleteSubjectHistory = async (subject: string) => {
     if (!user) return;
-    
+
     try {
-      const resultsToDelete = history.filter(res => {
-        const quizSubjects = new Set(res.questions.map(q => normalizeSubject(q.subject || res.fileName)));
+      const resultsToDelete = history.filter((res) => {
+        const quizSubjects = new Set(
+          res.questions.map((q) => normalizeSubject(q.subject || res.fileName)),
+        );
         return quizSubjects.has(subject);
       });
 
       if (resultsToDelete.length === 0) return;
 
       const batch = writeBatch(db);
-      resultsToDelete.forEach(res => {
-        const docRef = doc(db, 'results', res.id);
-        batch.update(docRef, { 
-          deleted: true, 
-          deletedAt: Timestamp.now() 
+      resultsToDelete.forEach((res) => {
+        const docRef = doc(db, "results", res.id);
+        batch.update(docRef, {
+          deleted: true,
+          deletedAt: Timestamp.now(),
         });
       });
 
@@ -5758,7 +7558,11 @@ function QuizApp() {
   const [firestoreQuotaExceeded, setFirestoreQuotaExceeded] = useState(false);
   const [firestoreUnavailable, setFirestoreUnavailable] = useState(false);
 
-  const handleAddStudyLog = async (subject: string, fileNames: string, isAutomatic: boolean = false) => {
+  const handleAddStudyLog = async (
+    subject: string,
+    fileNames: string,
+    isAutomatic: boolean = false,
+  ) => {
     if (!user || firestoreQuotaExceeded) return;
     try {
       // Check for existing log for the same subject and files on the same day
@@ -5768,14 +7572,14 @@ function QuizApp() {
       tomorrow.setDate(tomorrow.getDate() + 1);
 
       const q = query(
-        collection(db, 'studyLogs'),
-        where('uid', '==', user.uid),
-        where('subject', '==', subject),
-        where('fileNames', '==', fileNames),
-        where('date', '>=', Timestamp.fromDate(today)),
-        where('date', '<', Timestamp.fromDate(tomorrow))
+        collection(db, "studyLogs"),
+        where("uid", "==", user.uid),
+        where("subject", "==", subject),
+        where("fileNames", "==", fileNames),
+        where("date", ">=", Timestamp.fromDate(today)),
+        where("date", "<", Timestamp.fromDate(tomorrow)),
       );
-      
+
       const existing = await getDocs(q);
       if (!existing.empty) {
         // Se já existe um log automático e este também é automático, não faz nada.
@@ -5783,40 +7587,51 @@ function QuizApp() {
         return;
       }
 
-      const newLogRef = doc(collection(db, 'studyLogs'));
+      const newLogRef = doc(collection(db, "studyLogs"));
       await setDoc(newLogRef, {
         uid: user.uid,
         date: Timestamp.now(),
         subject,
         fileNames,
-        isAutomatic
+        isAutomatic,
       });
     } catch (error: any) {
       const msg = error.message || String(error);
       const code = error.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+      if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
         setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+      } else if (
+        code === "unavailable" ||
+        msg.includes("unavailable") ||
+        msg.includes("Could not reach")
+      ) {
         setFirestoreUnavailable(true);
       } else {
-        handleFirestoreError(error, OperationType.CREATE, 'studyLogs');
+        handleFirestoreError(error, OperationType.CREATE, "studyLogs");
       }
     }
   };
 
-  const handleUpdateStudyLog = async (id: string, updates: Partial<StudyLog>) => {
+  const handleUpdateStudyLog = async (
+    id: string,
+    updates: Partial<StudyLog>,
+  ) => {
     if (firestoreQuotaExceeded) return;
     try {
-      const docRef = doc(db, 'studyLogs', id);
+      const docRef = doc(db, "studyLogs", id);
       const fsUpdates: any = { ...updates };
       if (updates.date) fsUpdates.date = Timestamp.fromDate(updates.date);
       await updateDoc(docRef, fsUpdates);
     } catch (error: any) {
       const msg = error.message || String(error);
       const code = error.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+      if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
         setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+      } else if (
+        code === "unavailable" ||
+        msg.includes("unavailable") ||
+        msg.includes("Could not reach")
+      ) {
         setFirestoreUnavailable(true);
       } else {
         handleFirestoreError(error, OperationType.UPDATE, `studyLogs/${id}`);
@@ -5827,13 +7642,17 @@ function QuizApp() {
   const handleDeleteStudyLog = async (id: string) => {
     if (firestoreQuotaExceeded) return;
     try {
-      await deleteDoc(doc(db, 'studyLogs', id));
+      await deleteDoc(doc(db, "studyLogs", id));
     } catch (error: any) {
       const msg = error.message || String(error);
       const code = error.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+      if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
         setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+      } else if (
+        code === "unavailable" ||
+        msg.includes("unavailable") ||
+        msg.includes("Could not reach")
+      ) {
         setFirestoreUnavailable(true);
       } else {
         handleFirestoreError(error, OperationType.DELETE, `studyLogs/${id}`);
@@ -5844,17 +7663,21 @@ function QuizApp() {
   const handleDeleteQuiz = async (id: string) => {
     if (!user || firestoreQuotaExceeded) return;
     try {
-      await updateDoc(doc(db, 'results', id), { 
-        deleted: true, 
-        deletedAt: Timestamp.now() 
+      await updateDoc(doc(db, "results", id), {
+        deleted: true,
+        deletedAt: Timestamp.now(),
       });
       setQuizToDelete(null);
     } catch (error: any) {
       const msg = error.message || String(error);
       const code = error.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+      if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
         setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+      } else if (
+        code === "unavailable" ||
+        msg.includes("unavailable") ||
+        msg.includes("Could not reach")
+      ) {
         setFirestoreUnavailable(true);
       } else {
         handleFirestoreError(error, OperationType.UPDATE, `results/${id}`);
@@ -5866,22 +7689,26 @@ function QuizApp() {
     if (!user || ids.length === 0 || firestoreQuotaExceeded) return;
     try {
       const batch = writeBatch(db);
-      ids.forEach(id => {
-        batch.update(doc(db, 'results', id), { 
-          deleted: true, 
-          deletedAt: Timestamp.now() 
+      ids.forEach((id) => {
+        batch.update(doc(db, "results", id), {
+          deleted: true,
+          deletedAt: Timestamp.now(),
         });
       });
       await batch.commit();
     } catch (error: any) {
       const msg = error.message || String(error);
       const code = error.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+      if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
         setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+      } else if (
+        code === "unavailable" ||
+        msg.includes("unavailable") ||
+        msg.includes("Could not reach")
+      ) {
         setFirestoreUnavailable(true);
       } else {
-        handleFirestoreError(error, OperationType.UPDATE, 'results/multiple');
+        handleFirestoreError(error, OperationType.UPDATE, "results/multiple");
       }
     }
   };
@@ -5891,31 +7718,33 @@ function QuizApp() {
     try {
       const batch = writeBatch(db);
       const subjectsSet = new Set(subjects);
-      
-      const resultsToDelete = history.filter(res => {
-        const quizSubjects = new Set(res.questions.map(q => normalizeSubject(q.subject || res.fileName)));
-        return Array.from(quizSubjects).some(s => subjectsSet.has(s));
+
+      const resultsToDelete = history.filter((res) => {
+        const quizSubjects = new Set(
+          res.questions.map((q) => normalizeSubject(q.subject || res.fileName)),
+        );
+        return Array.from(quizSubjects).some((s) => subjectsSet.has(s));
       });
 
-      resultsToDelete.forEach(res => {
-        batch.update(doc(db, 'results', res.id), { 
-          deleted: true, 
-          deletedAt: Timestamp.now() 
+      resultsToDelete.forEach((res) => {
+        batch.update(doc(db, "results", res.id), {
+          deleted: true,
+          deletedAt: Timestamp.now(),
         });
       });
 
       await batch.commit();
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'results/subjects');
+      handleFirestoreError(error, OperationType.UPDATE, "results/subjects");
     }
   };
 
   const handleRestoreQuiz = async (id: string) => {
     if (!user) return;
     try {
-      await updateDoc(doc(db, 'results', id), { 
-        deleted: false, 
-        deletedAt: null 
+      await updateDoc(doc(db, "results", id), {
+        deleted: false,
+        deletedAt: null,
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `results/${id}`);
@@ -5926,22 +7755,22 @@ function QuizApp() {
     if (!user || ids.length === 0) return;
     try {
       const batch = writeBatch(db);
-      ids.forEach(id => {
-        batch.update(doc(db, 'results', id), { 
-          deleted: false, 
-          deletedAt: null 
+      ids.forEach((id) => {
+        batch.update(doc(db, "results", id), {
+          deleted: false,
+          deletedAt: null,
         });
       });
       await batch.commit();
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'results/multiple');
+      handleFirestoreError(error, OperationType.UPDATE, "results/multiple");
     }
   };
 
   const handlePermanentlyDeleteQuiz = async (id: string) => {
     if (!user) return;
     try {
-      await deleteDoc(doc(db, 'results', id));
+      await deleteDoc(doc(db, "results", id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `results/${id}`);
     }
@@ -5951,34 +7780,34 @@ function QuizApp() {
     if (!user || ids.length === 0) return;
     try {
       const batch = writeBatch(db);
-      ids.forEach(id => {
-        batch.delete(doc(db, 'results', id));
+      ids.forEach((id) => {
+        batch.delete(doc(db, "results", id));
       });
       await batch.commit();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'results/multiple');
+      handleFirestoreError(error, OperationType.DELETE, "results/multiple");
     }
   };
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
     let statusInterval: NodeJS.Timeout;
-    
+
     const statuses = [
       "Analisando materiais...",
       "Extraindo conceitos chave...",
       "Estruturando questões...",
       "Simulando estilo da banca...",
       "Refinando alternativas...",
-      "Finalizando quiz personalizado..."
+      "Finalizando quiz personalizado...",
     ];
 
-    if (state === 'loading') {
+    if (state === "loading") {
       setLoadingProgress(0);
       setLoadingStatus(statuses[0]);
-      
+
       interval = setInterval(() => {
-        setLoadingProgress(prev => {
+        setLoadingProgress((prev) => {
           if (prev >= 98) return prev;
           const increment = Math.max(0.05, (100 - prev) / 40);
           return Math.min(98, prev + increment);
@@ -5992,7 +7821,7 @@ function QuizApp() {
       }, 3000);
     } else {
       setLoadingProgress(0);
-      setLoadingStatus('');
+      setLoadingStatus("");
     }
     return () => {
       clearInterval(interval);
@@ -6009,7 +7838,7 @@ function QuizApp() {
       "Aprofundando conceitos...",
       "Criando mnemônicos...",
       "Buscando referências extras...",
-      "Formatando conteúdo pedagógico..."
+      "Formatando conteúdo pedagógico...",
     ];
 
     if (isDeepDiveLoading) {
@@ -6017,7 +7846,7 @@ function QuizApp() {
       setDeepDiveStatus(statuses[0]);
 
       interval = setInterval(() => {
-        setDeepDiveProgress(prev => {
+        setDeepDiveProgress((prev) => {
           if (prev >= 98) return prev;
           const increment = Math.max(0.1, (100 - prev) / 30);
           return Math.min(98, prev + increment);
@@ -6031,7 +7860,7 @@ function QuizApp() {
       }, 2500);
     } else {
       setDeepDiveProgress(0);
-      setDeepDiveStatus('');
+      setDeepDiveStatus("");
     }
     return () => {
       clearInterval(interval);
@@ -6049,42 +7878,44 @@ function QuizApp() {
   const theme = THEME_CONFIG[themeColor];
 
   useEffect(() => {
-    localStorage.setItem('themeColor', themeColor);
+    localStorage.setItem("themeColor", themeColor);
     if (user && userProfile?.themeColor !== themeColor) {
       const timer = setTimeout(() => {
-        const userRef = doc(db, 'users', user.uid);
-        setDoc(userRef, { themeColor }, { merge: true })
-          .catch(e => {
-            if (e.message?.includes('Quota Exceeded')) {
-              setFirestoreQuotaExceeded(true);
-            } else if (e.code === 'unavailable' || e.message?.includes('unavailable')) {
-              setFirestoreUnavailable(true);
-            } else {
-              console.error("Error updating themeColor in Firestore", e);
-            }
-          });
+        const userRef = doc(db, "users", user.uid);
+        setDoc(userRef, { themeColor }, { merge: true }).catch((e) => {
+          if (e.message?.includes("Quota Exceeded")) {
+            setFirestoreQuotaExceeded(true);
+          } else if (
+            e.code === "unavailable" ||
+            e.message?.includes("unavailable")
+          ) {
+            setFirestoreUnavailable(true);
+          } else {
+            console.error("Error updating themeColor in Firestore", e);
+          }
+        });
       }, 2000);
       return () => clearTimeout(timer);
     }
   }, [themeColor, user, userProfile]);
   const [timeAlertThreshold, setTimeAlertThreshold] = useState(100); // Default 1:40
-  
+
   const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('theme');
-      if (saved) return saved === 'dark';
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("theme");
+      if (saved) return saved === "dark";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
     }
     return false;
   });
 
   useEffect(() => {
     if (darkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
     } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
     }
   }, [darkMode]);
 
@@ -6092,7 +7923,7 @@ function QuizApp() {
   const [totalTime, setTotalTime] = useState(0);
   const [questionTime, setQuestionTime] = useState(0);
   const [questionTimes, setQuestionTimes] = useState<number[]>([]);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -6101,10 +7932,10 @@ function QuizApp() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setIsAuthReady(true);
-      
+
       if (currentUser) {
         // Create/Update user profile in Firestore
-        const userRef = doc(db, 'users', currentUser.uid);
+        const userRef = doc(db, "users", currentUser.uid);
         try {
           const userDoc = await getDoc(userRef);
           if (!userDoc.exists()) {
@@ -6114,16 +7945,22 @@ function QuizApp() {
               email: currentUser.email,
               photoURL: currentUser.photoURL,
               createdAt: Timestamp.now(),
-              role: 'user'
+              role: "user",
             });
           }
           setFirestoreQuotaExceeded(false);
           setFirestoreUnavailable(false);
         } catch (error: any) {
-          if (error.message?.includes('Quota Exceeded') || error.code === 'resource-exhausted') {
+          if (
+            error.message?.includes("Quota Exceeded") ||
+            error.code === "resource-exhausted"
+          ) {
             setFirestoreQuotaExceeded(true);
             console.warn("Firestore Quota Exceeded during auth setup");
-          } else if (error.code === 'unavailable' || error.message?.includes('unavailable')) {
+          } else if (
+            error.code === "unavailable" ||
+            error.message?.includes("unavailable")
+          ) {
             setFirestoreUnavailable(true);
             console.warn("Firestore Unavailable during auth setup");
           } else {
@@ -6143,37 +7980,53 @@ function QuizApp() {
     }
 
     const q = query(
-      collection(db, 'results'),
-      where('uid', '==', user.uid),
-      orderBy('date', 'desc'),
-      limit(500)
+      collection(db, "results"),
+      where("uid", "==", user.uid),
+      orderBy("date", "desc"),
+      limit(500),
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const results = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          ...data,
-          id: doc.id,
-          date: data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date),
-          deletedAt: data.deletedAt instanceof Timestamp ? data.deletedAt.toDate() : (data.deletedAt ? new Date(data.deletedAt) : undefined)
-        } as QuizResult;
-      });
-      setHistory(results.filter(r => r.deleted !== true));
-      setRecycleBin(results.filter(r => r.deleted === true));
-      setFirestoreQuotaExceeded(false);
-      setFirestoreUnavailable(false);
-    }, (error) => {
-      const msg = error instanceof Error ? error.message : String(error);
-      const code = (error as any)?.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
-        setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
-        setFirestoreUnavailable(true);
-      } else {
-        handleFirestoreError(error, OperationType.LIST, 'results');
-      }
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const results = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            ...data,
+            id: doc.id,
+            date:
+              data.date instanceof Timestamp
+                ? data.date.toDate()
+                : new Date(data.date),
+            deletedAt:
+              data.deletedAt instanceof Timestamp
+                ? data.deletedAt.toDate()
+                : data.deletedAt
+                  ? new Date(data.deletedAt)
+                  : undefined,
+          } as QuizResult;
+        });
+        setHistory(results.filter((r) => r.deleted !== true));
+        setRecycleBin(results.filter((r) => r.deleted === true));
+        setFirestoreQuotaExceeded(false);
+        setFirestoreUnavailable(false);
+      },
+      (error) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        const code = (error as any)?.code;
+        if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
+          setFirestoreQuotaExceeded(true);
+        } else if (
+          code === "unavailable" ||
+          msg.includes("unavailable") ||
+          msg.includes("Could not reach")
+        ) {
+          setFirestoreUnavailable(true);
+        } else {
+          handleFirestoreError(error, OperationType.LIST, "results");
+        }
+      },
+    );
 
     return () => unsubscribe();
   }, [isAuthReady, user]);
@@ -6185,24 +8038,32 @@ function QuizApp() {
       return;
     }
 
-    const userRef = doc(db, 'users', user.uid);
-    const unsubscribe = onSnapshot(userRef, (doc) => {
-      if (doc.exists()) {
-        setUserProfile(doc.data());
-      }
-      setFirestoreQuotaExceeded(false);
-      setFirestoreUnavailable(false);
-    }, (error) => {
-      const msg = error instanceof Error ? error.message : String(error);
-      const code = (error as any)?.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
-        setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
-        setFirestoreUnavailable(true);
-      } else {
-        handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
-      }
-    });
+    const userRef = doc(db, "users", user.uid);
+    const unsubscribe = onSnapshot(
+      userRef,
+      (doc) => {
+        if (doc.exists()) {
+          setUserProfile(doc.data());
+        }
+        setFirestoreQuotaExceeded(false);
+        setFirestoreUnavailable(false);
+      },
+      (error) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        const code = (error as any)?.code;
+        if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
+          setFirestoreQuotaExceeded(true);
+        } else if (
+          code === "unavailable" ||
+          msg.includes("unavailable") ||
+          msg.includes("Could not reach")
+        ) {
+          setFirestoreUnavailable(true);
+        } else {
+          handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+        }
+      },
+    );
 
     return () => unsubscribe();
   }, [isAuthReady, user]);
@@ -6214,57 +8075,95 @@ function QuizApp() {
       return;
     }
 
-    const registryRef = doc(db, 'srs_registries', user.uid);
-    const unsubscribe = onSnapshot(registryRef, (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        const items = Object.entries(data.items || {}).map(([id, item]: [string, any]) => ({
-          ...item,
-          id,
-          nextReviewDate: item.nextReviewDate instanceof Timestamp ? item.nextReviewDate.toDate() : new Date(item.nextReviewDate)
-        }));
-        // Sort by nextReviewDate in memory
-        items.sort((a, b) => a.nextReviewDate.getTime() - b.nextReviewDate.getTime());
-        setSrsItems(items);
-      } else {
-        // Fallback to legacy srs collection if registry doesn't exist yet
-        const q = query(
-          collection(db, 'srs'),
-          where('uid', '==', user.uid),
-          orderBy('nextReviewDate', 'asc')
-        );
-        
-        getDocs(q).then(snapshot => {
-          if (!snapshot.empty) {
-            const legacyItems = snapshot.docs.map(doc => ({
-              ...doc.data(),
-              id: doc.id,
-              nextReviewDate: doc.data().nextReviewDate instanceof Timestamp ? doc.data().nextReviewDate.toDate() : new Date(doc.data().nextReviewDate)
-            }));
-            setSrsItems(legacyItems);
-          }
-        }).catch(e => {
-          if (!(e instanceof Error && e.message.includes('Quota Exceeded'))) {
-            console.error("Error loading legacy SRS", e);
-          }
-        });
-      }
-      setFirestoreQuotaExceeded(false);
-      setFirestoreUnavailable(false);
-    }, (error) => {
-      const msg = error instanceof Error ? error.message : String(error);
-      const code = (error as any)?.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
-        setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
-        setFirestoreUnavailable(true);
-      } else {
-        handleFirestoreError(error, OperationType.GET, 'srs_registries');
-      }
-    });
+    const registryRef = doc(db, "srs_registries", user.uid);
+    const unsubscribe = onSnapshot(
+      registryRef,
+      (doc) => {
+        if (doc.exists()) {
+          const data = doc.data();
+          const items = Object.entries(data.items || {}).map(
+            ([id, item]: [string, any]) => ({
+              ...item,
+              id,
+              nextReviewDate:
+                item.nextReviewDate instanceof Timestamp
+                  ? item.nextReviewDate.toDate()
+                  : new Date(item.nextReviewDate),
+            }),
+          );
+          // Sort by nextReviewDate in memory
+          items.sort(
+            (a, b) => a.nextReviewDate.getTime() - b.nextReviewDate.getTime(),
+          );
+          setSrsItems(items);
+        } else {
+          // Fallback to legacy srs collection if registry doesn't exist yet
+          const q = query(
+            collection(db, "srs"),
+            where("uid", "==", user.uid),
+            orderBy("nextReviewDate", "asc"),
+          );
+
+          getDocs(q)
+            .then((snapshot) => {
+              if (!snapshot.empty) {
+                const legacyItems = snapshot.docs.map((doc) => ({
+                  ...doc.data(),
+                  id: doc.id,
+                  nextReviewDate:
+                    doc.data().nextReviewDate instanceof Timestamp
+                      ? doc.data().nextReviewDate.toDate()
+                      : new Date(doc.data().nextReviewDate),
+                }));
+                setSrsItems(legacyItems);
+              }
+            })
+            .catch((e) => {
+              if (
+                !(e instanceof Error && e.message.includes("Quota Exceeded"))
+              ) {
+                console.error("Error loading legacy SRS", e);
+              }
+            });
+        }
+        setFirestoreQuotaExceeded(false);
+        setFirestoreUnavailable(false);
+      },
+      (error) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        const code = (error as any)?.code;
+        if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
+          setFirestoreQuotaExceeded(true);
+        } else if (
+          code === "unavailable" ||
+          msg.includes("unavailable") ||
+          msg.includes("Could not reach")
+        ) {
+          setFirestoreUnavailable(true);
+        } else {
+          handleFirestoreError(error, OperationType.GET, "srs_registries");
+        }
+      },
+    );
 
     return () => unsubscribe();
   }, [isAuthReady, user]);
+
+  // Auto-scroll logic for quiz navigation
+  useEffect(() => {
+    if (state === "active") {
+      const activeElement = document.getElementById(
+        `quiz-nav-item-${currentIndex}`,
+      );
+      if (activeElement) {
+        activeElement.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center",
+        });
+      }
+    }
+  }, [currentIndex, state]);
 
   // Flashcards Listener
   useEffect(() => {
@@ -6274,37 +8173,58 @@ function QuizApp() {
     }
 
     const q = query(
-      collection(db, 'flashcards'),
-      where('uid', '==', user.uid),
-      orderBy('createdAt', 'desc'),
-      limit(300)
+      collection(db, "flashcards"),
+      where("uid", "==", user.uid),
+      orderBy("createdAt", "desc"),
+      limit(300),
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const cards = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          ...data,
-          id: doc.id,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
-          nextReviewDate: data.nextReviewDate instanceof Timestamp ? data.nextReviewDate.toDate() : (data.nextReviewDate ? new Date(data.nextReviewDate) : undefined),
-          lastReviewed: data.lastReviewed instanceof Timestamp ? data.lastReviewed.toDate() : (data.lastReviewed ? new Date(data.lastReviewed) : undefined)
-        };
-      });
-      setFlashcards(cards);
-      setFirestoreQuotaExceeded(false);
-      setFirestoreUnavailable(false);
-    }, (error) => {
-      const msg = error instanceof Error ? error.message : String(error);
-      const code = (error as any)?.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
-        setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
-        setFirestoreUnavailable(true);
-      } else {
-        handleFirestoreError(error, OperationType.LIST, 'flashcards');
-      }
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const cards = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            ...data,
+            id: doc.id,
+            createdAt:
+              data.createdAt instanceof Timestamp
+                ? data.createdAt.toDate()
+                : new Date(data.createdAt),
+            nextReviewDate:
+              data.nextReviewDate instanceof Timestamp
+                ? data.nextReviewDate.toDate()
+                : data.nextReviewDate
+                  ? new Date(data.nextReviewDate)
+                  : undefined,
+            lastReviewed:
+              data.lastReviewed instanceof Timestamp
+                ? data.lastReviewed.toDate()
+                : data.lastReviewed
+                  ? new Date(data.lastReviewed)
+                  : undefined,
+          };
+        });
+        setFlashcards(cards);
+        setFirestoreQuotaExceeded(false);
+        setFirestoreUnavailable(false);
+      },
+      (error) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        const code = (error as any)?.code;
+        if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
+          setFirestoreQuotaExceeded(true);
+        } else if (
+          code === "unavailable" ||
+          msg.includes("unavailable") ||
+          msg.includes("Could not reach")
+        ) {
+          setFirestoreUnavailable(true);
+        } else {
+          handleFirestoreError(error, OperationType.LIST, "flashcards");
+        }
+      },
+    );
 
     return () => unsubscribe();
   }, [isAuthReady, user]);
@@ -6317,34 +8237,45 @@ function QuizApp() {
     }
 
     const q = query(
-      collection(db, 'studyLogs'),
-      where('uid', '==', user.uid),
-      orderBy('date', 'desc')
+      collection(db, "studyLogs"),
+      where("uid", "==", user.uid),
+      orderBy("date", "desc"),
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const logs = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          ...data,
-          id: doc.id,
-          date: data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date)
-        } as StudyLog;
-      });
-      setStudyLogs(logs);
-      setFirestoreQuotaExceeded(false);
-      setFirestoreUnavailable(false);
-    }, (error) => {
-      const msg = error instanceof Error ? error.message : String(error);
-      const code = (error as any)?.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
-        setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
-        setFirestoreUnavailable(true);
-      } else {
-        handleFirestoreError(error, OperationType.LIST, 'studyLogs');
-      }
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const logs = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            ...data,
+            id: doc.id,
+            date:
+              data.date instanceof Timestamp
+                ? data.date.toDate()
+                : new Date(data.date),
+          } as StudyLog;
+        });
+        setStudyLogs(logs);
+        setFirestoreQuotaExceeded(false);
+        setFirestoreUnavailable(false);
+      },
+      (error) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        const code = (error as any)?.code;
+        if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
+          setFirestoreQuotaExceeded(true);
+        } else if (
+          code === "unavailable" ||
+          msg.includes("unavailable") ||
+          msg.includes("Could not reach")
+        ) {
+          setFirestoreUnavailable(true);
+        } else {
+          handleFirestoreError(error, OperationType.LIST, "studyLogs");
+        }
+      },
+    );
 
     return () => unsubscribe();
   }, [isAuthReady, user]);
@@ -6357,34 +8288,45 @@ function QuizApp() {
     }
 
     const q = query(
-      collection(db, 'revisionTasks'),
-      where('uid', '==', user.uid),
-      orderBy('dueDate', 'asc')
+      collection(db, "revisionTasks"),
+      where("uid", "==", user.uid),
+      orderBy("dueDate", "asc"),
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const tasks = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          ...data,
-          id: doc.id,
-          dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : new Date(data.dueDate)
-        } as RevisionTask;
-      });
-      setRevisionTasks(tasks);
-      setFirestoreQuotaExceeded(false);
-      setFirestoreUnavailable(false);
-    }, (error) => {
-      const msg = error instanceof Error ? error.message : String(error);
-      const code = (error as any)?.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
-        setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
-        setFirestoreUnavailable(true);
-      } else {
-        handleFirestoreError(error, OperationType.LIST, 'revisionTasks');
-      }
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const tasks = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            ...data,
+            id: doc.id,
+            dueDate:
+              data.dueDate instanceof Timestamp
+                ? data.dueDate.toDate()
+                : new Date(data.dueDate),
+          } as RevisionTask;
+        });
+        setRevisionTasks(tasks);
+        setFirestoreQuotaExceeded(false);
+        setFirestoreUnavailable(false);
+      },
+      (error) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        const code = (error as any)?.code;
+        if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
+          setFirestoreQuotaExceeded(true);
+        } else if (
+          code === "unavailable" ||
+          msg.includes("unavailable") ||
+          msg.includes("Could not reach")
+        ) {
+          setFirestoreUnavailable(true);
+        } else {
+          handleFirestoreError(error, OperationType.LIST, "revisionTasks");
+        }
+      },
+    );
 
     return () => unsubscribe();
   }, [isAuthReady, user]);
@@ -6397,7 +8339,7 @@ function QuizApp() {
         setHasApiKey(selected);
       } else {
         // Local mode
-        const storedKey = localStorage.getItem('GEMINI_API_KEY');
+        const storedKey = localStorage.getItem("GEMINI_API_KEY");
         if (!storedKey && !process.env.GEMINI_API_KEY && !process.env.API_KEY) {
           setHasApiKey(false);
           setShowApiKeyInput(true);
@@ -6408,7 +8350,7 @@ function QuizApp() {
   }, []);
 
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [jumpToQuestion, setJumpToQuestion] = useState('');
+  const [jumpToQuestion, setJumpToQuestion] = useState("");
   const pdfContentRef = useRef<HTMLDivElement>(null);
   const deepDivePdfRef = useRef<HTMLDivElement>(null);
 
@@ -6417,22 +8359,27 @@ function QuizApp() {
     const num = parseInt(jumpToQuestion);
     if (!isNaN(num) && num >= 1 && num <= questions.length) {
       setCurrentIndex(num - 1);
-      setJumpToQuestion('');
+      setJumpToQuestion("");
     }
   };
 
   // Timer Logic
   useEffect(() => {
-    if (state === 'active' && answers[currentIndex] === null && isQuestionStarted && !isPaused) {
+    if (
+      state === "active" &&
+      answers[currentIndex] === null &&
+      isQuestionStarted &&
+      !isPaused
+    ) {
       timerRef.current = setInterval(() => {
-        setQuestionTime(prev => {
+        setQuestionTime((prev) => {
           if (prev <= 0) {
             if (timerRef.current) clearInterval(timerRef.current);
             return 0;
           }
           return prev - 1;
         });
-        setTotalTime(prev => prev + 1);
+        setTotalTime((prev) => prev + 1);
       }, 1000);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -6446,7 +8393,7 @@ function QuizApp() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    setState('loading');
+    setState("loading");
     setError(null);
 
     try {
@@ -6456,14 +8403,23 @@ function QuizApp() {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         fileNames.push(file.name);
-        
-        if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+
+        if (
+          file.type ===
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ) {
           const arrayBuffer = await file.arrayBuffer();
           const result = await mammoth.extractRawText({ arrayBuffer });
           contents.push(result.value);
-        } else if (file.type === 'text/plain' || file.type === 'text/markdown') {
+        } else if (
+          file.type === "text/plain" ||
+          file.type === "text/markdown"
+        ) {
           contents.push(await file.text());
-        } else if (file.type && (file.type === 'application/pdf' || file.type.startsWith('image/'))) {
+        } else if (
+          file.type &&
+          (file.type === "application/pdf" || file.type.startsWith("image/"))
+        ) {
           const base64 = await fileToBase64(file);
           contents.push({ data: base64, mimeType: file.type });
         } else {
@@ -6479,12 +8435,14 @@ function QuizApp() {
         }
       }
 
-      const cleanFileNames = fileNames.map(name => name.replace(/^\d+[\s\.\-\:]*/, '').trim());
-      const combinedFileName = fileNames.join(', ');
+      const cleanFileNames = fileNames.map((name) =>
+        name.replace(/^\d+[\s\.\-\:]*/, "").trim(),
+      );
+      const combinedFileName = fileNames.join(", ");
 
       setPendingContent(contents);
       setPendingFileName(combinedFileName);
-      
+
       // Guess subject if empty
       if (!selectedSubject) {
         const guessed = normalizeSubject(cleanFileNames[0]);
@@ -6492,10 +8450,10 @@ function QuizApp() {
       }
 
       // Don't call startQuiz immediately
-      setState('idle');
+      setState("idle");
     } catch (err: any) {
       setError(err.message || "Erro ao processar os materiais.");
-      setState('idle');
+      setState("idle");
     }
   };
 
@@ -6504,22 +8462,26 @@ function QuizApp() {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => {
-        const base64String = (reader.result as string).split(',')[1];
+        const base64String = (reader.result as string).split(",")[1];
         resolve(base64String);
       };
-      reader.onerror = error => reject(error);
+      reader.onerror = (error) => reject(error);
     });
   };
 
   const hasContentForSubject = (subject: string) => {
     const normalized = subject.trim().toLowerCase();
-    if (selectedSubject.trim().toLowerCase() === normalized && pendingContent) return true;
-    return history.some(h => 
-      h.content && (
-        (h.subject && h.subject.trim().toLowerCase() === normalized) ||
-        (h.fileName && h.fileName.toLowerCase().includes(normalized)) ||
-        (h.questions && h.questions.some(q => q.subject && q.subject.trim().toLowerCase() === normalized))
-      )
+    if (selectedSubject.trim().toLowerCase() === normalized && pendingContent)
+      return true;
+    return history.some(
+      (h) =>
+        h.content &&
+        ((h.subject && h.subject.trim().toLowerCase() === normalized) ||
+          (h.fileName && h.fileName.toLowerCase().includes(normalized)) ||
+          (h.questions &&
+            h.questions.some(
+              (q) => q.subject && q.subject.trim().toLowerCase() === normalized,
+            ))),
     );
   };
 
@@ -6530,14 +8492,16 @@ function QuizApp() {
     }
 
     setIsRedoing(false);
-    setState('loading');
+    setState("loading");
     setLoadingProgress(5);
     setError(null);
     setShowDashboard(false);
 
     try {
       const totalQuestions = questionCount;
-      const questionsPerSubject = Math.floor(totalQuestions / selectedSimuladoSubjects.length);
+      const questionsPerSubject = Math.floor(
+        totalQuestions / selectedSimuladoSubjects.length,
+      );
       const remainder = totalQuestions % selectedSimuladoSubjects.length;
 
       if (selectedSimuladoSubjects.length === 0) {
@@ -6546,40 +8510,56 @@ function QuizApp() {
 
       let allSimuladoQuestions: QuizQuestion[] = [];
       const missingSubjects: string[] = [];
-      
+
       // Derive format
-      const hasCebraspe = selectedExamBoards.includes('Cebraspe');
-      const hasMC = selectedExamBoards.includes('Múltipla Escolha') || 
-                  selectedExamBoards.some(b => b !== 'Cebraspe' && b !== 'Múltipla Escolha') || 
-                  selectedExamBoards.includes('Geral');
-      
-      let derivedFormat: QuizFormat = 'multiple-choice';
-      if (hasCebraspe && hasMC) derivedFormat = 'both';
-      else if (hasCebraspe) derivedFormat = 'cebraspe';
-      
-      const boardsToPass = selectedExamBoards.filter(b => b !== 'Múltipla Escolha' && b !== 'Geral');
-      const examBoardStr = boardsToPass.length > 0 ? boardsToPass.join(', ') : 'Geral';
+      const hasCebraspe = selectedExamBoards.includes("Cebraspe");
+      const hasMC =
+        selectedExamBoards.includes("Múltipla Escolha") ||
+        selectedExamBoards.some(
+          (b) => b !== "Cebraspe" && b !== "Múltipla Escolha",
+        ) ||
+        selectedExamBoards.includes("Geral");
+
+      let derivedFormat: QuizFormat = "multiple-choice";
+      if (hasCebraspe && hasMC) derivedFormat = "both";
+      else if (hasCebraspe) derivedFormat = "cebraspe";
+
+      const boardsToPass = selectedExamBoards.filter(
+        (b) => b !== "Múltipla Escolha" && b !== "Geral",
+      );
+      const examBoardStr =
+        boardsToPass.length > 0 ? boardsToPass.join(", ") : "Geral";
 
       for (let i = 0; i < selectedSimuladoSubjects.length; i++) {
         const subject = selectedSimuladoSubjects[i];
         const count = questionsPerSubject + (i < remainder ? 1 : 0);
-        
+
         // Find content for this subject
         // 1. Check if the currently pending content matches this subject
         // 2. Check history for results where the subject matches or the fileName matches
         let content = null;
         const normalizedSubject = subject.trim().toLowerCase();
-        
-        if (selectedSubject.trim().toLowerCase() === normalizedSubject && pendingContent) {
+
+        if (
+          selectedSubject.trim().toLowerCase() === normalizedSubject &&
+          pendingContent
+        ) {
           content = pendingContent;
         } else {
           // Look for the most recent result that has content and matches the subject
-          const subjectResult = history.find(h => 
-            h.content && (
-              (h.subject && h.subject.trim().toLowerCase() === normalizedSubject) ||
-              (h.fileName && h.fileName.toLowerCase().includes(normalizedSubject)) || 
-              (h.questions && h.questions.some(q => q.subject && q.subject.trim().toLowerCase() === normalizedSubject))
-            )
+          const subjectResult = history.find(
+            (h) =>
+              h.content &&
+              ((h.subject &&
+                h.subject.trim().toLowerCase() === normalizedSubject) ||
+                (h.fileName &&
+                  h.fileName.toLowerCase().includes(normalizedSubject)) ||
+                (h.questions &&
+                  h.questions.some(
+                    (q) =>
+                      q.subject &&
+                      q.subject.trim().toLowerCase() === normalizedSubject,
+                  ))),
           );
           content = subjectResult?.content;
         }
@@ -6591,18 +8571,27 @@ function QuizApp() {
         }
 
         setLoadingProgress(10 + (i / selectedSimuladoSubjects.length) * 80);
-        
+
         // Generate questions for this subject batch
         try {
-          const generated = await generateQuiz(content, count, derivedFormat, examBoardStr, isBancaMindset, subjects, hypotheticalCasesCount, true);
-          
+          const generated = await generateQuiz(
+            content,
+            count,
+            derivedFormat,
+            examBoardStr,
+            isBancaMindset,
+            subjects,
+            hypotheticalCasesCount,
+            true,
+          );
+
           if (generated && generated.length > 0) {
-            const categorized = generated.map(q => ({
+            const categorized = generated.map((q) => ({
               ...q,
               subject,
-              id: `${subject.substring(0, 3)}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+              id: `${subject.substring(0, 3)}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             }));
-            
+
             allSimuladoQuestions = [...allSimuladoQuestions, ...categorized];
           } else {
             console.warn(`Nenhuma questão gerada para a matéria: ${subject}`);
@@ -6615,9 +8604,13 @@ function QuizApp() {
 
       if (allSimuladoQuestions.length === 0) {
         if (missingSubjects.length > 0) {
-          throw new Error(`Não foi possível encontrar conteúdo para as matérias: ${missingSubjects.join(', ')}. Tente carregar um material para cada uma primeiro.`);
+          throw new Error(
+            `Não foi possível encontrar conteúdo para as matérias: ${missingSubjects.join(", ")}. Tente carregar um material para cada uma primeiro.`,
+          );
         }
-        throw new Error("Não foi possível gerar questões para o simulado. Verifique se os materiais carregados possuem conteúdo suficiente ou tente novamente.");
+        throw new Error(
+          "Não foi possível gerar questões para o simulado. Verifique se os materiais carregados possuem conteúdo suficiente ou tente novamente.",
+        );
       }
 
       setLoadingProgress(95);
@@ -6629,25 +8622,32 @@ function QuizApp() {
       setQuestionTime(timeAlertThreshold);
       setIsQuestionStarted(false);
       setIsPaused(false);
-      setState('active');
-      setLastFileName(`Simulado: ${selectedSimuladoSubjects.join(', ')}`);
+      setState("active");
+      setLastFileName(`Simulado: ${selectedSimuladoSubjects.join(", ")}`);
       setLastContent(null); // Combined content is complex, we leave it null for now
       setIsSimulado(true);
       setShowRevisionAgenda(false);
       setIsReviewMode(false);
-      
+
       setLoadingProgress(100);
     } catch (err: any) {
       console.error("Erro ao gerar simulado:", err);
       setError(err.message || "Erro ao gerar simulado.");
-      setState('idle');
+      setState("idle");
     }
   };
 
-  const startQuiz = async (content: ContentItem | ContentItem[], fileName: string) => {
-    console.log("Iniciando geração de quiz...", { count: questionCount, fileName, selectedSubject });
+  const startQuiz = async (
+    content: ContentItem | ContentItem[],
+    fileName: string,
+  ) => {
+    console.log("Iniciando geração de quiz...", {
+      count: questionCount,
+      fileName,
+      selectedSubject,
+    });
     setIsRedoing(false);
-    setState('loading');
+    setState("loading");
     setError(null);
     setShowDashboard(false);
     setLastContent(content);
@@ -6655,41 +8655,78 @@ function QuizApp() {
     setActiveResultId(null);
     try {
       setLoadingProgress(10);
-      
-      // Derive format based on selections
-      const hasCebraspe = selectedExamBoards.includes('Cebraspe');
-      const hasMC = selectedExamBoards.includes('Múltipla Escolha') || 
-                  selectedExamBoards.some(b => b !== 'Cebraspe' && b !== 'Múltipla Escolha') || 
-                  selectedExamBoards.includes('Geral');
-      
-      let derivedFormat: QuizFormat = 'multiple-choice';
-      if (hasCebraspe && hasMC) derivedFormat = 'both';
-      else if (hasCebraspe) derivedFormat = 'cebraspe';
-      
-      const boardsToPass = selectedExamBoards.filter(b => b !== 'Múltipla Escolha' && b !== 'Geral');
-      const examBoardStr = boardsToPass.length > 0 ? boardsToPass.join(', ') : 'Geral';
 
-      console.log("Chamando generateQuiz...", { count: questionCount, format: derivedFormat, board: examBoardStr, isBancaMindset, hypotheticalCasesCount, isSimulado });
-      const generatedQuestions = await generateQuiz(content, questionCount, derivedFormat, examBoardStr, isBancaMindset, subjects, hypotheticalCasesCount, isSimulado);
-      
+      // Derive format based on selections
+      const hasCebraspe = selectedExamBoards.includes("Cebraspe");
+      const hasMC =
+        selectedExamBoards.includes("Múltipla Escolha") ||
+        selectedExamBoards.some(
+          (b) => b !== "Cebraspe" && b !== "Múltipla Escolha",
+        ) ||
+        selectedExamBoards.includes("Geral");
+
+      let derivedFormat: QuizFormat = "multiple-choice";
+      if (hasCebraspe && hasMC) derivedFormat = "both";
+      else if (hasCebraspe) derivedFormat = "cebraspe";
+
+      const boardsToPass = selectedExamBoards.filter(
+        (b) => b !== "Múltipla Escolha" && b !== "Geral",
+      );
+      const examBoardStr =
+        boardsToPass.length > 0 ? boardsToPass.join(", ") : "Geral";
+
+      console.log("Chamando generateQuiz...", {
+        count: questionCount,
+        format: derivedFormat,
+        board: examBoardStr,
+        isBancaMindset,
+        hypotheticalCasesCount,
+        isSimulado,
+      });
+      const generatedQuestions = await generateQuiz(
+        content,
+        questionCount,
+        derivedFormat,
+        examBoardStr,
+        isBancaMindset,
+        subjects,
+        hypotheticalCasesCount,
+        isSimulado,
+      );
+
       // If a subject was selected, ensure all questions are categorized under it
-      const finalQuestions = generatedQuestions.map(q => ({
-        ...q,
-        subject: selectedSubject || q.subject || 'Geral',
-        options: q.options || [],
-        explanation: q.explanation || '',
-        hint: q.hint || '',
-        id: q.id || Math.random().toString(36).substr(2, 9)
-      }));
+      const finalQuestions = generatedQuestions.map((q) => {
+        const options = q.options || [];
+        return {
+          ...q,
+          subject: selectedSubject || q.subject || "Geral",
+          type: q.type || (options.length > 0 ? "multiple-choice" : "cebraspe"),
+          options,
+          explanation: q.explanation || "",
+          hint: q.hint || "",
+          difficulty: q.difficulty || "medium",
+          id: q.id || Math.random().toString(36).substr(2, 9),
+        };
+      });
 
       setLoadingProgress(90);
-      console.log("Quiz gerado com sucesso!", { count: finalQuestions?.length });
-      
+      console.log("Quiz gerado com sucesso!", {
+        count: finalQuestions?.length,
+      });
+
       if (!finalQuestions || finalQuestions.length === 0) {
-        throw new Error("Não foi possível gerar o quiz com o conteúdo fornecido.");
+        throw new Error(
+          "Não foi possível gerar o quiz com o conteúdo fornecido.",
+        );
       }
 
       setQuestions(finalQuestions);
+
+      // Auto Study Log - Registra o início do estudo de ARQUIVOS
+      if (!isSimulado && !isReviewMode && !isRedoing) {
+        handleAddStudyLog(selectedSubject || "Geral", fileName, true);
+      }
+
       setAnswers(new Array(finalQuestions.length).fill(null));
       setQuestionTimes(new Array(finalQuestions.length).fill(0));
       setCurrentIndex(0);
@@ -6697,26 +8734,33 @@ function QuizApp() {
       setQuestionTime(timeAlertThreshold);
       setIsQuestionStarted(false);
       setIsPaused(false);
-      setState('active');
+      setState("active");
       setShowDeepDive(false);
       setIsDeepDiveExpanded(false);
       setIsReviewMode(false);
-      
+
       // Clear pending content only, keep selectedSubject so it can be saved in finishQuiz
       setPendingContent(null);
-      setPendingFileName('');
+      setPendingFileName("");
     } catch (err: any) {
       console.error("Erro ao gerar quiz:", err);
       if (err.message?.includes("Requested entity was not found")) {
         setHasApiKey(false);
-        setError("A chave de API selecionada não foi encontrada ou expirou. Por favor, selecione novamente.");
-      } else if (err.message?.includes("API_KEY_INVALID") || err.message?.includes("Chave de API inválida")) {
+        setError(
+          "A chave de API selecionada não foi encontrada ou expirou. Por favor, selecione novamente.",
+        );
+      } else if (
+        err.message?.includes("API_KEY_INVALID") ||
+        err.message?.includes("Chave de API inválida")
+      ) {
         setHasApiKey(false);
-        setError("Chave de API inválida. Por favor, configure uma chave válida nas configurações.");
+        setError(
+          "Chave de API inválida. Por favor, configure uma chave válida nas configurações.",
+        );
       } else {
         setError(err.message || "Erro ao gerar o quiz.");
       }
-      setState('idle');
+      setState("idle");
     }
   };
 
@@ -6725,7 +8769,10 @@ function QuizApp() {
     let nameToUse = pendingFileName;
 
     if (!contentToUse && urlInput.trim()) {
-      const urls = urlInput.split('\n').map(u => u.trim()).filter(u => u.startsWith('http'));
+      const urls = urlInput
+        .split("\n")
+        .map((u) => u.trim())
+        .filter((u) => u.startsWith("http"));
       if (urls.length > 0) {
         contentToUse = urls;
         nameToUse = urls.length === 1 ? urls[0] : `${urls.length} links`;
@@ -6737,13 +8784,18 @@ function QuizApp() {
       return;
     }
     if (!selectedSubject.trim()) {
-      setError("O campo 'Matéria' é obrigatório. Por favor, digite o nome da matéria para continuar.");
+      setError(
+        "O campo 'Matéria' é obrigatório. Por favor, digite o nome da matéria para continuar.",
+      );
       // Scroll to the subject input to highlight it
       const input = document.querySelector('input[list="existing-subjects"]');
       if (input) {
-        input.classList.add('ring-2', 'ring-rose-500');
-        setTimeout(() => input.classList.remove('ring-2', 'ring-rose-500'), 3000);
-        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        input.classList.add("ring-2", "ring-rose-500");
+        setTimeout(
+          () => input.classList.remove("ring-2", "ring-rose-500"),
+          3000,
+        );
+        input.scrollIntoView({ behavior: "smooth", block: "center" });
       }
       return;
     }
@@ -6753,16 +8805,21 @@ function QuizApp() {
   const handleUrlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!urlInput.trim()) return;
-    
-    const urls = urlInput.split('\n').map(u => u.trim()).filter(u => u.startsWith('http'));
+
+    const urls = urlInput
+      .split("\n")
+      .map((u) => u.trim())
+      .filter((u) => u.startsWith("http"));
     if (urls.length === 0) {
-      setError("Por favor, insira pelo menos um link válido (começando com http).");
+      setError(
+        "Por favor, insira pelo menos um link válido (começando com http).",
+      );
       return;
     }
-    
+
     setPendingContent(urls);
     setPendingFileName(urls.length === 1 ? urls[0] : `${urls.length} links`);
-    setUrlInput('');
+    setUrlInput("");
   };
 
   const getDynamicFontSize = (text: string, baseSize: string = "text-sm") => {
@@ -6785,7 +8842,7 @@ function QuizApp() {
 
   const handleSaveManualKey = () => {
     if (manualApiKey.trim()) {
-      localStorage.setItem('GEMINI_API_KEY', manualApiKey.trim());
+      localStorage.setItem("GEMINI_API_KEY", manualApiKey.trim());
       setHasApiKey(true);
       setShowApiKeyInput(false);
       setError(null);
@@ -6794,7 +8851,7 @@ function QuizApp() {
 
   useEffect(() => {
     if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [chatHistory]);
 
@@ -6811,9 +8868,14 @@ function QuizApp() {
       setQuestions(updatedQuestions);
     } catch (err: any) {
       console.error("Failed to fetch deep dive", err);
-      if (err.message?.includes("Requested entity was not found") || err.message?.includes("API_KEY_INVALID")) {
+      if (
+        err.message?.includes("Requested entity was not found") ||
+        err.message?.includes("API_KEY_INVALID")
+      ) {
         setHasApiKey(false);
-        setError("Erro de autenticação com a API. Por favor, verifique sua chave.");
+        setError(
+          "Erro de autenticação com a API. Por favor, verifique sua chave.",
+        );
       }
     } finally {
       setIsDeepDiveLoading(false);
@@ -6825,34 +8887,124 @@ function QuizApp() {
     if (!chatInput.trim() || isChatLoading) return;
 
     const userMsg = chatInput.trim();
-    setChatInput('');
-    
+    setChatInput("");
+
     // Update history with user message first
-    const currentHistory = [...chatHistory, { role: 'user' as const, text: userMsg }];
+    const currentHistory = [
+      ...chatHistory,
+      { role: "user" as const, text: userMsg },
+    ];
     setChatHistory(currentHistory);
-    
+
     setIsChatLoading(true);
     try {
       // Pass the history BEFORE the current message, as chatWithProfessor adds the current message
-      const response = await chatWithProfessor(questions[currentIndex], chatHistory, userMsg);
-      setChatHistory(current => [...current, { role: 'model' as const, text: response }]);
-      
+      const response = await chatWithProfessor(
+        questions[currentIndex],
+        chatHistory,
+        userMsg,
+      );
+      setChatHistory((current) => [
+        ...current,
+        { role: "model" as const, text: response },
+      ]);
+
       // Force scroll after response
       setTimeout(() => {
         if (chatEndRef.current) {
-          chatEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          chatEndRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "end",
+          });
         }
       }, 100);
     } catch (err) {
       console.error("Chat error:", err);
-      setChatHistory(current => [...current, { role: 'model' as const, text: "Desculpe, tive um problema ao processar sua pergunta. Tente novamente." }]);
+      setChatHistory((current) => [
+        ...current,
+        {
+          role: "model" as const,
+          text: "Desculpe, tive um problema ao processar sua pergunta. Tente novamente.",
+        },
+      ]);
     } finally {
       setIsChatLoading(false);
     }
   };
 
+  // Auto-save session to Firestore
+  const saveActiveSession = async (
+    currentQuestions: QuizQuestion[],
+    currentAnswers: (string | null)[],
+    index: number,
+    fileName: string,
+    simulado: boolean,
+  ) => {
+    if (!user) return;
+    try {
+      const sessionRef = doc(db, "users", user.uid, "activeSession", "current");
+      await setDoc(sessionRef, {
+        questions: currentQuestions,
+        answers: currentAnswers,
+        currentIndex: index,
+        lastFileName: fileName,
+        isSimulado: simulado,
+        updatedAt: Timestamp.now(),
+      });
+    } catch (err) {
+      console.error("Erro ao salvar sessão:", err);
+    }
+  };
+
+  const clearActiveSession = async () => {
+    if (!user) return;
+    try {
+      const sessionRef = doc(db, "users", user.uid, "activeSession", "current");
+      await deleteDoc(sessionRef);
+    } catch (err) {
+      console.error("Erro ao limpar sessão:", err);
+    }
+  };
+
+  const resetCurrentQuiz = () => {
+    setAnswers(new Array(questions.length).fill(null));
+    setCurrentIndex(0);
+    setTotalTime(0);
+    setQuestionTime(timeAlertThreshold);
+    setIsReviewMode(false);
+    setIsQuestionStarted(false);
+    clearActiveSession();
+  };
+
+  const resumeSession = (session: any) => {
+    setIsResuming(true);
+    setQuestions(session.questions);
+    setAnswers(session.answers);
+    setCurrentIndex(session.currentIndex);
+    setLastFileName(session.lastFileName);
+    setIsSimulado(session.isSimulado);
+    setTotalTime(0);
+    setQuestionTime(timeAlertThreshold);
+    setState("active");
+    setIsReviewMode(false);
+    setPendingSession(null);
+    setIsResuming(false);
+  };
+
+  // Check for existing session on login
+  useEffect(() => {
+    if (user && state === "idle") {
+      const sessionRef = doc(db, "users", user.uid, "activeSession", "current");
+      getDoc(sessionRef).then((docSnap) => {
+        if (docSnap.exists()) {
+          setPendingSession(docSnap.data());
+        }
+      });
+    }
+  }, [user, state]);
+
   const handleAnswer = (answer: string) => {
-    if (answers[currentIndex] !== null) return;
+    if (answers[currentIndex] !== null || isReviewMode) return;
 
     const newAnswers = [...answers];
     newAnswers[currentIndex] = answer;
@@ -6862,7 +9014,14 @@ function QuizApp() {
     newQuestionTimes[currentIndex] = timeAlertThreshold - questionTime;
     setQuestionTimes(newQuestionTimes);
 
-    // No automatic deep dive trigger
+    // Save session
+    saveActiveSession(
+      questions,
+      newAnswers,
+      currentIndex,
+      lastFileName,
+      isSimulado,
+    );
   };
 
   const handlePlayAudio = async (text: string) => {
@@ -6871,7 +9030,9 @@ function QuizApp() {
         audioRef.current.pause();
       }
       if ((window as any)._currentAudioSource) {
-        try { (window as any)._currentAudioSource.stop(); } catch(e) {}
+        try {
+          (window as any)._currentAudioSource.stop();
+        } catch (e) {}
       }
       setIsAudioPlaying(false);
       setIsAudioLoading(false);
@@ -6881,41 +9042,47 @@ function QuizApp() {
     try {
       setIsAudioLoading(true);
       // Strip markdown for cleaner TTS
-      const cleanText = text.replace(/[#*`_~\[\]()]/g, '').trim();
+      const cleanText = text.replace(/[#*`_~\[\]()]/g, "").trim();
       if (!cleanText) {
         setIsAudioLoading(false);
         return;
       }
-      
+
       const { data, mimeType } = await generateSpeech(cleanText);
-      
-      if (mimeType.includes('pcm')) {
+
+      if (mimeType.includes("pcm")) {
         if (!audioContextRef.current) {
-          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+          audioContextRef.current = new (
+            window.AudioContext || (window as any).webkitAudioContext
+          )({ sampleRate: 24000 });
         }
         const audioContext = audioContextRef.current;
-        
+
         const binaryString = window.atob(data);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
-        
+
         const pcmData = new Int16Array(bytes.buffer);
         const floatData = new Float32Array(pcmData.length);
         for (let i = 0; i < pcmData.length; i++) {
           floatData[i] = pcmData[i] / 32768.0;
         }
-        
-        const audioBuffer = audioContext.createBuffer(1, floatData.length, 24000);
+
+        const audioBuffer = audioContext.createBuffer(
+          1,
+          floatData.length,
+          24000,
+        );
         audioBuffer.getChannelData(0).set(floatData);
-        
+
         const source = audioContext.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(audioContext.destination);
         source.onended = () => setIsAudioPlaying(false);
         (window as any)._currentAudioSource = source;
-        
+
         setIsAudioLoading(false);
         setIsAudioPlaying(true);
         source.start();
@@ -6928,20 +9095,23 @@ function QuizApp() {
         } else {
           audioRef.current = new Audio(audioUrl);
         }
-        
+
         audioRef.current.onended = () => setIsAudioPlaying(false);
         audioRef.current.onerror = () => {
           setIsAudioPlaying(false);
           setIsAudioLoading(false);
         };
-        
+
         setIsAudioLoading(false);
         setIsAudioPlaying(true);
         await audioRef.current.play();
       }
     } catch (err: any) {
       console.error("Failed to play audio", err);
-      if (err.message?.includes("Requested entity was not found") || err.message?.includes("API_KEY_INVALID")) {
+      if (
+        err.message?.includes("Requested entity was not found") ||
+        err.message?.includes("API_KEY_INVALID")
+      ) {
         setHasApiKey(false);
         setError("Erro de autenticação com a API ao gerar áudio.");
       }
@@ -6963,9 +9133,12 @@ function QuizApp() {
   const nextQuestion = () => {
     if (currentIndex < questions.length - 1) {
       let nextIdx = currentIndex + 1;
-      
-      if (isReviewMode && reviewFilter === 'incorrect') {
-        while (nextIdx < questions.length && answers[nextIdx] === questions[nextIdx].correctAnswer) {
+
+      if (isReviewMode && reviewFilter === "incorrect") {
+        while (
+          nextIdx < questions.length &&
+          answers[nextIdx] === questions[nextIdx].correctAnswer
+        ) {
           nextIdx++;
         }
       }
@@ -6978,17 +9151,25 @@ function QuizApp() {
         if (!isReviewMode) {
           setShowDeepDive(false);
           setIsDeepDiveExpanded(false);
+          // Update session index and save
+          saveActiveSession(
+            questions,
+            answers,
+            nextIdx,
+            lastFileName,
+            isSimulado,
+          );
         }
       } else {
         if (isReviewMode) {
-          setState('finished');
+          setState("finished");
         } else {
           finishQuiz();
         }
       }
     } else {
       if (isReviewMode) {
-        setState('finished');
+        setState("finished");
       } else {
         finishQuiz();
       }
@@ -6998,9 +9179,12 @@ function QuizApp() {
   const prevQuestion = () => {
     if (currentIndex > 0) {
       let prevIdx = currentIndex - 1;
-      
-      if (isReviewMode && reviewFilter === 'incorrect') {
-        while (prevIdx >= 0 && answers[prevIdx] === questions[prevIdx].correctAnswer) {
+
+      if (isReviewMode && reviewFilter === "incorrect") {
+        while (
+          prevIdx >= 0 &&
+          answers[prevIdx] === questions[prevIdx].correctAnswer
+        ) {
           prevIdx--;
         }
       }
@@ -7008,28 +9192,52 @@ function QuizApp() {
       if (prevIdx >= 0) {
         setCurrentIndex(prevIdx);
         setShowHint(false);
+        if (!isReviewMode) {
+          setShowDeepDive(false);
+          setIsDeepDiveExpanded(false);
+          // Update session index and save
+          saveActiveSession(
+            questions,
+            answers,
+            prevIdx,
+            lastFileName,
+            isSimulado,
+          );
+        }
       }
     }
   };
 
   const updateStreakAndStats = async (correct: number, total: number) => {
     if (!user) return;
-    const userRef = doc(db, 'users', user.uid);
+    const userRef = doc(db, "users", user.uid);
     try {
       const userDoc = await getDoc(userRef);
       if (userDoc.exists()) {
         const data = userDoc.data();
         const now = new Date();
-        const lastActivity = data.lastActivity ? (data.lastActivity instanceof Timestamp ? data.lastActivity.toDate() : new Date(data.lastActivity)) : null;
-        
+        const lastActivity = data.lastActivity
+          ? data.lastActivity instanceof Timestamp
+            ? data.lastActivity.toDate()
+            : new Date(data.lastActivity)
+          : null;
+
         let newStreak = data.streak || 0;
         if (lastActivity) {
           // Reset time to start of day for comparison
-          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          const lastDay = new Date(lastActivity.getFullYear(), lastActivity.getMonth(), lastActivity.getDate());
+          const today = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+          );
+          const lastDay = new Date(
+            lastActivity.getFullYear(),
+            lastActivity.getMonth(),
+            lastActivity.getDate(),
+          );
           const diffTime = today.getTime() - lastDay.getTime();
           const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-          
+
           if (diffDays === 1) {
             newStreak += 1;
           } else if (diffDays > 1) {
@@ -7045,17 +9253,27 @@ function QuizApp() {
           streak: newStreak,
           lastActivity: Timestamp.fromDate(now),
           totalCorrectAnswers: (data.totalCorrectAnswers || 0) + correct,
-          totalQuizzesTaken: (data.totalQuizzesTaken || 0) + 1
+          totalQuizzesTaken: (data.totalQuizzesTaken || 0) + 1,
         };
 
         // Check achievements
         const currentAchievements = data.achievements || [];
         const newAchievements = [...currentAchievements];
-        
-        if (newStreak >= 7 && !newAchievements.includes('streak_7')) newAchievements.push('streak_7');
-        if (newStreak >= 30 && !newAchievements.includes('streak_30')) newAchievements.push('streak_30');
-        if (updates.totalQuizzesTaken >= 10 && !newAchievements.includes('quizzes_10')) newAchievements.push('quizzes_10');
-        if (updates.totalCorrectAnswers >= 100 && !newAchievements.includes('correct_100')) newAchievements.push('correct_100');
+
+        if (newStreak >= 7 && !newAchievements.includes("streak_7"))
+          newAchievements.push("streak_7");
+        if (newStreak >= 30 && !newAchievements.includes("streak_30"))
+          newAchievements.push("streak_30");
+        if (
+          updates.totalQuizzesTaken >= 10 &&
+          !newAchievements.includes("quizzes_10")
+        )
+          newAchievements.push("quizzes_10");
+        if (
+          updates.totalCorrectAnswers >= 100 &&
+          !newAchievements.includes("correct_100")
+        )
+          newAchievements.push("correct_100");
 
         if (newAchievements.length > currentAchievements.length) {
           updates.achievements = newAchievements;
@@ -7068,116 +9286,138 @@ function QuizApp() {
     }
   };
 
-  const addToSRS = async (questions: QuizQuestion[], answers: (string | null)[]) => {
+  const addToSRS = async (
+    questions: QuizQuestion[],
+    answers: (string | null)[],
+  ) => {
     if (!user) return;
-    
+
     try {
-      const registryRef = doc(db, 'srs_registries', user.uid);
+      const registryRef = doc(db, "srs_registries", user.uid);
       const registryDoc = await getDoc(registryRef);
-      const registryData = registryDoc.exists() ? registryDoc.data() : { items: {} };
+      const registryData = registryDoc.exists()
+        ? registryDoc.data()
+        : { items: {} };
       const items = { ...registryData.items };
-      
+
       let hasNewItems = false;
       questions.forEach((q, idx) => {
         const isCorrect = answers[idx] === q.correctAnswer;
-        const questionId = q.id || q.question.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '_');
-        
+        const questionId =
+          q.id || q.question.substring(0, 50).replace(/[^a-zA-Z0-9]/g, "_");
+
         const nextReview = new Date();
         if (isCorrect) {
           nextReview.setDate(nextReview.getDate() + 1);
         }
-        
+
         items[questionId] = {
           uid: user.uid,
           questionId: questionId,
-          question: q.question || '',
+          question: q.question || "",
           options: q.options || [],
-          correctAnswer: q.correctAnswer || '',
-          explanation: q.explanation || '',
-          subject: q.subject || 'Geral',
+          correctAnswer: q.correctAnswer || "",
+          explanation: q.explanation || "",
+          subject: q.subject || "Geral",
           interval: isCorrect ? 1 : 0,
           easeFactor: 2.5,
           nextReviewDate: Timestamp.fromDate(nextReview),
-          consecutiveCorrect: isCorrect ? 1 : 0
+          consecutiveCorrect: isCorrect ? 1 : 0,
         };
         hasNewItems = true;
       });
-      
+
       if (hasNewItems) {
-        await setDoc(registryRef, { uid: user.uid, items, lastUpdated: Timestamp.now() }, { merge: true });
+        await setDoc(
+          registryRef,
+          { uid: user.uid, items, lastUpdated: Timestamp.now() },
+          { merge: true },
+        );
       }
     } catch (error: any) {
       const msg = error.message || String(error);
       const code = error.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+      if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
         setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+      } else if (
+        code === "unavailable" ||
+        msg.includes("unavailable") ||
+        msg.includes("Could not reach")
+      ) {
         setFirestoreUnavailable(true);
       } else {
         console.error("Error adding to SRS registry", error);
-        handleFirestoreError(error, OperationType.WRITE, `srs_registries/${user.uid}`);
+        handleFirestoreError(
+          error,
+          OperationType.WRITE,
+          `srs_registries/${user.uid}`,
+        );
       }
     }
   };
 
   const updateSRSAfterReview = async (results: any[]) => {
     if (!user) return;
-    
+
     try {
-      const registryRef = doc(db, 'srs_registries', user.uid);
+      const registryRef = doc(db, "srs_registries", user.uid);
       const registryDoc = await getDoc(registryRef);
-      
+
       if (registryDoc.exists()) {
         const registryData = registryDoc.data();
         const items = { ...registryData.items };
-        
-        results.forEach(res => {
+
+        results.forEach((res) => {
           const item = items[res.id];
           if (item) {
             const isCorrect = res.userAnswer === res.correctAnswer;
-            
+
             // Simple SRS algorithm (SuperMemo-2 like)
             let interval = item.interval || 0;
             let easeFactor = item.easeFactor || 2.5;
             let consecutiveCorrect = item.consecutiveCorrect || 0;
-            
+
             if (isCorrect) {
               consecutiveCorrect += 1;
               if (consecutiveCorrect === 1) interval = 1;
               else if (consecutiveCorrect === 2) interval = 6;
               else interval = Math.round(interval * easeFactor);
-              
+
               easeFactor = Math.max(1.3, easeFactor + 0.1);
             } else {
               consecutiveCorrect = 0;
               interval = 1;
               easeFactor = Math.max(1.3, easeFactor - 0.2);
             }
-            
+
             const nextReview = new Date();
             nextReview.setDate(nextReview.getDate() + interval);
-            
+
             items[res.id] = {
               ...item,
               interval,
               easeFactor,
               consecutiveCorrect,
               nextReviewDate: Timestamp.fromDate(nextReview),
-              lastReviewed: Timestamp.fromDate(new Date())
+              lastReviewed: Timestamp.fromDate(new Date()),
             };
           }
         });
-        
-        await setDoc(registryRef, { uid: user.uid, items, lastUpdated: Timestamp.now() }, { merge: true });
+
+        await setDoc(
+          registryRef,
+          { uid: user.uid, items, lastUpdated: Timestamp.now() },
+          { merge: true },
+        );
       } else {
         // Fallback to legacy individual updates if registry doesn't exist
         const batch = writeBatch(db);
-        results.forEach(res => {
-          const srsItem = srsItems.find(item => item.questionId === res.id);
+        results.forEach((res) => {
+          const srsItem = srsItems.find((item) => item.questionId === res.id);
           if (srsItem) {
             const isCorrect = res.userAnswer === res.correctAnswer;
             let { interval, easeFactor, consecutiveCorrect } = srsItem;
-            
+
             if (isCorrect) {
               consecutiveCorrect += 1;
               if (consecutiveCorrect === 1) interval = 1;
@@ -7189,17 +9429,17 @@ function QuizApp() {
               interval = 1;
               easeFactor = Math.max(1.3, easeFactor - 0.2);
             }
-            
+
             const nextReviewDate = new Date();
             nextReviewDate.setDate(nextReviewDate.getDate() + interval);
-            
-            const itemRef = doc(db, 'srs', srsItem.id);
+
+            const itemRef = doc(db, "srs", srsItem.id);
             batch.update(itemRef, {
               interval,
               easeFactor,
               consecutiveCorrect,
               nextReviewDate: Timestamp.fromDate(nextReviewDate),
-              lastReviewed: Timestamp.fromDate(new Date())
+              lastReviewed: Timestamp.fromDate(new Date()),
             });
           }
         });
@@ -7208,21 +9448,29 @@ function QuizApp() {
     } catch (error: any) {
       const msg = error.message || String(error);
       const code = error.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+      if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
         setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+      } else if (
+        code === "unavailable" ||
+        msg.includes("unavailable") ||
+        msg.includes("Could not reach")
+      ) {
         setFirestoreUnavailable(true);
       } else {
         console.error("Error updating SRS registry after review", error);
-        handleFirestoreError(error, OperationType.WRITE, `srs_registries/${user.uid}`);
+        handleFirestoreError(
+          error,
+          OperationType.WRITE,
+          `srs_registries/${user.uid}`,
+        );
       }
     }
   };
 
   const updateFlashcardSRS = async (cardId: string, isCorrect: boolean) => {
     if (!user) return;
-    
-    const card = flashcards.find(c => c.id === cardId);
+
+    const card = flashcards.find((c) => c.id === cardId);
     if (!card) return;
 
     let interval = card.interval || 1;
@@ -7245,39 +9493,104 @@ function QuizApp() {
     nextReviewDate.setDate(nextReviewDate.getDate() + interval);
 
     try {
-      const cardRef = doc(db, 'flashcards', cardId);
+      const cardRef = doc(db, "flashcards", cardId);
       await updateDoc(cardRef, {
         interval,
         easeFactor,
         consecutiveCorrect,
         nextReviewDate: Timestamp.fromDate(nextReviewDate),
-        lastReviewed: Timestamp.now()
+        lastReviewed: Timestamp.now(),
       });
     } catch (error: any) {
       const msg = error.message || String(error);
       const code = error.code;
-      if (msg.includes('Quota Exceeded') || code === 'resource-exhausted') {
+      if (msg.includes("Quota Exceeded") || code === "resource-exhausted") {
         setFirestoreQuotaExceeded(true);
-      } else if (code === 'unavailable' || msg.includes('unavailable') || msg.includes('Could not reach')) {
+      } else if (
+        code === "unavailable" ||
+        msg.includes("unavailable") ||
+        msg.includes("Could not reach")
+      ) {
         setFirestoreUnavailable(true);
       } else {
         console.error("Error updating flashcard SRS", error);
-        handleFirestoreError(error, OperationType.WRITE, `flashcards/${cardId}`);
+        handleFirestoreError(
+          error,
+          OperationType.WRITE,
+          `flashcards/${cardId}`,
+        );
       }
     }
   };
 
-  const scheduleRevisions = async (quizId: string, subject: string, fileName: string) => {
+  const handleCreateFlashcards = async (
+    incorrectQuestions: QuizQuestion[],
+    fileName: string,
+    subject: string,
+  ) => {
+    if (
+      !user ||
+      incorrectQuestions.length === 0 ||
+      firestoreQuotaExceeded ||
+      firestoreUnavailable
+    )
+      return;
+
+    setIsGeneratingFlashcards(true);
+    try {
+      const generatedCards =
+        await generateFlashcardsFromIncorrectQuestions(incorrectQuestions);
+
+      const batch = writeBatch(db);
+      generatedCards.forEach((card) => {
+        const cardRef = doc(collection(db, "flashcards"));
+        batch.set(cardRef, {
+          ...card,
+          uid: user.uid,
+          fileName: fileName || "Documento",
+          subject: subject || "Geral",
+          createdAt: Timestamp.now(),
+          interval: 0,
+          easeFactor: 2.5,
+          consecutiveCorrect: 0,
+          nextReviewDate: Timestamp.now(), // Due immediately
+        });
+      });
+
+      await batch.commit();
+      alert(
+        "Flashcards gerados com sucesso! Você pode estudá-los no Dashboard.",
+      );
+    } catch (error: any) {
+      console.error("Error creating flashcards", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes("Quota Exceeded")) {
+        setFirestoreQuotaExceeded(true);
+      } else if (msg.includes("unavailable")) {
+        setFirestoreUnavailable(true);
+      } else {
+        handleFirestoreError(error, OperationType.WRITE, "flashcards");
+      }
+    } finally {
+      setIsGeneratingFlashcards(false);
+    }
+  };
+
+  const scheduleRevisions = async (
+    quizId: string,
+    subject: string,
+    fileName: string,
+  ) => {
     const intervals = [1, 3, 7, 15, 30]; // Days for spaced repetition
     const taskIds: string[] = [];
     const newTasks: RevisionTask[] = [];
-    
+
     if (user) {
       try {
         const batch = writeBatch(db);
-        
-        intervals.forEach(days => {
-          const taskRef = doc(collection(db, 'revisionTasks'));
+
+        intervals.forEach((days) => {
+          const taskRef = doc(collection(db, "revisionTasks"));
           const id = taskRef.id;
           const task: RevisionTask = {
             id,
@@ -7286,24 +9599,24 @@ function QuizApp() {
             fileName,
             dueDate: addDays(new Date(), days),
             completed: false,
-            intervalDays: days
+            intervalDays: days,
           };
-          
+
           newTasks.push(task);
           taskIds.push(id);
-          
+
           batch.set(taskRef, {
             ...task,
             uid: user.uid,
-            dueDate: Timestamp.fromDate(task.dueDate)
+            dueDate: Timestamp.fromDate(task.dueDate),
           });
         });
-        
+
         await batch.commit();
         // onSnapshot will handle state update, but we can update locally for immediate feedback
-        setRevisionTasks(prev => {
-          const existingIds = new Set(prev.map(t => t.id));
-          const filteredNew = newTasks.filter(t => !existingIds.has(t.id));
+        setRevisionTasks((prev) => {
+          const existingIds = new Set(prev.map((t) => t.id));
+          const filteredNew = newTasks.filter((t) => !existingIds.has(t.id));
           return [...prev, ...filteredNew];
         });
         return taskIds;
@@ -7313,7 +9626,7 @@ function QuizApp() {
       }
     } else {
       const taskIds: string[] = [];
-      intervals.forEach(days => {
+      intervals.forEach((days) => {
         const id = `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const task: RevisionTask = {
           id,
@@ -7322,26 +9635,33 @@ function QuizApp() {
           fileName,
           dueDate: addDays(new Date(), days),
           completed: false,
-          intervalDays: days
+          intervalDays: days,
         };
         newTasks.push(task);
         taskIds.push(id);
       });
-      setRevisionTasks(prev => [...prev, ...newTasks]);
+      setRevisionTasks((prev) => [...prev, ...newTasks]);
       return taskIds;
     }
   };
 
   const finishQuiz = async () => {
-    const correct = answers.filter((ans, idx) => ans === questions[idx]?.correctAnswer).length;
-    const resultId = user ? doc(collection(db, 'results')).id : `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Clear session on finish
+    clearActiveSession();
+
+    const correct = answers.filter(
+      (ans, idx) => ans === questions[idx]?.correctAnswer,
+    ).length;
+    const resultId = user
+      ? doc(collection(db, "results")).id
+      : `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const result: QuizResult = {
       id: resultId,
       date: new Date(),
       correct,
       total: questions.length,
       timeSpent: totalTime,
-      fileName: lastFileName || 'Documento',
+      fileName: lastFileName || "Documento",
       questions,
       answers,
       content: lastContent,
@@ -7349,27 +9669,29 @@ function QuizApp() {
       isRedoing,
       isReview: isReviewMode,
       subject: selectedSubject,
-      revisionTasks: []
+      revisionTasks: [],
     };
 
     // Finish UI immediately
-    setState('finished');
+    setState("finished");
     setShowDeepDive(false);
     setIsDeepDiveExpanded(false);
 
     if (activeRevisionTaskId) {
       // Find and complete the task automatically
-      const taskToComplete = revisionTasks.find(t => t.id === activeRevisionTaskId);
+      const taskToComplete = revisionTasks.find(
+        (t) => t.id === activeRevisionTaskId,
+      );
       if (taskToComplete && !taskToComplete.completed) {
-        const updatedTasks = revisionTasks.map(t => 
-          t.id === activeRevisionTaskId ? { ...t, completed: true } : t
+        const updatedTasks = revisionTasks.map((t) =>
+          t.id === activeRevisionTaskId ? { ...t, completed: true } : t,
         );
         setRevisionTasks(updatedTasks);
-        
+
         if (user) {
-          const docRef = doc(db, 'revisionTasks', activeRevisionTaskId);
-          updateDoc(docRef, { completed: true }).catch(err => 
-            console.error("Erro ao completar tarefa automática:", err)
+          const docRef = doc(db, "revisionTasks", activeRevisionTaskId);
+          updateDoc(docRef, { completed: true }).catch((err) =>
+            console.error("Erro ao completar tarefa automática:", err),
           );
         }
       }
@@ -7380,56 +9702,75 @@ function QuizApp() {
       (async () => {
         try {
           const batch = writeBatch(db);
-          const resultRef = doc(db, 'results', resultId);
-          
+          const resultRef = doc(db, "results", resultId);
+
           let scheduledTaskIds: string[] = [];
           // Schedule revisions if not in review mode
           if (!isReviewMode) {
             const intervals = [1, 3, 7, 15, 30];
-            intervals.forEach(days => {
-              const taskRef = doc(collection(db, 'revisionTasks'));
+            intervals.forEach((days) => {
+              const taskRef = doc(collection(db, "revisionTasks"));
               const id = taskRef.id;
               scheduledTaskIds.push(id);
               batch.set(taskRef, {
                 id,
                 quizId: resultId,
                 uid: user.uid,
-                subject: normalizeSubject(questions[0]?.subject || selectedSubject || 'Geral'),
+                subject: normalizeSubject(
+                  questions[0]?.subject || selectedSubject || "Geral",
+                ),
                 fileName: result.fileName,
                 dueDate: Timestamp.fromDate(addDays(new Date(), days)),
                 completed: false,
-                intervalDays: days
+                intervalDays: days,
               });
             });
           }
 
           // Estimate size and omit content if it's likely too large for Firestore (1MB limit)
-          const contentStr = JSON.stringify(lastContent || '');
+          const contentStr = JSON.stringify(lastContent || "");
           const resultToSave = {
             ...result,
             uid: user.uid,
             date: Timestamp.fromDate(result.date),
             id: resultId,
-            content: contentStr.length > 800000 ? 'Conteúdo muito grande para ser salvo no histórico.' : lastContent,
-            revisionTasks: scheduledTaskIds
+            content:
+              contentStr.length > 800000
+                ? "Conteúdo muito grande para ser salvo no histórico."
+                : lastContent,
+            revisionTasks: scheduledTaskIds,
           };
 
           batch.set(resultRef, resultToSave);
-          
+
           // Update stats
-          const userRef = doc(db, 'users', user.uid);
+          const userRef = doc(db, "users", user.uid);
           const userDoc = await getDoc(userRef);
           if (userDoc.exists()) {
             const data = userDoc.data();
             const now = new Date();
-            const lastActivity = data.lastActivity ? (data.lastActivity instanceof Timestamp ? data.lastActivity.toDate() : new Date(data.lastActivity)) : null;
-            
+            const lastActivity = data.lastActivity
+              ? data.lastActivity instanceof Timestamp
+                ? data.lastActivity.toDate()
+                : new Date(data.lastActivity)
+              : null;
+
             let newStreak = data.streak || 0;
             if (lastActivity) {
-              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              const lastDay = new Date(lastActivity.getFullYear(), lastActivity.getMonth(), lastActivity.getDate());
-              const diffDays = Math.floor((today.getTime() - lastDay.getTime()) / (1000 * 60 * 60 * 24));
-              
+              const today = new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate(),
+              );
+              const lastDay = new Date(
+                lastActivity.getFullYear(),
+                lastActivity.getMonth(),
+                lastActivity.getDate(),
+              );
+              const diffDays = Math.floor(
+                (today.getTime() - lastDay.getTime()) / (1000 * 60 * 60 * 24),
+              );
+
               if (diffDays === 1) newStreak += 1;
               else if (diffDays > 1) newStreak = 1;
             } else {
@@ -7440,7 +9781,7 @@ function QuizApp() {
               streak: newStreak,
               lastActivity: Timestamp.fromDate(now),
               totalCorrectAnswers: (data.totalCorrectAnswers || 0) + correct,
-              totalQuizzesTaken: (data.totalQuizzesTaken || 0) + 1
+              totalQuizzesTaken: (data.totalQuizzesTaken || 0) + 1,
             });
           }
 
@@ -7448,12 +9789,20 @@ function QuizApp() {
 
           // Auto Study Log - Registra apenas estudos de ARQUIVOS (não simulados, revisões ou refações)
           if (!isSimulado && !isReviewMode && !isRedoing) {
-            handleAddStudyLog(selectedSubject || 'Geral', result.fileName, true);
+            handleAddStudyLog(
+              selectedSubject || "Geral",
+              result.fileName,
+              true,
+            );
           }
 
           // SRS
           if (isReviewMode) {
-            const reviewResults = questions.map((q, i) => ({ id: q.id, userAnswer: answers[i], correctAnswer: q.correctAnswer }));
+            const reviewResults = questions.map((q, i) => ({
+              id: q.id,
+              userAnswer: answers[i],
+              correctAnswer: q.correctAnswer,
+            }));
             await updateSRSAfterReview(reviewResults);
           } else {
             await addToSRS(questions, answers);
@@ -7461,21 +9810,27 @@ function QuizApp() {
         } catch (e: any) {
           console.error("Failed to save history to Firestore", e);
           // If Firestore fails, ensure local state is updated so user sees the result
-          setHistory(prev => {
-            if (prev.some(h => h.id === resultId)) return prev;
+          setHistory((prev) => {
+            if (prev.some((h) => h.id === resultId)) return prev;
             return [result, ...prev];
           });
-          if (e.message?.includes('Quota Exceeded') || e.message?.includes('resource-exhausted')) {
+          if (
+            e.message?.includes("Quota Exceeded") ||
+            e.message?.includes("resource-exhausted")
+          ) {
             setFirestoreQuotaExceeded(true);
-          } else if (e.code === 'unavailable' || e.message?.includes('unavailable')) {
+          } else if (
+            e.code === "unavailable" ||
+            e.message?.includes("unavailable")
+          ) {
             setFirestoreUnavailable(true);
           }
         }
       })();
     } else {
       // Not logged in, quota exceeded or offline - always update locally
-      setHistory(prev => {
-        if (prev.some(h => h.id === resultId)) return prev;
+      setHistory((prev) => {
+        if (prev.some((h) => h.id === resultId)) return prev;
         return [result, ...prev];
       });
     }
@@ -7485,8 +9840,8 @@ function QuizApp() {
     if (activeRevisionTaskId) {
       setShowRevisionAgenda(true);
     }
-    setState('idle');
-    setSelectedSubject('');
+    setState("idle");
+    setSelectedSubject("");
     setQuestions([]);
     setCurrentIndex(0);
     setAnswers([]);
@@ -7504,76 +9859,78 @@ function QuizApp() {
       console.error("PDF content ref is null");
       return;
     }
-    
+
     setIsGeneratingPDF(true);
     try {
       // Small delay to ensure any dynamic content is ready
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
       const container = pdfContentRef.current;
-      
-      // Temporarily make it visible for capture if needed, 
+
+      // Temporarily make it visible for capture if needed,
       // but html2canvas onclone should handle it.
       const canvas = await html2canvas(container, {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff',
+        backgroundColor: "#ffffff",
         windowWidth: 800,
         onclone: (clonedDoc) => {
-          const element = clonedDoc.getElementById('pdf-content-container');
+          const element = clonedDoc.getElementById("pdf-content-container");
           if (element) {
-            element.style.position = 'relative';
-            element.style.left = '0';
-            element.style.display = 'block';
-            element.style.visibility = 'visible';
-            element.style.opacity = '1';
-            element.style.zIndex = '1000';
+            element.style.position = "relative";
+            element.style.left = "0";
+            element.style.display = "block";
+            element.style.visibility = "visible";
+            element.style.opacity = "1";
+            element.style.zIndex = "1000";
           }
-        }
+        },
       });
-      
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const pdf = new jsPDF("p", "mm", "a4");
+
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = pageWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
+
       let heightLeft = imgHeight;
       let position = 0;
 
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
 
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
       }
-      
+
       pdf.save(`resultado_quiz_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`);
     } catch (error) {
       console.error("Erro ao gerar PDF:", error);
       // Fallback to text only if PDF fails completely
-      const correct = answers.filter((ans, idx) => ans === questions[idx]?.correctAnswer).length;
+      const correct = answers.filter(
+        (ans, idx) => ans === questions[idx]?.correctAnswer,
+      ).length;
       const precision = Math.round((correct / questions.length) * 100);
-      let text = `RESULTADOS DO QUIZ - ${lastFileName || 'Documento'}\n`;
+      let text = `RESULTADOS DO QUIZ - ${lastFileName || "Documento"}\n`;
       text += `Data: ${format(new Date(), "dd/MM/yyyy HH:mm")}\n`;
       text += `Acertos: ${correct}\nErros: ${questions.length - correct}\nPrecisão: ${precision}%\nTempo Total: ${formatTime(totalTime)}\n\n`;
       text += `--- DETALHES DAS QUESTÕES ---\n\n`;
       questions.forEach((q, i) => {
         text += `Questão ${i + 1}: ${q.question}\n`;
-        text += `Sua Resposta: ${answers[i] || 'Não respondida'}\n`;
+        text += `Sua Resposta: ${answers[i] || "Não respondida"}\n`;
         text += `Resposta Correta: ${q.correctAnswer}\n`;
-        text += `Resultado: ${answers[i] === q.correctAnswer ? 'CORRETO' : 'INCORRETO'}\n`;
+        text += `Resultado: ${answers[i] === q.correctAnswer ? "CORRETO" : "INCORRETO"}\n`;
         text += `Explicação: ${q.explanation}\n\n`;
       });
-      const blob = new Blob([text], { type: 'text/plain' });
+      const blob = new Blob([text], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `resultado_quiz_${format(new Date(), "yyyyMMdd_HHmm")}.txt`;
       a.click();
@@ -7584,60 +9941,62 @@ function QuizApp() {
 
   const downloadDeepDivePDF = async () => {
     if (!deepDivePdfRef.current || !currentQuestion.deepDive) return;
-    
+
     setIsGeneratingPDF(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
       const container = deepDivePdfRef.current;
-      
+
       const canvas = await html2canvas(container, {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff',
+        backgroundColor: "#ffffff",
         windowWidth: 800,
         onclone: (clonedDoc) => {
-          const element = clonedDoc.getElementById('deep-dive-pdf-container');
+          const element = clonedDoc.getElementById("deep-dive-pdf-container");
           if (element) {
-            element.style.position = 'relative';
-            element.style.left = '0';
-            element.style.display = 'block';
-            element.style.visibility = 'visible';
-            element.style.opacity = '1';
-            element.style.zIndex = '1000';
+            element.style.position = "relative";
+            element.style.left = "0";
+            element.style.display = "block";
+            element.style.visibility = "visible";
+            element.style.opacity = "1";
+            element.style.zIndex = "1000";
           }
-        }
+        },
       });
-      
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const pdf = new jsPDF("p", "mm", "a4");
+
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = pageWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
+
       let heightLeft = imgHeight;
       let position = 0;
 
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
 
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
       }
-      
-      pdf.save(`explicacao_questao_${currentIndex + 1}_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`);
+
+      pdf.save(
+        `explicacao_questao_${currentIndex + 1}_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`,
+      );
     } catch (error) {
       console.error("Erro ao gerar PDF do aprofundamento:", error);
       const text = `APROFUNDAMENTO - QUESTÃO ${currentIndex + 1}\n\n${currentQuestion.question}\n\nEXPLICAÇÃO:\n${currentQuestion.deepDive}`;
-      const blob = new Blob([text], { type: 'text/plain' });
+      const blob = new Blob([text], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `explicacao_questao_${currentIndex + 1}.txt`;
       a.click();
@@ -7648,42 +10007,58 @@ function QuizApp() {
 
   const redoQuiz = () => {
     setIsRedoing(true);
+    const sanitizedQuestions = questions.map((q) => {
+      const options = q.options || [];
+      return {
+        ...q,
+        type: q.type || (options.length > 0 ? "multiple-choice" : "cebraspe"),
+        options,
+      };
+    });
+    setQuestions(sanitizedQuestions);
     setAnswers(new Array(questions.length).fill(null));
     setQuestionTimes(new Array(questions.length).fill(0));
     setCurrentIndex(0);
     setTotalTime(0);
     setQuestionTime(timeAlertThreshold);
     setIsQuestionStarted(false);
-    setState('active');
+    setState("active");
     setShowDeepDive(false);
     setIsDeepDiveExpanded(false);
     setIsReviewMode(false);
   };
 
-  const reviewQuiz = (filter: 'all' | 'incorrect' = 'all') => {
+  const reviewQuiz = (filter: "all" | "incorrect" = "all") => {
     setReviewFilter(filter);
     setIsReviewMode(true);
-    
-    if (filter === 'incorrect') {
-      const firstIncorrect = questions.findIndex((q, i) => answers[i] !== q.correctAnswer);
+
+    if (filter === "incorrect") {
+      const firstIncorrect = questions.findIndex(
+        (q, i) => answers[i] !== q.correctAnswer,
+      );
       setCurrentIndex(firstIncorrect !== -1 ? firstIncorrect : 0);
     } else {
       setCurrentIndex(0);
     }
-    
+
     setIsQuestionStarted(true);
-    setState('active');
+    setState("active");
     setShowDeepDive(false);
   };
 
-  const practiceIncorrect = (incorrectQuestions: QuizQuestion[], fileName: string, subject?: string) => {
+  const practiceIncorrect = (
+    incorrectQuestions: QuizQuestion[],
+    fileName: string,
+    subject?: string,
+  ) => {
     setIsRedoing(true);
-    const sanitizedQuestions = incorrectQuestions.map(q => ({
+    const sanitizedQuestions = incorrectQuestions.map((q) => ({
       ...q,
+      type: q.type || (q.options?.length > 0 ? "multiple-choice" : "cebraspe"),
       options: q.options || [],
-      explanation: q.explanation || '',
-      hint: q.hint || '',
-      id: q.id || Math.random().toString(36).substr(2, 9)
+      explanation: q.explanation || "",
+      hint: q.hint || "",
+      id: q.id || Math.random().toString(36).substr(2, 9),
     }));
     setQuestions(sanitizedQuestions);
     setAnswers(new Array(sanitizedQuestions.length).fill(null));
@@ -7692,32 +10067,39 @@ function QuizApp() {
     setTotalTime(0);
     setQuestionTime(timeAlertThreshold);
     setIsQuestionStarted(false);
-    setState('active');
+    setState("active");
     setShowDeepDive(false);
     setIsDeepDiveExpanded(false);
     setIsReviewMode(false);
     setShowStudyMode(false);
     setShowDashboard(false);
     setLastFileName(fileName);
-    setSelectedSubject(subject || '');
+    setSelectedSubject(subject || "");
     // Keep lastContent if it exists, otherwise it remains null
   };
 
   const retryIncorrectOnly = () => {
-    const incorrectQuestions = questions.filter((q, i) => answers[i] !== q.correctAnswer);
+    const incorrectQuestions = questions.filter(
+      (q, i) => answers[i] !== q.correctAnswer,
+    );
     if (incorrectQuestions.length > 0) {
       practiceIncorrect(incorrectQuestions, lastFileName);
     }
   };
 
   const onPracticeTopic = (topicName: string, quizIds?: string[]) => {
-    console.log("Tentando praticar tópico:", topicName, "com quizzes:", quizIds);
-    
+    console.log(
+      "Tentando praticar tópico:",
+      topicName,
+      "com quizzes:",
+      quizIds,
+    );
+
     if (quizIds && quizIds.length > 0) {
-      const selectedResults = history.filter(res => quizIds.includes(res.id));
+      const selectedResults = history.filter((res) => quizIds.includes(res.id));
       const combinedContent: ContentItem[] = [];
-      
-      selectedResults.forEach(res => {
+
+      selectedResults.forEach((res) => {
         if (res.content) {
           if (Array.isArray(res.content)) {
             combinedContent.push(...res.content);
@@ -7728,45 +10110,66 @@ function QuizApp() {
       });
 
       if (combinedContent.length > 0) {
-        console.log("Iniciando quiz com conteúdo combinado de", selectedResults.length, "quizzes");
+        console.log(
+          "Iniciando quiz com conteúdo combinado de",
+          selectedResults.length,
+          "quizzes",
+        );
         startQuiz(combinedContent, topicName);
         setShowDashboard(false);
         setShowStudyMode(false);
       } else {
-        setError("Não foi possível recuperar o conteúdo dos quizzes selecionados.");
+        setError(
+          "Não foi possível recuperar o conteúdo dos quizzes selecionados.",
+        );
       }
       return;
     }
 
     // Fallback to original behavior if no quizIds provided
-    const lastResult = history.find(res => 
-      res.questions.some(q => normalizeSubject(q.subject || res.fileName) === topicName) ||
-      normalizeSubject(res.fileName) === topicName
+    const lastResult = history.find(
+      (res) =>
+        res.questions.some(
+          (q) => normalizeSubject(q.subject || res.fileName) === topicName,
+        ) || normalizeSubject(res.fileName) === topicName,
     );
-    
+
     if (lastResult && lastResult.content) {
       // Check if it's the "too large" placeholder
-      if (typeof lastResult.content === 'object' && 'content' in lastResult.content && (lastResult.content as any).content === 'Conteúdo muito grande para ser salvo no histórico.') {
-        setError("O conteúdo original deste assunto é muito grande para ser recuperado do histórico.");
+      if (
+        typeof lastResult.content === "object" &&
+        "content" in lastResult.content &&
+        (lastResult.content as any).content ===
+          "Conteúdo muito grande para ser salvo no histórico."
+      ) {
+        setError(
+          "O conteúdo original deste assunto é muito grande para ser recuperado do histórico.",
+        );
         return;
       }
-      console.log("Conteúdo encontrado, iniciando quiz...", lastResult.fileName);
+      console.log(
+        "Conteúdo encontrado, iniciando quiz...",
+        lastResult.fileName,
+      );
       startQuiz(lastResult.content, lastResult.fileName);
       setShowDashboard(false);
       setShowStudyMode(false);
     } else {
       console.warn("Could not find content for topic:", topicName);
-      setError(`Não foi possível encontrar o conteúdo original para a matéria "${topicName}". Tente gerar um novo quiz a partir de um arquivo.`);
+      setError(
+        `Não foi possível encontrar o conteúdo original para a matéria "${topicName}". Tente gerar um novo quiz a partir de um arquivo.`,
+      );
     }
   };
 
   const handleHistoryClick = (res: QuizResult) => {
-    const sanitizedQuestions = res.questions.map(q => ({
+    const sanitizedQuestions = res.questions.map((q) => ({
       ...q,
+      type: q.type || (q.options?.length > 0 ? "multiple-choice" : "cebraspe"),
       options: q.options || [],
-      explanation: q.explanation || '',
-      hint: q.hint || '',
-      id: q.id || Math.random().toString(36).substr(2, 9)
+      explanation: q.explanation || "",
+      hint: q.hint || "",
+      id: q.id || Math.random().toString(36).substr(2, 9),
     }));
     setQuestions(sanitizedQuestions);
     setAnswers(res.answers);
@@ -7776,7 +10179,7 @@ function QuizApp() {
     setQuestionTime(timeAlertThreshold);
     setIsQuestionStarted(true);
     setIsReviewMode(true);
-    setState('active');
+    setState("active");
     setShowDeepDive(false);
     setSidebarOpen(false);
     setLastContent(res.content || null);
@@ -7786,12 +10189,13 @@ function QuizApp() {
 
   const handleRedoHistoricalQuiz = (res: QuizResult) => {
     setIsRedoing(true);
-    const sanitizedQuestions = res.questions.map(q => ({
+    const sanitizedQuestions = res.questions.map((q) => ({
       ...q,
+      type: q.type || (q.options?.length > 0 ? "multiple-choice" : "cebraspe"),
       options: q.options || [],
-      explanation: q.explanation || '',
-      hint: q.hint || '',
-      id: q.id || Math.random().toString(36).substr(2, 9)
+      explanation: q.explanation || "",
+      hint: q.hint || "",
+      id: q.id || Math.random().toString(36).substr(2, 9),
     }));
     setQuestions(sanitizedQuestions);
     setAnswers(new Array(sanitizedQuestions.length).fill(null));
@@ -7801,7 +10205,7 @@ function QuizApp() {
     setQuestionTime(timeAlertThreshold);
     setIsQuestionStarted(false);
     setIsReviewMode(false);
-    setState('active');
+    setState("active");
     setShowDeepDive(false);
     setSidebarOpen(false);
     setLastContent(res.content || null);
@@ -7815,19 +10219,26 @@ function QuizApp() {
   const generateAnother = () => {
     if (lastContent) {
       // Check if it's the "too large" placeholder
-      const isPlaceholder = typeof lastContent === 'string' && lastContent.includes('muito grande');
+      const isPlaceholder =
+        typeof lastContent === "string" && lastContent.includes("muito grande");
       if (isPlaceholder) {
-        setError("O conteúdo original deste material é muito grande para ser recuperado do histórico. Por favor, carregue o arquivo novamente para gerar um novo quiz.");
+        setError(
+          "O conteúdo original deste material é muito grande para ser recuperado do histórico. Por favor, carregue o arquivo novamente para gerar um novo quiz.",
+        );
         return;
       }
       startQuiz(lastContent, lastFileName);
     } else {
       // Try to find content in history as a fallback
-      const historicalResult = history.find(h => h.fileName === lastFileName && h.content);
+      const historicalResult = history.find(
+        (h) => h.fileName === lastFileName && h.content,
+      );
       if (historicalResult && historicalResult.content) {
         startQuiz(historicalResult.content, lastFileName);
       } else {
-        setError("Não foi possível recuperar o conteúdo original para gerar um novo quiz. Tente carregar o arquivo novamente.");
+        setError(
+          "Não foi possível recuperar o conteúdo original para gerar um novo quiz. Tente carregar o arquivo novamente.",
+        );
       }
     }
   };
@@ -7836,28 +10247,30 @@ function QuizApp() {
     e.stopPropagation();
     if (user) {
       try {
-        await updateDoc(doc(db, 'results', id), { 
-          deleted: true, 
-          deletedAt: Timestamp.now() 
+        await updateDoc(doc(db, "results", id), {
+          deleted: true,
+          deletedAt: Timestamp.now(),
         });
       } catch (e) {
         handleFirestoreError(e, OperationType.UPDATE, `results/${id}`);
       }
     } else {
       // Local fallback
-      setHistory(prev => prev.filter(h => h.id !== id));
+      setHistory((prev) => prev.filter((h) => h.id !== id));
     }
   };
 
   const handleBackup = async () => {
     try {
-      const response = await fetch('/api/backup');
+      const response = await fetch("/api/backup");
       const data = await response.json();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `quiz_backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `quiz_backup_${new Date().toISOString().split("T")[0]}.json`;
       a.click();
     } catch (e) {
       alert("Erro ao fazer backup");
@@ -7865,19 +10278,19 @@ function QuizApp() {
   };
 
   const handleRestore = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
     input.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (!file) return;
       const text = await file.text();
       try {
         const data = JSON.parse(text);
-        const response = await fetch('/api/restore', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
+        const response = await fetch("/api/restore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
         });
         if (response.ok) {
           alert("Backup restaurado com sucesso!");
@@ -7892,50 +10305,61 @@ function QuizApp() {
     input.click();
   };
 
-  const correctCount = answers.filter((ans, idx) => ans === questions[idx]?.correctAnswer).length;
+  const correctCount = answers.filter(
+    (ans, idx) => ans === questions[idx]?.correctAnswer,
+  ).length;
   const currentQuestion = questions[currentIndex];
   const currentAnswer = answers[currentIndex];
   const isCorrect = currentAnswer === currentQuestion?.correctAnswer;
 
   const itemsDue = React.useMemo(() => {
     const now = new Date();
-    return srsItems.filter(item => item.nextReviewDate <= now);
+    return srsItems.filter((item) => item.nextReviewDate <= now);
   }, [srsItems]);
 
   const handleStartSRSReview = () => {
     if (itemsDue.length === 0) return;
-    
-    setQuestions(itemsDue.map(item => ({
-      id: item.questionId,
-      question: item.question,
-      options: item.options,
-      correctAnswer: item.correctAnswer,
-      explanation: item.explanation,
-      subject: item.subject,
-      hint: '',
-      type: 'multiple-choice',
-      difficulty: 'medium'
-    })));
+
+    const processedQuestions = itemsDue.map((item) => {
+      const options = item.options || [];
+      return {
+        id: item.questionId,
+        question: item.question,
+        type:
+          item.type || (options.length > 0 ? "multiple-choice" : "cebraspe"),
+        options: options,
+        correctAnswer: item.correctAnswer,
+        explanation: item.explanation,
+        subject: item.subject,
+        hint: "",
+        difficulty: "medium" as any,
+      };
+    });
+    setQuestions(processedQuestions);
     setAnswers(new Array(itemsDue.length).fill(null));
     setCurrentIndex(0);
-    setState('active');
+    setState("active");
     setIsReviewMode(true);
     setShowDashboard(false);
   };
 
   return (
-    <div className={cn("min-h-screen bg-[#F5F5F0] dark:bg-slate-950 text-[#1A1A1A] dark:text-slate-100 font-sans flex overflow-hidden relative", theme.selection)}>
-      
+    <div
+      className={cn(
+        "min-h-screen bg-[#F5F5F0] dark:bg-slate-950 text-[#1A1A1A] dark:text-slate-100 font-sans flex overflow-hidden relative",
+        theme.selection,
+      )}
+    >
       {/* Background Watermark */}
-      {backgroundUrl !== 'none' && (
-        <div 
+      {backgroundUrl !== "none" && (
+        <div
           className="fixed inset-0 z-0 pointer-events-none transition-opacity duration-1000"
-          style={{ 
+          style={{
             backgroundImage: `url(${backgroundUrl})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            backgroundSize: "cover",
+            backgroundPosition: "center",
             filter: `blur(${backgroundBlur}px)`,
-            opacity: backgroundOpacity / 100
+            opacity: backgroundOpacity / 100,
           }}
         />
       )}
@@ -7943,15 +10367,18 @@ function QuizApp() {
       {/* Quota Exceeded / Connectivity Global Banners */}
       <AnimatePresence>
         {firestoreQuotaExceeded && (
-          <motion.div 
+          <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="fixed top-0 left-0 right-0 z-[100] bg-rose-600 text-white py-2 px-4 text-center text-sm font-medium shadow-lg backdrop-blur-md flex items-center justify-center gap-3"
           >
             <AlertCircle size={16} className="animate-pulse" />
-            <span>Limite de uso diário do Firebase atingido (Quota Exceeded). Novos registros podem não ser salvos até amanhã.</span>
-            <button 
+            <span>
+              Limite de uso diário do Firebase atingido (Quota Exceeded). Novos
+              registros podem não ser salvos até amanhã.
+            </span>
+            <button
               onClick={() => setFirestoreQuotaExceeded(false)}
               className="ml-4 hover:opacity-70 transition-opacity"
             >
@@ -7960,15 +10387,18 @@ function QuizApp() {
           </motion.div>
         )}
         {firestoreUnavailable && (
-          <motion.div 
+          <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="fixed top-0 left-0 right-0 z-[100] bg-amber-600 text-white py-2 px-4 text-center text-sm font-medium shadow-lg backdrop-blur-md flex items-center justify-center gap-3"
           >
             <WifiOff size={16} className="animate-pulse" />
-            <span>Modo Offline: Não foi possível conectar ao servidor. O Experte IA está usando dados salvos no seu dispositivo.</span>
-            <button 
+            <span>
+              Modo Offline: Não foi possível conectar ao servidor. O Experte IA
+              está usando dados salvos no seu dispositivo.
+            </span>
+            <button
               onClick={() => setFirestoreUnavailable(false)}
               className="ml-4 hover:opacity-70 transition-opacity"
             >
@@ -7981,7 +10411,7 @@ function QuizApp() {
       {/* Sidebar Overlay for Mobile */}
       <AnimatePresence>
         {sidebarOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -7992,26 +10422,32 @@ function QuizApp() {
       </AnimatePresence>
 
       {/* Sidebar */}
-      <motion.aside 
+      <motion.aside
         initial={false}
-        animate={{ 
-          width: sidebarOpen ? 320 : 0, 
+        animate={{
+          width: sidebarOpen ? 320 : 0,
           opacity: sidebarOpen ? 1 : 0,
-          x: sidebarOpen ? 0 : -320
+          x: sidebarOpen ? 0 : -320,
         }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
         className={cn(
           "bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border-r border-white/20 dark:border-slate-800/50 flex-shrink-0 relative overflow-hidden flex flex-col z-[70]",
-          "fixed inset-y-0 left-0 lg:relative lg:translate-x-0"
+          "fixed inset-y-0 left-0 lg:relative lg:translate-x-0",
         )}
       >
         <div className="w-[320px] h-full flex flex-col p-6 space-y-8">
-          <div 
+          <div
             onClick={() => setSidebarOpen(false)}
             className="flex items-center justify-between cursor-pointer group/header"
           >
             <h3 className="font-bold text-lg flex items-center gap-2 dark:text-slate-100 group-hover/header:opacity-70 transition-opacity">
-              <Settings size={20} className={cn(theme.icon, "group-hover/header:rotate-45 transition-transform")} />
+              <Settings
+                size={20}
+                className={cn(
+                  theme.icon,
+                  "group-hover/header:rotate-45 transition-transform",
+                )}
+              />
               Configurações
             </h3>
             <button className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:text-slate-400 transition-colors">
@@ -8022,23 +10458,25 @@ function QuizApp() {
           <div className="space-y-4 relative">
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
-                <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Plano de Fundo</label>
+                <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">
+                  Plano de Fundo
+                </label>
                 <span className="text-[10px] text-black/40 dark:text-white/40 font-bold uppercase">
                   {customBackgrounds.length}/15 Arquivos
                 </span>
               </div>
-              <button 
+              <button
                 onClick={() => fileInputBackgroundRef.current?.click()}
                 className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
               >
                 <PlusCircle size={10} />
                 Adicionar
               </button>
-              <input 
-                type="file" 
-                ref={fileInputBackgroundRef} 
-                className="hidden" 
-                accept="image/*" 
+              <input
+                type="file"
+                ref={fileInputBackgroundRef}
+                className="hidden"
+                accept="image/*"
                 onChange={handleCustomBackgroundUpload}
               />
             </div>
@@ -8050,11 +10488,11 @@ function QuizApp() {
                   <span>Desfoque</span>
                   <span>{backgroundBlur}px</span>
                 </div>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="20" 
-                  value={backgroundBlur} 
+                <input
+                  type="range"
+                  min="0"
+                  max="20"
+                  value={backgroundBlur}
                   onChange={(e) => setBackgroundBlur(Number(e.target.value))}
                   className="w-full h-1.5 bg-black/10 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                 />
@@ -8064,11 +10502,11 @@ function QuizApp() {
                   <span>Opacidade</span>
                   <span>{backgroundOpacity}%</span>
                 </div>
-                <input 
-                  type="range" 
-                  min="5" 
-                  max="100" 
-                  value={backgroundOpacity} 
+                <input
+                  type="range"
+                  min="5"
+                  max="100"
+                  value={backgroundOpacity}
                   onChange={(e) => setBackgroundOpacity(Number(e.target.value))}
                   className="w-full h-1.5 bg-black/10 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                 />
@@ -8079,32 +10517,37 @@ function QuizApp() {
               {[...defaultBackgrounds, ...customBackgrounds].map((opt) => (
                 <div
                   key={opt.id}
-                  onClick={() => setBackgroundUrl(opt.url || 'none')}
+                  onClick={() => setBackgroundUrl(opt.url || "none")}
                   className={cn(
                     "relative h-16 rounded-xl overflow-hidden border-2 transition-all group cursor-pointer",
-                    (backgroundUrl === opt.url || (opt.id === 'none' && backgroundUrl === 'none'))
-                      ? theme.border 
-                      : "border-black/5 dark:border-slate-800 hover:border-black/20 dark:hover:border-white/20"
+                    backgroundUrl === opt.url ||
+                      (opt.id === "none" && backgroundUrl === "none")
+                      ? theme.border
+                      : "border-black/5 dark:border-slate-800 hover:border-black/20 dark:hover:border-white/20",
                   )}
                 >
-                  {opt.id === 'none' ? (
+                  {opt.id === "none" ? (
                     <div className="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                      <span className="text-[10px] font-bold opacity-40 uppercase">Nenhum</span>
+                      <span className="text-[10px] font-bold opacity-40 uppercase">
+                        Nenhum
+                      </span>
                     </div>
                   ) : (
                     <>
-                      <img 
-                        src={opt.url} 
-                        alt={opt.name} 
-                        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" 
+                      <img
+                        src={opt.url}
+                        alt={opt.name}
+                        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
                         referrerPolicy="no-referrer"
                       />
                       <div className="absolute inset-0 bg-black/20 flex items-end p-1.5">
-                        <span className="text-[8px] font-bold text-white uppercase truncate">{opt.name}</span>
+                        <span className="text-[8px] font-bold text-white uppercase truncate">
+                          {opt.name}
+                        </span>
                       </div>
-                      
+
                       {/* Delete Button for custom backgrounds */}
-                      {opt.id.startsWith('custom-') && (
+                      {opt.id.startsWith("custom-") && (
                         <button
                           onClick={(e) => handleDeleteBackground(opt.id, e)}
                           className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 shadow-lg z-10"
@@ -8120,131 +10563,207 @@ function QuizApp() {
           </div>
 
           <div className="space-y-4 relative">
-            <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Cor do Tema</label>
+            <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">
+              Cor do Tema
+            </label>
             <div className="relative">
               <button
                 onClick={() => setShowColorPicker(!showColorPicker)}
                 className={cn(
                   "w-full flex items-center justify-between px-4 py-3 rounded-2xl border-2 transition-all bg-white dark:bg-slate-800",
-                  showColorPicker ? theme.border : "border-black/5 dark:border-slate-800"
+                  showColorPicker
+                    ? theme.border
+                    : "border-black/5 dark:border-slate-800",
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <div 
-                    className="w-5 h-5 rounded-full border border-black/10 dark:border-white/10" 
-                    style={{ backgroundColor: 
-                      themeColor === 'emerald' ? '#059669' : 
-                      themeColor === 'navy' ? '#1e3a8a' :
-                      themeColor === 'brown' ? '#78350f' :
-                      themeColor === 'moss' ? '#3f6212' :
-                      themeColor === 'slate' ? '#475569' :
-                      themeColor === 'yellow' ? '#eab308' :
-                      themeColor === 'amber' ? '#d97706' :
-                      themeColor === 'rose' ? '#e11d48' :
-                      themeColor === 'violet' ? '#7c3aed' :
-                      themeColor === 'cyan' ? '#0891b2' :
-                      themeColor === 'orange' ? '#ea580c' :
-                      themeColor === 'fuchsia' ? '#c026d3' :
-                      themeColor === 'indigo' ? '#4f46e5' :
-                      themeColor === 'black' ? '#0f172a' : customColor
-                    }} 
+                  <div
+                    className="w-5 h-5 rounded-full border border-black/10 dark:border-white/10"
+                    style={{
+                      backgroundColor:
+                        themeColor === "emerald"
+                          ? "#059669"
+                          : themeColor === "navy"
+                            ? "#1e3a8a"
+                            : themeColor === "brown"
+                              ? "#78350f"
+                              : themeColor === "moss"
+                                ? "#3f6212"
+                                : themeColor === "slate"
+                                  ? "#475569"
+                                  : themeColor === "yellow"
+                                    ? "#eab308"
+                                    : themeColor === "amber"
+                                      ? "#d97706"
+                                      : themeColor === "rose"
+                                        ? "#e11d48"
+                                        : themeColor === "violet"
+                                          ? "#7c3aed"
+                                          : themeColor === "cyan"
+                                            ? "#0891b2"
+                                            : themeColor === "orange"
+                                              ? "#ea580c"
+                                              : themeColor === "fuchsia"
+                                                ? "#c026d3"
+                                                : themeColor === "indigo"
+                                                  ? "#4f46e5"
+                                                  : themeColor === "black"
+                                                    ? "#0f172a"
+                                                    : customColor,
+                    }}
                   />
                   <span className="text-sm font-medium dark:text-slate-200">
-                    {themeColor === 'emerald' ? 'Esmeralda' :
-                     themeColor === 'navy' ? 'Azul Marinho' :
-                     themeColor === 'brown' ? 'Marrom Clássico' :
-                     themeColor === 'moss' ? 'Verde Musgo' :
-                     themeColor === 'slate' ? 'Cinza' :
-                     themeColor === 'yellow' ? 'Amarelo' :
-                     themeColor === 'amber' ? 'Âmbar' :
-                     themeColor === 'rose' ? 'Rosa' :
-                     themeColor === 'violet' ? 'Violeta' :
-                     themeColor === 'cyan' ? 'Ciano' :
-                     themeColor === 'orange' ? 'Laranja' :
-                     themeColor === 'fuchsia' ? 'Fúcsia' :
-                     themeColor === 'indigo' ? 'Índigo' :
-                     themeColor === 'black' ? 'Preto' : 'Personalizado'}
+                    {themeColor === "emerald"
+                      ? "Esmeralda"
+                      : themeColor === "navy"
+                        ? "Azul Marinho"
+                        : themeColor === "brown"
+                          ? "Marrom Clássico"
+                          : themeColor === "moss"
+                            ? "Verde Musgo"
+                            : themeColor === "slate"
+                              ? "Cinza"
+                              : themeColor === "yellow"
+                                ? "Amarelo"
+                                : themeColor === "amber"
+                                  ? "Âmbar"
+                                  : themeColor === "rose"
+                                    ? "Rosa"
+                                    : themeColor === "violet"
+                                      ? "Violeta"
+                                      : themeColor === "cyan"
+                                        ? "Ciano"
+                                        : themeColor === "orange"
+                                          ? "Laranja"
+                                          : themeColor === "fuchsia"
+                                            ? "Fúcsia"
+                                            : themeColor === "indigo"
+                                              ? "Índigo"
+                                              : themeColor === "black"
+                                                ? "Preto"
+                                                : "Personalizado"}
                   </span>
                 </div>
-                <Palette size={18} className={cn("transition-transform duration-300", showColorPicker ? "rotate-12" : "", theme.icon)} />
+                <Palette
+                  size={18}
+                  className={cn(
+                    "transition-transform duration-300",
+                    showColorPicker ? "rotate-12" : "",
+                    theme.icon,
+                  )}
+                />
               </button>
 
               <AnimatePresence>
                 {showColorPicker && (
                   <>
-                      <motion.div
-                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        className="absolute left-0 right-0 top-full mt-2 p-3 bg-white dark:bg-slate-800 rounded-2xl border-2 border-black/5 dark:border-slate-700 shadow-xl z-50 flex flex-col gap-4"
-                      >
-                        <div className="grid grid-cols-4 gap-2 max-h-[240px] overflow-y-auto p-1">
-                          {[
-                            { id: 'emerald', label: 'Esmeralda', color: '#059669' },
-                            { id: 'navy', label: 'Azul Marinho', color: '#1e3a8a' },
-                            { id: 'brown', label: 'Marrom Clássico', color: '#78350f' },
-                            { id: 'moss', label: 'Verde Musgo', color: '#3f6212' },
-                            { id: 'slate', label: 'Cinza', color: '#475569' },
-                            { id: 'yellow', label: 'Amarelo', color: '#eab308' },
-                            { id: 'amber', label: 'Âmbar', color: '#d97706' },
-                            { id: 'rose', label: 'Rosa', color: '#e11d48' },
-                            { id: 'violet', label: 'Violeta', color: '#7c3aed' },
-                            { id: 'cyan', label: 'Ciano', color: '#0891b2' },
-                            { id: 'orange', label: 'Laranja', color: '#ea580c' },
-                            { id: 'fuchsia', label: 'Fúcsia', color: '#c026d3' },
-                            { id: 'indigo', label: 'Índigo', color: '#4f46e5' },
-                            { id: 'black', label: 'Preto', color: '#0f172a' },
-                            { id: 'custom', label: 'Personalizado', color: customColor },
-                          ].map((opt) => (
-                            <button
-                              key={opt.id}
-                              onClick={() => {
-                                setThemeColor(opt.id as ThemeColor);
-                                if (opt.id !== 'custom') setShowColorPicker(false);
-                              }}
+                    <motion.div
+                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                      className="absolute left-0 right-0 top-full mt-2 p-3 bg-white dark:bg-slate-800 rounded-2xl border-2 border-black/5 dark:border-slate-700 shadow-xl z-50 flex flex-col gap-4"
+                    >
+                      <div className="grid grid-cols-4 gap-2 max-h-[240px] overflow-y-auto p-1">
+                        {[
+                          {
+                            id: "emerald",
+                            label: "Esmeralda",
+                            color: "#059669",
+                          },
+                          {
+                            id: "navy",
+                            label: "Azul Marinho",
+                            color: "#1e3a8a",
+                          },
+                          {
+                            id: "brown",
+                            label: "Marrom Clássico",
+                            color: "#78350f",
+                          },
+                          {
+                            id: "moss",
+                            label: "Verde Musgo",
+                            color: "#3f6212",
+                          },
+                          { id: "slate", label: "Cinza", color: "#475569" },
+                          { id: "yellow", label: "Amarelo", color: "#eab308" },
+                          { id: "amber", label: "Âmbar", color: "#d97706" },
+                          { id: "rose", label: "Rosa", color: "#e11d48" },
+                          { id: "violet", label: "Violeta", color: "#7c3aed" },
+                          { id: "cyan", label: "Ciano", color: "#0891b2" },
+                          { id: "orange", label: "Laranja", color: "#ea580c" },
+                          { id: "fuchsia", label: "Fúcsia", color: "#c026d3" },
+                          { id: "indigo", label: "Índigo", color: "#4f46e5" },
+                          { id: "black", label: "Preto", color: "#0f172a" },
+                          {
+                            id: "custom",
+                            label: "Personalizado",
+                            color: customColor,
+                          },
+                        ].map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => {
+                              setThemeColor(opt.id as ThemeColor);
+                              if (opt.id !== "custom")
+                                setShowColorPicker(false);
+                            }}
+                            className={cn(
+                              "flex flex-col items-center gap-2 p-2 rounded-xl transition-all hover:bg-black/5 dark:hover:bg-white/5",
+                              themeColor === opt.id
+                                ? "bg-black/5 dark:bg-white/5"
+                                : "",
+                            )}
+                          >
+                            <div
                               className={cn(
-                                "flex flex-col items-center gap-2 p-2 rounded-xl transition-all hover:bg-black/5 dark:hover:bg-white/5",
-                                themeColor === opt.id ? "bg-black/5 dark:bg-white/5" : ""
+                                "w-8 h-8 rounded-full border-2 flex items-center justify-center transition-transform",
+                                themeColor === opt.id
+                                  ? "border-black dark:border-white scale-110"
+                                  : "border-transparent",
                               )}
+                              style={{ backgroundColor: opt.color }}
                             >
-                              <div 
-                                className={cn(
-                                  "w-8 h-8 rounded-full border-2 flex items-center justify-center transition-transform",
-                                  themeColor === opt.id ? "border-black dark:border-white scale-110" : "border-transparent"
-                                )}
-                                style={{ backgroundColor: opt.color }}
-                              >
-                                {themeColor === opt.id && <CheckCircle2 size={14} className="text-white" />}
-                              </div>
-                              <span className="text-[10px] font-medium dark:text-slate-300 text-center leading-tight">{opt.label}</span>
-                            </button>
-                          ))}
-                        </div>
-
-                        {themeColor === 'custom' && (
-                          <div className="pt-3 border-t border-black/5 dark:border-slate-700 space-y-2">
-                            <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest px-1">Escolher Cor</label>
-                            <div className="flex items-center gap-3 px-1">
-                              <input 
-                                type="color" 
-                                value={customColor}
-                                onChange={(e) => setCustomColor(e.target.value)}
-                                className="w-10 h-10 rounded-lg cursor-pointer bg-transparent border-0 p-0"
-                              />
-                              <input 
-                                type="text" 
-                                value={customColor}
-                                onChange={(e) => setCustomColor(e.target.value)}
-                                className="flex-1 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-lg px-3 py-2 text-xs font-mono dark:text-slate-200"
-                                placeholder="#000000"
-                              />
+                              {themeColor === opt.id && (
+                                <CheckCircle2
+                                  size={14}
+                                  className="text-white"
+                                />
+                              )}
                             </div>
+                            <span className="text-[10px] font-medium dark:text-slate-300 text-center leading-tight">
+                              {opt.label}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {themeColor === "custom" && (
+                        <div className="pt-3 border-t border-black/5 dark:border-slate-700 space-y-2">
+                          <label className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest px-1">
+                            Escolher Cor
+                          </label>
+                          <div className="flex items-center gap-3 px-1">
+                            <input
+                              type="color"
+                              value={customColor}
+                              onChange={(e) => setCustomColor(e.target.value)}
+                              className="w-10 h-10 rounded-lg cursor-pointer bg-transparent border-0 p-0"
+                            />
+                            <input
+                              type="text"
+                              value={customColor}
+                              onChange={(e) => setCustomColor(e.target.value)}
+                              className="flex-1 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-lg px-3 py-2 text-xs font-mono dark:text-slate-200"
+                              placeholder="#000000"
+                            />
                           </div>
-                        )}
-                      </motion.div>
-                    <div 
-                      className="fixed inset-0 z-40" 
-                      onClick={() => setShowColorPicker(false)} 
+                        </div>
+                      )}
+                    </motion.div>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowColorPicker(false)}
                     />
                   </>
                 )}
@@ -8252,58 +10771,77 @@ function QuizApp() {
             </div>
           </div>
 
-
-
           <div className="space-y-4 p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
-            <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Gerenciar Matérias</label>
+            <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">
+              Gerenciar Matérias
+            </label>
             <form onSubmit={handleAddSubject} className="flex gap-2">
-              <input 
+              <input
                 type="text"
                 value={newSubjectInput}
                 onChange={(e) => setNewSubjectInput(e.target.value)}
                 placeholder="Nova matéria..."
                 className="flex-1 bg-white dark:bg-slate-800 border-2 border-black/5 dark:border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 transition-all dark:text-slate-200"
               />
-              <button 
+              <button
                 type="submit"
-                className={cn("p-2 rounded-xl text-white transition-all", theme.primary, theme.primaryHover)}
+                className={cn(
+                  "p-2 rounded-xl text-white transition-all",
+                  theme.primary,
+                  theme.primaryHover,
+                )}
               >
                 <PlusCircle size={18} />
               </button>
             </form>
             <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto pr-1 custom-scrollbar">
-              {subjects.map(subject => (
-                <div 
+              {subjects.map((subject) => (
+                <div
                   key={subject}
                   className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-black/5 dark:border-slate-700 rounded-lg group"
                 >
                   {editingSubject?.original === subject ? (
                     <div className="flex items-center gap-1">
-                      <input 
+                      <input
                         autoFocus
                         type="text"
                         value={editingSubject.current}
-                        onChange={(e) => setEditingSubject({ ...editingSubject, current: e.target.value })}
+                        onChange={(e) =>
+                          setEditingSubject({
+                            ...editingSubject,
+                            current: e.target.value,
+                          })
+                        }
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleEditSubject(subject, editingSubject.current);
-                          if (e.key === 'Escape') setEditingSubject(null);
+                          if (e.key === "Enter")
+                            handleEditSubject(subject, editingSubject.current);
+                          if (e.key === "Escape") setEditingSubject(null);
                         }}
-                        onBlur={() => handleEditSubject(subject, editingSubject.current)}
+                        onBlur={() =>
+                          handleEditSubject(subject, editingSubject.current)
+                        }
                         className="bg-transparent border-none outline-none text-[10px] font-bold dark:text-slate-300 w-24"
                       />
                     </div>
                   ) : (
                     <>
-                      <span className="text-[10px] font-bold dark:text-slate-300">{subject}</span>
+                      <span className="text-[10px] font-bold dark:text-slate-300">
+                        {subject}
+                      </span>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => setEditingSubject({ original: subject, current: subject })}
+                        <button
+                          onClick={() =>
+                            setEditingSubject({
+                              original: subject,
+                              current: subject,
+                            })
+                          }
                           className="text-black/20 dark:text-slate-500 hover:text-blue-500 transition-colors"
                           title="Editar"
                         >
                           <Settings size={10} />
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleRemoveSubject(subject)}
                           className="text-black/20 dark:text-slate-500 hover:text-rose-500 transition-colors"
                           title="Remover"
@@ -8319,28 +10857,48 @@ function QuizApp() {
           </div>
 
           <div className="space-y-4 p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
-            <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Alerta de Tempo (segundos)</label>
+            <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">
+              Alerta de Tempo (segundos)
+            </label>
             <div className="flex items-center gap-4">
-              <input 
-                type="range" 
-                min="30" 
-                max="300" 
+              <input
+                type="range"
+                min="30"
+                max="300"
                 step="10"
                 value={timeAlertThreshold}
-                onChange={(e) => setTimeAlertThreshold(parseInt(e.target.value))}
+                onChange={(e) =>
+                  setTimeAlertThreshold(parseInt(e.target.value))
+                }
                 className={cn("flex-1", theme.accent, theme.accentDark)}
               />
-              <span className={cn("font-mono font-bold w-12 text-right", theme.text, theme.textDark)}>{timeAlertThreshold}s</span>
+              <span
+                className={cn(
+                  "font-mono font-bold w-12 text-right",
+                  theme.text,
+                  theme.textDark,
+                )}
+              >
+                {timeAlertThreshold}s
+              </span>
             </div>
-            <p className="text-[10px] text-black/40 dark:text-slate-500 italic">O cronômetro piscará em vermelho após este tempo.</p>
+            <p className="text-[10px] text-black/40 dark:text-slate-500 italic">
+              O cronômetro piscará em vermelho após este tempo.
+            </p>
           </div>
 
           <div className="space-y-4">
-              <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">Backup e Restauração</label>
+            <label className="block text-sm font-medium text-black/60 dark:text-slate-400 uppercase tracking-wider">
+              Backup e Restauração
+            </label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={handleBackup}
-                className={cn("flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-black text-white hover:bg-black/80 transition-all", theme.darkPrimary, theme.primaryHover)}
+                className={cn(
+                  "flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-black text-white hover:bg-black/80 transition-all",
+                  theme.darkPrimary,
+                  theme.primaryHover,
+                )}
               >
                 Fazer Backup
               </button>
@@ -8366,24 +10924,39 @@ function QuizApp() {
                   {format(calendarMonth, "MMMM yyyy", { locale: ptBR })}
                 </span>
                 <div className="flex gap-1">
-                  <button 
-                    onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))}
+                  <button
+                    onClick={() =>
+                      setCalendarMonth(subMonths(calendarMonth, 1))
+                    }
                     className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors"
                   >
-                    <ChevronLeft size={16} className="text-black/40 dark:text-slate-500" />
+                    <ChevronLeft
+                      size={16}
+                      className="text-black/40 dark:text-slate-500"
+                    />
                   </button>
-                  <button 
-                    onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))}
+                  <button
+                    onClick={() =>
+                      setCalendarMonth(addMonths(calendarMonth, 1))
+                    }
                     className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors"
                   >
-                    <ChevronRight size={16} className="text-black/40 dark:text-slate-500" />
+                    <ChevronRight
+                      size={16}
+                      className="text-black/40 dark:text-slate-500"
+                    />
                   </button>
                 </div>
               </div>
 
               <div className="grid grid-cols-7 gap-1 text-center mb-1">
-                {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, i) => (
-                  <span key={i} className="text-[10px] font-black text-black/20 dark:text-slate-600">{day}</span>
+                {["D", "S", "T", "Q", "Q", "S", "S"].map((day, i) => (
+                  <span
+                    key={i}
+                    className="text-[10px] font-black text-black/20 dark:text-slate-600"
+                  >
+                    {day}
+                  </span>
                 ))}
               </div>
 
@@ -8392,11 +10965,14 @@ function QuizApp() {
                   const start = startOfWeek(startOfMonth(calendarMonth));
                   const end = endOfWeek(endOfMonth(calendarMonth));
                   const days = eachDayOfInterval({ start, end });
-                  
+
                   return days.map((day, i) => {
                     const isSelected = isSameDay(day, selectedDate);
-                    const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
-                    const hasHistory = history.some(h => isSameDay(h.date, day));
+                    const isCurrentMonth =
+                      day.getMonth() === calendarMonth.getMonth();
+                    const hasHistory = history.some((h) =>
+                      isSameDay(h.date, day),
+                    );
                     const isTodayDate = isToday(day);
 
                     return (
@@ -8406,14 +10982,23 @@ function QuizApp() {
                         className={cn(
                           "aspect-square flex flex-col items-center justify-center rounded-lg text-[10px] font-bold transition-all relative",
                           !isCurrentMonth && "opacity-20",
-                          isSelected ? "bg-black text-white dark:bg-white dark:text-black shadow-lg scale-110 z-10" : 
-                          isTodayDate ? "bg-amber-500/20 text-amber-600 border border-amber-500/20" :
-                          "hover:bg-black/5 dark:hover:bg-white/5 text-black/60 dark:text-slate-400"
+                          isSelected
+                            ? "bg-black text-white dark:bg-white dark:text-black shadow-lg scale-110 z-10"
+                            : isTodayDate
+                              ? "bg-amber-500/20 text-amber-600 border border-amber-500/20"
+                              : "hover:bg-black/5 dark:hover:bg-white/5 text-black/60 dark:text-slate-400",
                         )}
                       >
                         {day.getDate()}
                         {hasHistory && !isSelected && (
-                          <div className={cn("absolute bottom-1 w-1 h-1 rounded-full", isTodayDate ? "bg-amber-500" : "bg-black/20 dark:bg-white/20")} />
+                          <div
+                            className={cn(
+                              "absolute bottom-1 w-1 h-1 rounded-full",
+                              isTodayDate
+                                ? "bg-amber-500"
+                                : "bg-black/20 dark:bg-white/20",
+                            )}
+                          />
                         )}
                       </button>
                     );
@@ -8424,13 +11009,18 @@ function QuizApp() {
 
             <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
               {(() => {
-                const filteredHistory = history.filter(res => isSameDay(res.date, selectedDate));
-                
+                const filteredHistory = history.filter((res) =>
+                  isSameDay(res.date, selectedDate),
+                );
+
                 if (filteredHistory.length === 0) {
                   return (
                     <div className="text-center py-12 px-4">
                       <div className="w-12 h-12 bg-black/5 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <History size={20} className="text-black/20 dark:text-slate-600" />
+                        <History
+                          size={20}
+                          className="text-black/20 dark:text-slate-600"
+                        />
                       </div>
                       <p className="text-xs font-bold text-black/30 dark:text-slate-500 uppercase tracking-widest">
                         Sem atividades em
@@ -8443,61 +11033,80 @@ function QuizApp() {
                 }
 
                 return filteredHistory.map((res) => {
-                  const accuracy = res.total > 0 ? (res.correct / res.total) : 0;
+                  const accuracy = res.total > 0 ? res.correct / res.total : 0;
                   const accuracyPercent = Math.round(accuracy * 100);
                   const incorrectCount = res.total - res.correct;
-                  
+
                   const displayFileName = res.fileName
-                    .replace(/^\d+[\s\.\-\:]*/, '')
-                    .replace(/\d+\s*arquivos\s*\(/i, '')
-                    .replace(/\s*arquivos\s*/i, '')
-                    .replace(/\(|\)/g, '')
-                    .replace(/\.\.\.$/, '')
+                    .replace(/^\d+[\s\.\-\:]*/, "")
+                    .replace(/\d+\s*arquivos\s*\(/i, "")
+                    .replace(/\s*arquivos\s*/i, "")
+                    .replace(/\(|\)/g, "")
+                    .replace(/\.\.\.$/, "")
                     .trim();
-                  
+
                   return (
-                    <div 
-                      key={res.id} 
+                    <div
+                      key={res.id}
                       onClick={() => handleHistoryClick(res)}
                       className={cn(
                         "bg-[#F5F5F0] dark:bg-slate-800 p-4 rounded-2xl group relative transition-all cursor-pointer border-2",
-                        activeResultId === res.id 
-                          ? cn(theme.border, theme.borderDark, "border-opacity-40 dark:border-opacity-30") 
+                        activeResultId === res.id
+                          ? cn(
+                              theme.border,
+                              theme.borderDark,
+                              "border-opacity-40 dark:border-opacity-30",
+                            )
                           : "border-transparent",
-                        `hover:${theme.bg}`, 
-                        `dark:hover:${theme.bgDark}`, 
-                        "hover:shadow-md active:scale-[0.98]"
+                        `hover:${theme.bg}`,
+                        `dark:hover:${theme.bgDark}`,
+                        "hover:shadow-md active:scale-[0.98]",
                       )}
                     >
                       <div className="flex justify-between items-start mb-2">
                         <span className="text-[10px] font-bold text-black/40 dark:text-slate-500 uppercase tracking-widest">
                           {format(res.date, "dd MMM, HH:mm", { locale: ptBR })}
                         </span>
-                        <button 
+                        <button
                           onClick={(e) => deleteHistoryItem(res.id, e)}
                           className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-600 transition-all dark:text-slate-500"
                         >
                           <Trash2 size={14} />
                         </button>
                       </div>
-                      
-                      <p className={cn("font-bold mb-3 pr-4 dark:text-slate-200 leading-tight", getDynamicFontSize(displayFileName, "text-sm"))}>
+
+                      <p
+                        className={cn(
+                          "font-bold mb-3 pr-4 dark:text-slate-200 leading-tight",
+                          getDynamicFontSize(displayFileName, "text-sm"),
+                        )}
+                      >
                         {displayFileName}
                       </p>
-                      
+
                       {/* Detailed Accuracy Stacked Bar */}
                       <div className="mb-4">
                         <div className="flex justify-between items-center mb-1.5">
-                          <span className="text-[10px] font-bold text-black/30 dark:text-slate-500 uppercase tracking-tighter">Desempenho</span>
+                          <span className="text-[10px] font-bold text-black/30 dark:text-slate-500 uppercase tracking-tighter">
+                            Desempenho
+                          </span>
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">{res.correct} C</span>
-                            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">{incorrectCount} E</span>
-                            <span className={cn(
-                              "text-[10px] font-black px-1.5 py-0.5 rounded-md ml-1",
-                              accuracy >= 0.8 ? "bg-emerald-500/10 text-emerald-600" : 
-                              accuracy >= 0.5 ? "bg-amber-500/10 text-amber-600" : 
-                              "bg-rose-500/10 text-rose-600"
-                            )}>
+                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                              {res.correct} C
+                            </span>
+                            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                              {incorrectCount} E
+                            </span>
+                            <span
+                              className={cn(
+                                "text-[10px] font-black px-1.5 py-0.5 rounded-md ml-1",
+                                accuracy >= 0.8
+                                  ? "bg-emerald-500/10 text-emerald-600"
+                                  : accuracy >= 0.5
+                                    ? "bg-amber-500/10 text-amber-600"
+                                    : "bg-rose-500/10 text-rose-600",
+                              )}
+                            >
                               {accuracyPercent}%
                             </span>
                           </div>
@@ -8505,7 +11114,7 @@ function QuizApp() {
                         <div className="h-2 w-full bg-black/5 dark:bg-slate-700 rounded-full overflow-hidden flex gap-[1px]">
                           {/* Correct Segment */}
                           {res.correct > 0 && (
-                            <motion.div 
+                            <motion.div
                               initial={{ flexGrow: 0 }}
                               animate={{ flexGrow: res.correct }}
                               transition={{ duration: 1, ease: "easeOut" }}
@@ -8515,10 +11124,14 @@ function QuizApp() {
                           )}
                           {/* Incorrect Segment */}
                           {incorrectCount > 0 && (
-                            <motion.div 
+                            <motion.div
                               initial={{ flexGrow: 0 }}
                               animate={{ flexGrow: incorrectCount }}
-                              transition={{ duration: 1, ease: "easeOut", delay: 0.1 }}
+                              transition={{
+                                duration: 1,
+                                ease: "easeOut",
+                                delay: 0.1,
+                              }}
                               className="h-full bg-rose-500"
                               style={{ flexBasis: 0 }}
                             />
@@ -8531,13 +11144,42 @@ function QuizApp() {
                           <div className="p-1.5 bg-amber-500/10 rounded-lg">
                             <Trophy size={14} className="text-amber-500" />
                           </div>
-                          <span className="text-xs font-bold dark:text-slate-300">{res.correct} / {res.total}</span>
+                          <span className="text-xs font-bold dark:text-slate-300">
+                            {res.correct} / {res.total}
+                          </span>
                         </div>
                         <div className="flex items-center gap-1.5 px-2 py-1 bg-black/5 dark:bg-white/5 rounded-lg text-black/60 dark:text-slate-400 border border-black/5 dark:border-white/5">
                           <Clock size={12} className="opacity-60" />
-                          <span className="text-[10px] font-bold tracking-tight">{formatTime(res.timeSpent)}</span>
+                          <span className="text-[10px] font-bold tracking-tight">
+                            {formatTime(res.timeSpent)}
+                          </span>
                         </div>
                       </div>
+
+                      {/* Quick Flashcard Generate for failures */}
+                      {incorrectCount > 0 && (
+                        <div className="mt-4 pt-3 border-t border-black/5 dark:border-white/5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const incorrectQuestions = res.questions.filter(
+                                (q: any, i: number) =>
+                                  res.answers[i] !== q.correctAnswer,
+                              );
+                              handleCreateFlashcards(
+                                incorrectQuestions,
+                                res.fileName,
+                                res.subject || "",
+                              );
+                            }}
+                            disabled={isGeneratingFlashcards}
+                            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-[9px] font-black uppercase tracking-widest transition-all border border-indigo-500/20 active:scale-95 disabled:opacity-50"
+                          >
+                            <BrainCircuit size={14} />
+                            Gerar Flashcards dos Erros
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 });
@@ -8552,12 +11194,21 @@ function QuizApp() {
         <header className="border-b border-white/20 dark:border-slate-800/50 bg-white/40 dark:bg-slate-950/40 backdrop-blur-xl sticky top-0 z-50">
           <div className="max-w-full mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-4">
-              <button 
+              <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="flex items-center gap-2 px-2 sm:px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors group"
               >
-                {sidebarOpen ? <ChevronLeft size={20} className="dark:text-slate-400" /> : <Settings size={20} className="group-hover:rotate-90 transition-transform duration-500 dark:text-slate-400" />}
-                <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-black/60 dark:text-slate-500 hidden xs:inline">Ajuste</span>
+                {sidebarOpen ? (
+                  <ChevronLeft size={20} className="dark:text-slate-400" />
+                ) : (
+                  <Settings
+                    size={20}
+                    className="group-hover:rotate-90 transition-transform duration-500 dark:text-slate-400"
+                  />
+                )}
+                <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-black/60 dark:text-slate-500 hidden xs:inline">
+                  Ajuste
+                </span>
               </button>
               <Logo theme={theme} />
             </div>
@@ -8566,13 +11217,22 @@ function QuizApp() {
               {user ? (
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="hidden md:flex flex-col items-end">
-                    <span className="text-xs font-bold dark:text-slate-200 leading-none">{user.displayName}</span>
-                    <span className="text-[10px] text-black/40 dark:text-slate-500 font-medium">{user.email}</span>
+                    <span className="text-xs font-bold dark:text-slate-200 leading-none">
+                      {user.displayName}
+                    </span>
+                    <span className="text-[10px] text-black/40 dark:text-slate-500 font-medium">
+                      {user.email}
+                    </span>
                   </div>
                   <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl border-2 border-black/5 dark:border-white/10 overflow-hidden shadow-sm">
-                    <img src={user.photoURL || ''} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <img
+                      src={user.photoURL || ""}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
                   </div>
-                  <button 
+                  <button
                     onClick={logout}
                     className="p-2 hover:bg-rose-50 dark:hover:bg-rose-900/20 text-black/40 hover:text-rose-600 dark:text-slate-500 rounded-xl transition-all"
                     title="Sair"
@@ -8581,29 +11241,40 @@ function QuizApp() {
                   </button>
                 </div>
               ) : (
-                <button 
+                <button
                   onClick={async () => {
                     try {
                       await loginWithGoogle();
                     } catch (err: any) {
                       console.error("Login error:", err);
-                      if (err.code === 'auth/unauthorized-domain') {
-                        setError("Este domínio não está autorizado no Firebase. Por favor, adicione este domínio no console do Firebase ou execute a configuração do Firebase novamente.");
-                      } else if (err.code === 'auth/popup-blocked') {
-                        setError("O popup de login foi bloqueado pelo navegador. Por favor, permita popups para este site.");
+                      if (err.code === "auth/unauthorized-domain") {
+                        setError(
+                          "Este domínio não está autorizado no Firebase. Por favor, adicione este domínio no console do Firebase ou execute a configuração do Firebase novamente.",
+                        );
+                      } else if (err.code === "auth/popup-blocked") {
+                        setError(
+                          "O popup de login foi bloqueado pelo navegador. Por favor, permita popups para este site.",
+                        );
                       } else {
-                        setError(err.message || "Erro ao fazer login com Google.");
+                        setError(
+                          err.message || "Erro ao fazer login com Google.",
+                        );
                       }
                     }
                   }}
-                  className={cn("flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md active:scale-95", theme.primary, theme.contrastText, theme.shadow)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md active:scale-95",
+                    theme.primary,
+                    theme.contrastText,
+                    theme.shadow,
+                  )}
                 >
                   <LogIn size={16} />
                   <span className="hidden xs:inline">Entrar</span>
                 </button>
               )}
               <div className="w-px h-6 bg-black/5 dark:bg-white/10 mx-1 hidden sm:block" />
-              <button 
+              <button
                 onClick={() => setDarkMode(!darkMode)}
                 className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-all text-black/40 dark:text-slate-500"
               >
@@ -8611,16 +11282,19 @@ function QuizApp() {
               </button>
             </div>
 
-            {state === 'active' && (
+            {state === "active" && (
               <div className="hidden md:flex items-center gap-2 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 px-4 py-2 rounded-full mx-4">
-                <Clock size={16} className="text-black/40 dark:text-slate-500" />
+                <Clock
+                  size={16}
+                  className="text-black/40 dark:text-slate-500"
+                />
                 <span className="text-sm font-mono font-bold text-black/60 dark:text-slate-300">
                   {format(currentTime, "HH:mm")}
                 </span>
               </div>
             )}
 
-            {state === 'active' && (
+            {state === "active" && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={resetQuiz}
@@ -8633,13 +11307,15 @@ function QuizApp() {
                   onClick={() => setIsPaused(!isPaused)}
                   className={cn(
                     "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all border",
-                    isPaused 
-                      ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800" 
-                      : "bg-black/5 text-black/60 border-black/5 hover:bg-black/10 dark:bg-white/10 dark:text-slate-300 dark:border-white/10 dark:hover:bg-white/20"
+                    isPaused
+                      ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800"
+                      : "bg-black/5 text-black/60 border-black/5 hover:bg-black/10 dark:bg-white/10 dark:text-slate-300 dark:border-white/10 dark:hover:bg-white/20",
                   )}
                 >
                   {isPaused ? <Play size={18} /> : <Pause size={18} />}
-                  <span className="hidden sm:inline">{isPaused ? 'Retomar' : 'Pausar'}</span>
+                  <span className="hidden sm:inline">
+                    {isPaused ? "Retomar" : "Pausar"}
+                  </span>
                 </button>
                 <button
                   onClick={resetQuiz}
@@ -8652,13 +11328,13 @@ function QuizApp() {
             )}
           </div>
         </header>
-        
+
         {/* Quota Exceeded / Connectivity Global Banners */}
         <AnimatePresence>
           {firestoreQuotaExceeded && (
-            <motion.div 
+            <motion.div
               initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
+              animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="bg-rose-600 text-white overflow-hidden"
             >
@@ -8666,10 +11342,11 @@ function QuizApp() {
                 <div className="flex items-center gap-3">
                   <AlertTriangle size={18} className="shrink-0" />
                   <p className="text-sm font-bold tracking-tight">
-                    Limite de uso do banco de dados atingido (Quota Exceeded). Seu progresso será salvo localmente até amanhã.
+                    Limite de uso do banco de dados atingido (Quota Exceeded).
+                    Seu progresso será salvo localmente até amanhã.
                   </p>
                 </div>
-                <button 
+                <button
                   onClick={() => setFirestoreQuotaExceeded(false)}
                   className="p-1 hover:bg-white/20 rounded-lg transition-colors"
                 >
@@ -8679,9 +11356,9 @@ function QuizApp() {
             </motion.div>
           )}
           {firestoreUnavailable && (
-            <motion.div 
+            <motion.div
               initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
+              animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="bg-amber-600 text-white overflow-hidden"
             >
@@ -8689,10 +11366,11 @@ function QuizApp() {
                 <div className="flex items-center gap-3">
                   <WifiOff size={18} className="shrink-0" />
                   <p className="text-sm font-bold tracking-tight">
-                    Você está em Modo Offline. Alguns recursos podem ficar indisponíveis até a conexão ser restaurada.
+                    Você está em Modo Offline. Alguns recursos podem ficar
+                    indisponíveis até a conexão ser restaurada.
                   </p>
                 </div>
-                <button 
+                <button
                   onClick={() => setFirestoreUnavailable(false)}
                   className="p-1 hover:bg-white/20 rounded-lg transition-colors"
                 >
@@ -8707,15 +11385,14 @@ function QuizApp() {
           {/* Persistent Navigation */}
           <GlobalNav />
           <div className="max-w-full mx-auto px-2 py-6">
-            
             <AnimatePresence mode="wait">
               {showDashboard ? (
-                <Dashboard 
+                <Dashboard
                   key="dashboard"
-                  history={history} 
-                  theme={theme} 
+                  history={history}
+                  theme={theme}
                   themeColor={themeColor}
-                  onClose={() => setShowDashboard(false)} 
+                  onClose={() => setShowDashboard(false)}
                   onPracticeTopic={onPracticeTopic}
                   dateFilter={dashboardDateFilter}
                   setDateFilter={setDashboardDateFilter}
@@ -8744,7 +11421,7 @@ function QuizApp() {
                   }}
                 />
               ) : showRecycleBin ? (
-                <RecycleBin 
+                <RecycleBin
                   items={recycleBin}
                   theme={theme}
                   onClose={() => setShowRecycleBin(false)}
@@ -8762,7 +11439,7 @@ function QuizApp() {
                   theme={theme}
                 />
               ) : showStudyMode ? (
-                <StudyMode 
+                <StudyMode
                   key="studymode"
                   history={history}
                   theme={theme}
@@ -8787,25 +11464,25 @@ function QuizApp() {
                   setSelectedSubjects={setSelectedSubjects}
                 />
               ) : showRevisionAgenda ? (
-                <RevisionAgenda 
+                <RevisionAgenda
                   tasks={revisionTasks}
                   theme={theme}
                   onClose={() => setShowRevisionAgenda(false)}
                   onCompleteTask={async (taskId) => {
-                    const task = revisionTasks.find(t => t.id === taskId);
+                    const task = revisionTasks.find((t) => t.id === taskId);
                     if (!task) return;
-                    
+
                     const newStatus = !task.completed;
-                    
+
                     // Update local state immediately for snappy UI
-                    const updatedTasks = revisionTasks.map(t => 
-                      t.id === taskId ? { ...t, completed: newStatus } : t
+                    const updatedTasks = revisionTasks.map((t) =>
+                      t.id === taskId ? { ...t, completed: newStatus } : t,
                     );
                     setRevisionTasks(updatedTasks);
-                    
+
                     if (user) {
                       try {
-                        const docRef = doc(db, 'revisionTasks', taskId);
+                        const docRef = doc(db, "revisionTasks", taskId);
                         await updateDoc(docRef, { completed: newStatus });
                       } catch (err) {
                         console.error("Erro ao atualizar tarefa:", err);
@@ -8817,26 +11494,30 @@ function QuizApp() {
                   onDeleteTask={async (taskId) => {
                     if (user) {
                       try {
-                        const docRef = doc(db, 'revisionTasks', taskId);
+                        const docRef = doc(db, "revisionTasks", taskId);
                         await deleteDoc(docRef);
-                        setRevisionTasks(prev => prev.filter(t => t.id !== taskId));
+                        setRevisionTasks((prev) =>
+                          prev.filter((t) => t.id !== taskId),
+                        );
                       } catch (err) {
                         console.error("Erro ao excluir tarefa:", err);
                       }
                     } else {
-                      setRevisionTasks(prev => prev.filter(t => t.id !== taskId));
+                      setRevisionTasks((prev) =>
+                        prev.filter((t) => t.id !== taskId),
+                      );
                     }
                   }}
                   onPracticeQuiz={async (quizId, taskId) => {
                     // Mark which task we are practicing
                     setActiveRevisionTaskId(taskId);
                     setIsReviewMode(true); // Mark as review mode for better tracking
-                    
+
                     // Find the quiz in history or fetch from Firestore
-                    let quiz = history.find(h => h.id === quizId);
+                    let quiz = history.find((h) => h.id === quizId);
                     if (!quiz && user) {
                       try {
-                        const docRef = doc(db, 'results', quizId);
+                        const docRef = doc(db, "results", quizId);
                         const docSnap = await getDoc(docRef);
                         if (docSnap.exists()) {
                           quiz = docSnap.data() as QuizResult;
@@ -8849,14 +11530,14 @@ function QuizApp() {
                         console.error("Erro ao buscar quiz para revisão:", err);
                       }
                     }
-                    
+
                     if (quiz) {
                       setQuestions(quiz.questions);
                       setAnswers(new Array(quiz.questions.length).fill(null));
                       setCurrentIndex(0);
                       setTotalTime(0);
                       setQuestionTime(timeAlertThreshold);
-                      setState('active');
+                      setState("active");
                       setIsReviewMode(false); // It's a practice session, not just viewing results
                       setShowRevisionAgenda(false);
                       setLastFileName(quiz.fileName);
@@ -8876,24 +11557,37 @@ function QuizApp() {
                   onPracticeSubject={(subject, fileName) => {
                     setSelectedSubject(subject);
                     // Try to find the content for this subject/file in history
-                    const result = history.find(h => (h.subject === subject || normalizeSubject(h.fileName) === subject) && h.fileName === fileName && h.content);
-                    
+                    const result = history.find(
+                      (h) =>
+                        (h.subject === subject ||
+                          normalizeSubject(h.fileName) === subject) &&
+                        h.fileName === fileName &&
+                        h.content,
+                    );
+
                     setShowStudySchedule(false);
                     setShowDashboard(false);
                     setShowStudyMode(false);
                     setShowRevisionAgenda(false);
                     setSidebarOpen(false);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    window.scrollTo({ top: 0, behavior: "smooth" });
 
                     if (result && result.content) {
                       // Check if it's the placeholder
-                      if (typeof result.content === 'string' && result.content.includes('muito grande')) {
-                        setError("O conteúdo original deste material é muito grande para ser recuperado do histórico. Por favor, carregue o arquivo novamente.");
+                      if (
+                        typeof result.content === "string" &&
+                        result.content.includes("muito grande")
+                      ) {
+                        setError(
+                          "O conteúdo original deste material é muito grande para ser recuperado do histórico. Por favor, carregue o arquivo novamente.",
+                        );
                         return;
                       }
                       startQuiz(result.content, result.fileName);
                     } else {
-                      setError("O conteúdo original deste material não pôde ser recuperado do histórico.");
+                      setError(
+                        "O conteúdo original deste material não pôde ser recuperado do histórico.",
+                      );
                     }
                   }}
                 />
@@ -8908,7 +11602,7 @@ function QuizApp() {
                   onUpdateLog={handleUpdateStudyLog}
                   onDeleteLog={handleDeleteStudyLog}
                 />
-              ) : state === 'idle' ? (
+              ) : state === "idle" ? (
                 <motion.div
                   key="idle"
                   initial={{ opacity: 0, y: 20 }}
@@ -8916,13 +11610,16 @@ function QuizApp() {
                   exit={{ opacity: 0, y: -20 }}
                   className="max-w-5xl mx-auto text-center space-y-8"
                 >
-                  <div className="flex justify-center items-center pt-6" style={{ height: '90px' }}>
+                  <div
+                    className="flex justify-center items-center pt-6"
+                    style={{ height: "90px" }}
+                  >
                     <Logo theme={theme} className="scale-150" />
                   </div>
 
                   {/* Streak Indicator on Main Screen */}
                   {userProfile?.streak > 0 && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-full text-orange-600 dark:text-orange-400 font-bold text-sm"
@@ -8933,28 +11630,49 @@ function QuizApp() {
                   )}
 
                   <div className="space-y-4">
-                    <h1 
+                    <h1
                       className="text-5xl font-medium tracking-tight leading-tight dark:text-slate-100"
-                      style={{ 
-                        height: '124px', 
-                        width: '1023px', 
-                        marginBottom: '14px',
-                        marginRight: '0px',
-                        marginLeft: '0px',
-                        marginTop: '0px',
-                        padding: '0px',
-                        borderRadius: '1px',
-                        borderStyle: 'solid',
-                        borderWidth: '0px',
-                        color: '#1f2022'
+                      style={{
+                        height: "124px",
+                        width: "1023px",
+                        marginBottom: "14px",
+                        marginRight: "0px",
+                        marginLeft: "0px",
+                        marginTop: "0px",
+                        padding: "0px",
+                        borderRadius: "1px",
+                        borderStyle: "solid",
+                        borderWidth: "0px",
+                        color: "#1f2022",
                       }}
                     >
-                      Transforme seus documentos em <span className={cn("italic font-serif", theme.textLight, theme.textLightDark)} style={{ color: '#2b842b' }}>conhecimento</span>
+                      Transforme seus documentos em{" "}
+                      <span
+                        className={cn(
+                          "italic font-serif",
+                          theme.textLight,
+                          theme.textLightDark,
+                        )}
+                        style={{ color: "#2b842b" }}
+                      >
+                        conhecimento
+                      </span>
                       <br />
-                      <span className={cn("italic font-serif", theme.textLight, theme.textLightDark)} style={{ color: '#2b842b' }}>vivo</span>.
+                      <span
+                        className={cn(
+                          "italic font-serif",
+                          theme.textLight,
+                          theme.textLightDark,
+                        )}
+                        style={{ color: "#2b842b" }}
+                      >
+                        vivo
+                      </span>
+                      .
                     </h1>
                     <p className="text-lg text-black/60 dark:text-slate-400 max-w-3xl mx-auto">
-                      Envie qualquer arquivo (PDF, Word, Imagem, Texto) e nossa IA criará um quiz personalizado.
+                      Envie qualquer arquivo (PDF, Word, Imagem, Texto) e nossa
+                      IA criará um quiz personalizado.
                     </p>
                   </div>
 
@@ -8963,55 +11681,81 @@ function QuizApp() {
                     <div className="flex flex-wrap justify-center items-start gap-3 mb-4">
                       {/* Banca Dropdown */}
                       <div className="relative">
-                        <button 
+                        <button
                           onClick={() => {
                             setShowBancaDropdown(!showBancaDropdown);
                             setShowQuantityDropdown(false);
                           }}
                           className={cn(
                             "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95",
-                            showBancaDropdown 
-                              ? cn(theme.border, theme.bg, theme.text) 
-                              : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20"
+                            showBancaDropdown
+                              ? cn(theme.border, theme.bg, theme.text)
+                              : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20",
                           )}
                         >
                           <Target size={18} className={theme.icon} />
                           <span>
-                            Banca: {selectedExamBoards.length === 1 && selectedExamBoards[0] === 'Geral' 
-                              ? 'Geral' 
-                              : selectedExamBoards.length === 1 
-                                ? selectedExamBoards[0] 
+                            Banca:{" "}
+                            {selectedExamBoards.length === 1 &&
+                            selectedExamBoards[0] === "Geral"
+                              ? "Geral"
+                              : selectedExamBoards.length === 1
+                                ? selectedExamBoards[0]
                                 : `${selectedExamBoards.length} Selecionadas`}
                           </span>
-                          <ChevronRight size={16} className={cn("transition-transform", showBancaDropdown ? "rotate-90" : "")} />
+                          <ChevronRight
+                            size={16}
+                            className={cn(
+                              "transition-transform",
+                              showBancaDropdown ? "rotate-90" : "",
+                            )}
+                          />
                         </button>
 
                         <AnimatePresence>
                           {showBancaDropdown && (
                             <>
-                              <motion.div 
+                              <motion.div
                                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
                                 className="absolute top-full left-0 mt-3 w-72 bg-white dark:bg-slate-900 rounded-3xl border border-black/5 dark:border-white/10 shadow-2xl z-50 p-5 space-y-4 backdrop-blur-xl"
                               >
                                 <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-3">
-                                  <span className="text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">Banca e Estilo</span>
-                                  <span className="text-[9px] font-bold px-2 py-0.5 bg-amber-500/10 text-amber-600 rounded-full uppercase">Multiseleção</span>
+                                  <span className="text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">
+                                    Banca e Estilo
+                                  </span>
+                                  <span className="text-[9px] font-bold px-2 py-0.5 bg-amber-500/10 text-amber-600 rounded-full uppercase">
+                                    Multiseleção
+                                  </span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
-                                  {['Geral', 'Múltipla Escolha', 'Cebraspe', 'FGV', 'FCC', 'Vunesp', 'Cesgranrio'].map((board) => (
+                                  {[
+                                    "Geral",
+                                    "Múltipla Escolha",
+                                    "Cebraspe",
+                                    "FGV",
+                                    "FCC",
+                                    "Vunesp",
+                                    "Cesgranrio",
+                                  ].map((board) => (
                                     <button
                                       key={board}
                                       onClick={() => {
-                                        if (board === 'Geral') {
-                                          setSelectedExamBoards(['Geral']);
+                                        if (board === "Geral") {
+                                          setSelectedExamBoards(["Geral"]);
                                         } else {
-                                          setSelectedExamBoards(prev => {
-                                            const filtered = prev.filter(b => b !== 'Geral');
+                                          setSelectedExamBoards((prev) => {
+                                            const filtered = prev.filter(
+                                              (b) => b !== "Geral",
+                                            );
                                             if (filtered.includes(board)) {
-                                              const next = filtered.filter(b => b !== board);
-                                              return next.length === 0 ? ['Geral'] : next;
+                                              const next = filtered.filter(
+                                                (b) => b !== board,
+                                              );
+                                              return next.length === 0
+                                                ? ["Geral"]
+                                                : next;
                                             } else {
                                               return [...filtered, board];
                                             }
@@ -9021,17 +11765,27 @@ function QuizApp() {
                                       className={cn(
                                         "px-3 py-2 rounded-xl text-[10px] font-bold border-2 transition-all text-center flex items-center justify-center gap-1.5",
                                         selectedExamBoards.includes(board)
-                                          ? cn(theme.border, theme.bg, theme.textLight, theme.textLightDark)
-                                          : "border-black/5 dark:border-slate-800 hover:border-black/10 dark:hover:border-slate-700 text-black/40 dark:text-slate-500"
+                                          ? cn(
+                                              theme.border,
+                                              theme.bg,
+                                              theme.textLight,
+                                              theme.textLightDark,
+                                            )
+                                          : "border-black/5 dark:border-slate-800 hover:border-black/10 dark:hover:border-slate-700 text-black/40 dark:text-slate-500",
                                       )}
                                     >
-                                      {selectedExamBoards.includes(board) && <CheckCircle2 size={10} />}
+                                      {selectedExamBoards.includes(board) && (
+                                        <CheckCircle2 size={10} />
+                                      )}
                                       {board}
                                     </button>
                                   ))}
                                 </div>
                               </motion.div>
-                              <div className="fixed inset-0 z-40" onClick={() => setShowBancaDropdown(false)} />
+                              <div
+                                className="fixed inset-0 z-40"
+                                onClick={() => setShowBancaDropdown(false)}
+                              />
                             </>
                           )}
                         </AnimatePresence>
@@ -9039,63 +11793,87 @@ function QuizApp() {
 
                       {/* Quantity Dropdown */}
                       <div className="relative">
-                        <button 
+                        <button
                           onClick={() => {
                             setShowQuantityDropdown(!showQuantityDropdown);
                             setShowBancaDropdown(false);
                           }}
                           className={cn(
                             "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95",
-                            showQuantityDropdown 
-                              ? cn(theme.border, theme.bg, theme.text) 
-                              : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20"
+                            showQuantityDropdown
+                              ? cn(theme.border, theme.bg, theme.text)
+                              : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20",
                           )}
                         >
                           <Hash size={18} className={theme.icon} />
                           <span>{questionCount} Questões</span>
-                          <ChevronRight size={16} className={cn("transition-transform", showQuantityDropdown ? "rotate-90" : "")} />
+                          <ChevronRight
+                            size={16}
+                            className={cn(
+                              "transition-transform",
+                              showQuantityDropdown ? "rotate-90" : "",
+                            )}
+                          />
                         </button>
 
                         <AnimatePresence>
                           {showQuantityDropdown && (
                             <>
-                              <motion.div 
+                              <motion.div
                                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
                                 className="absolute top-full right-0 md:left-0 mt-3 w-72 bg-white dark:bg-slate-900 rounded-3xl border border-black/5 dark:border-white/10 shadow-2xl z-50 p-6 space-y-6 backdrop-blur-xl"
                               >
                                 <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-3">
-                                  <span className="text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">Volume de Estudo</span>
+                                  <span className="text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">
+                                    Volume de Estudo
+                                  </span>
                                   <div className="flex items-center gap-1 px-2 py-1 bg-black/5 dark:bg-white/5 rounded-lg">
                                     <Hash size={12} className={theme.icon} />
-                                    <span className="text-xs font-bold dark:text-white">{questionCount}</span>
+                                    <span className="text-xs font-bold dark:text-white">
+                                      {questionCount}
+                                    </span>
                                   </div>
                                 </div>
                                 <div className="space-y-4">
-                                  <input 
-                                    type="range" 
-                                    min="5" 
-                                    max="100" 
+                                  <input
+                                    type="range"
+                                    min="5"
+                                    max="100"
                                     step="5"
                                     value={questionCount}
-                                    onChange={(e) => setQuestionCount(parseInt(e.target.value))}
-                                    className={cn("w-full h-2 bg-black/10 dark:bg-white/10 rounded-full appearance-none cursor-pointer accent-current", theme.text, theme.textDark)}
+                                    onChange={(e) =>
+                                      setQuestionCount(parseInt(e.target.value))
+                                    }
+                                    className={cn(
+                                      "w-full h-2 bg-black/10 dark:bg-white/10 rounded-full appearance-none cursor-pointer accent-current",
+                                      theme.text,
+                                      theme.textDark,
+                                    )}
                                   />
                                   <div className="flex justify-between px-1">
-                                    <span className="text-[10px] font-bold text-black/20 dark:text-slate-700">MÍN (5)</span>
-                                    <span className="text-[10px] font-bold text-black/20 dark:text-slate-700">MÁX (100)</span>
+                                    <span className="text-[10px] font-bold text-black/20 dark:text-slate-700">
+                                      MÍN (5)
+                                    </span>
+                                    <span className="text-[10px] font-bold text-black/20 dark:text-slate-700">
+                                      MÁX (100)
+                                    </span>
                                   </div>
                                   <div className="grid grid-cols-4 gap-2">
-                                    {[10, 20, 50, 100].map(val => (
+                                    {[10, 20, 50, 100].map((val) => (
                                       <button
                                         key={val}
                                         onClick={() => setQuestionCount(val)}
                                         className={cn(
                                           "py-2 rounded-xl text-[10px] font-bold border transition-all",
-                                          questionCount === val 
-                                            ? cn(theme.bg, theme.border, theme.text)
-                                            : "border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 text-black/40 dark:text-slate-500"
+                                          questionCount === val
+                                            ? cn(
+                                                theme.bg,
+                                                theme.border,
+                                                theme.text,
+                                              )
+                                            : "border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 text-black/40 dark:text-slate-500",
                                         )}
                                       >
                                         {val}
@@ -9104,7 +11882,10 @@ function QuizApp() {
                                   </div>
                                 </div>
                               </motion.div>
-                              <div className="fixed inset-0 z-40" onClick={() => setShowQuantityDropdown(false)} />
+                              <div
+                                className="fixed inset-0 z-40"
+                                onClick={() => setShowQuantityDropdown(false)}
+                              />
                             </>
                           )}
                         </AnimatePresence>
@@ -9120,17 +11901,32 @@ function QuizApp() {
                         className={cn(
                           "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95",
                           isSimulado
-                            ? cn(theme.border, theme.bg, theme.text, "ring-2 ring-offset-2", theme.ring)
-                            : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20"
+                            ? cn(
+                                theme.border,
+                                theme.bg,
+                                theme.text,
+                                "ring-2 ring-offset-2",
+                                theme.ring,
+                              )
+                            : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20",
                         )}
                         title="Modo Simulado: Cronômetro global, várias matérias e feedback apenas ao final."
                       >
-                        <TrendingUp size={18} className={isSimulado ? theme.icon : "text-black/20 dark:text-slate-600"} />
+                        <TrendingUp
+                          size={18}
+                          className={
+                            isSimulado
+                              ? theme.icon
+                              : "text-black/20 dark:text-slate-600"
+                          }
+                        />
                         <span>Simulado</span>
                         {isSimulado && (
                           <div className="flex items-center gap-2 ml-auto">
-                            <span className="text-[10px] text-blue-500 font-black animate-pulse">SEARCH ON</span>
-                            <motion.span 
+                            <span className="text-[10px] text-blue-500 font-black animate-pulse">
+                              SEARCH ON
+                            </span>
+                            <motion.span
                               initial={{ scale: 0 }}
                               animate={{ scale: 1 }}
                               className="flex h-2 w-2 rounded-full bg-blue-500"
@@ -9144,120 +11940,167 @@ function QuizApp() {
                         </p>
                       )}
 
-                        <div className="relative">
-                          <button
-                            onClick={() => {
-                              const next = !isBancaMindset;
-                              setIsBancaMindset(next);
-                              if (!next) setHypotheticalCasesCount(0);
-                            }}
-                            className={cn(
-                              "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95 whitespace-nowrap",
+                      <div className="relative">
+                        <button
+                          onClick={() => {
+                            const next = !isBancaMindset;
+                            setIsBancaMindset(next);
+                            if (!next) setHypotheticalCasesCount(0);
+                          }}
+                          className={cn(
+                            "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95 whitespace-nowrap",
+                            isBancaMindset
+                              ? cn(
+                                  theme.border,
+                                  theme.bg,
+                                  theme.text,
+                                  "ring-2 ring-offset-2",
+                                  theme.ring,
+                                )
+                              : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20",
+                          )}
+                          title="Ativa o modo de elaboração rigoroso, simulando a mente dos examinadores da banca."
+                        >
+                          <Award
+                            size={18}
+                            className={
                               isBancaMindset
-                                ? cn(theme.border, theme.bg, theme.text, "ring-2 ring-offset-2", theme.ring)
-                                : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20"
-                            )}
-                            title="Ativa o modo de elaboração rigoroso, simulando a mente dos examinadores da banca."
-                          >
-                            <Award size={18} className={isBancaMindset ? theme.icon : "text-black/20 dark:text-slate-600"} />
-                            <span>Própria Banca</span>
-                            {isBancaMindset && (
-                              <motion.span 
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                className="flex h-2 w-2 rounded-full bg-amber-500"
-                              />
-                            )}
-                          </button>
+                                ? theme.icon
+                                : "text-black/20 dark:text-slate-600"
+                            }
+                          />
+                          <span>Própria Banca</span>
+                          {isBancaMindset && (
+                            <motion.span
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="flex h-2 w-2 rounded-full bg-amber-500"
+                            />
+                          )}
+                        </button>
 
-                          <AnimatePresence>
-                            {isBancaMindset && (
-                              <motion.div
-                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                className="absolute top-full left-0 mt-3 w-64 bg-white dark:bg-slate-900 rounded-3xl border border-amber-500/20 shadow-2xl z-50 p-6 space-y-4 backdrop-blur-xl"
-                              >
-                                <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-3">
-                                  <div className="flex items-center gap-2">
-                                    <Zap size={14} className="text-amber-500" />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">Casos Hipotéticos</span>
-                                  </div>
-                                  <span className="text-xs font-black text-amber-600 dark:text-amber-400">{hypotheticalCasesCount}</span>
+                        <AnimatePresence>
+                          {isBancaMindset && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              className="absolute top-full left-0 mt-3 w-64 bg-white dark:bg-slate-900 rounded-3xl border border-amber-500/20 shadow-2xl z-50 p-6 space-y-4 backdrop-blur-xl"
+                            >
+                              <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-3">
+                                <div className="flex items-center gap-2">
+                                  <Zap size={14} className="text-amber-500" />
+                                  <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                                    Casos Hipotéticos
+                                  </span>
                                 </div>
-                                <input 
-                                  type="range"
-                                  min="0"
-                                  max={Math.min(questionCount, 10)}
-                                  step="1"
-                                  value={hypotheticalCasesCount}
-                                  onChange={(e) => setHypotheticalCasesCount(parseInt(e.target.value))}
-                                  className="w-full h-1.5 bg-amber-500/20 rounded-full appearance-none cursor-pointer accent-amber-500"
-                                />
-                                <p className="text-[9px] text-amber-600/60 dark:text-amber-400/60 font-medium leading-tight italic">
-                                  Define quantas questões serão baseadas em situações práticas para aplicar a teoria.
-                                </p>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
+                                <span className="text-xs font-black text-amber-600 dark:text-amber-400">
+                                  {hypotheticalCasesCount}
+                                </span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0"
+                                max={Math.min(questionCount, 10)}
+                                step="1"
+                                value={hypotheticalCasesCount}
+                                onChange={(e) =>
+                                  setHypotheticalCasesCount(
+                                    parseInt(e.target.value),
+                                  )
+                                }
+                                className="w-full h-1.5 bg-amber-500/20 rounded-full appearance-none cursor-pointer accent-amber-500"
+                              />
+                              <p className="text-[9px] text-amber-600/60 dark:text-amber-400/60 font-medium leading-tight italic">
+                                Define quantas questões serão baseadas em
+                                situações práticas para aplicar a teoria.
+                              </p>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </div>
                   </div>
 
                   <div className="space-y-6">
                     {/* Simulado Multi-Subject Configuration */}
                     {isSimulado && subjects.length > 0 && (
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="max-w-xl mx-auto space-y-4 p-6 rounded-[2.5rem] bg-blue-500/5 border border-blue-500/20 backdrop-blur-xl shadow-xl"
                       >
                         <div className="flex items-center gap-3 mb-2">
                           <TrendingUp className="text-blue-500" size={20} />
-                          <h3 className="font-bold text-sm uppercase tracking-widest text-blue-600 dark:text-blue-400">Configuração do Simulado</h3>
+                          <h3 className="font-bold text-sm uppercase tracking-widest text-blue-600 dark:text-blue-400">
+                            Configuração do Simulado
+                          </h3>
                         </div>
                         <p className="text-xs text-black/40 dark:text-slate-500 leading-relaxed">
-                          Selecione as matérias que você já estudou para compor seu simulado. O sistema dividirá as {questionCount} questões proporcionalmente entre elas de forma sequencial.
+                          Selecione as matérias que você já estudou para compor
+                          seu simulado. O sistema dividirá as {questionCount}{" "}
+                          questões proporcionalmente entre elas de forma
+                          sequencial.
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                          {Array.from(new Set(subjects)).map(subject => {
+                          {Array.from(new Set(subjects)).map((subject) => {
                             const hasContent = hasContentForSubject(subject);
-                            const isSelected = selectedSimuladoSubjects.includes(subject);
-                            
+                            const isSelected =
+                              selectedSimuladoSubjects.includes(subject);
+
                             return (
                               <button
                                 key={subject}
                                 onClick={() => {
-                                  setSelectedSimuladoSubjects(prev => 
-                                    prev.includes(subject) ? prev.filter(s => s !== subject) : [...prev, subject]
+                                  setSelectedSimuladoSubjects((prev) =>
+                                    prev.includes(subject)
+                                      ? prev.filter((s) => s !== subject)
+                                      : [...prev, subject],
                                   );
                                 }}
                                 className={cn(
                                   "px-4 py-3 rounded-2xl text-[11px] font-bold border-2 transition-all flex items-center justify-between text-left relative overflow-hidden",
-                                  isSelected 
-                                    ? cn(theme.border, theme.bg, theme.text) 
+                                  isSelected
+                                    ? cn(theme.border, theme.bg, theme.text)
                                     : "bg-white dark:bg-slate-900 border-black/5 dark:border-slate-800 text-black/40 dark:text-slate-500 hover:border-black/10",
-                                  !hasContent && !isSelected && "opacity-40 grayscale-[0.5]"
+                                  !hasContent &&
+                                    !isSelected &&
+                                    "opacity-40 grayscale-[0.5]",
                                 )}
                               >
                                 <div className="flex items-center gap-3">
-                                  <div className={cn(
-                                    "w-2 h-2 rounded-full",
-                                    hasContent ? "bg-emerald-500" : "bg-rose-500"
-                                  )} />
-                                  <span className="truncate max-w-[120px]">{subject}</span>
+                                  <div
+                                    className={cn(
+                                      "w-2 h-2 rounded-full",
+                                      hasContent
+                                        ? "bg-emerald-500"
+                                        : "bg-rose-500",
+                                    )}
+                                  />
+                                  <span className="truncate max-w-[120px]">
+                                    {subject}
+                                  </span>
                                 </div>
                                 {!hasContent && (
-                                  <span className="text-[8px] uppercase tracking-tighter opacity-50">Sem Material</span>
+                                  <span className="text-[8px] uppercase tracking-tighter opacity-50">
+                                    Sem Material
+                                  </span>
                                 )}
                                 {isSelected && (
-                                  <Check size={14} className={isSelected ? "text-current" : "text-blue-500"} />
+                                  <Check
+                                    size={14}
+                                    className={
+                                      isSelected
+                                        ? "text-current"
+                                        : "text-blue-500"
+                                    }
+                                  />
                                 )}
                               </button>
                             );
                           })}
                         </div>
-                        
+
                         {selectedSimuladoSubjects.length > 0 && (
                           <motion.button
                             initial={{ opacity: 0, scale: 0.9 }}
@@ -9266,7 +12109,7 @@ function QuizApp() {
                             className={cn(
                               "w-full py-4 rounded-2xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3 mt-4",
                               theme.primary,
-                              theme.primaryHover
+                              theme.primaryHover,
                             )}
                           >
                             <Zap size={20} />
@@ -9282,43 +12125,64 @@ function QuizApp() {
                         <div className="max-w-xl mx-auto space-y-3">
                           <div className="flex items-center justify-between px-1">
                             <label className="text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">
-                              1. Nome da Matéria <span className="text-rose-500">*</span>
+                              1. Nome da Matéria{" "}
+                              <span className="text-rose-500">*</span>
                             </label>
                             {selectedSubject && (
-                              <button onClick={() => setSelectedSubject('')} className="text-[10px] font-bold text-rose-500 hover:underline">Limpar</button>
+                              <button
+                                onClick={() => setSelectedSubject("")}
+                                className="text-[10px] font-bold text-rose-500 hover:underline"
+                              >
+                                Limpar
+                              </button>
                             )}
                           </div>
-                  <div className="relative group">
-                    <motion.div 
-                      initial={false}
-                      animate={selectedSubject ? { scale: [1, 1.02, 1], opacity: 1 } : { scale: 1, opacity: 0.5 }}
-                      className={cn("absolute left-4 top-1/2 -translate-y-1/2 text-black/20 dark:text-slate-600 transition-colors", selectedSubject ? theme.text : "")}
-                    >
-                      <Folder size={20} />
-                    </motion.div>
-                    <input 
-                      type="text"
-                      list="existing-subjects"
-                      value={selectedSubject}
-                      onChange={(e) => setSelectedSubject(e.target.value)}
-                      placeholder="Ex: Direito Constitucional, Português..."
-                      className={cn(
-                        "w-full bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-2 rounded-2xl py-4 pl-12 pr-4 transition-all outline-none font-bold dark:text-white", 
-                        selectedSubject ? "border-emerald-500/30" : "border-black/5 dark:border-slate-800",
-                        `focus:${theme.border}`, 
-                        theme.ring
-                      )}
-                    />
-                    <datalist id="existing-subjects">
-                      {Array.from(new Set(subjects)).map(s => <option key={s} value={s} />)}
-                    </datalist>
-                  </div>
+                          <div className="relative group">
+                            <motion.div
+                              initial={false}
+                              animate={
+                                selectedSubject
+                                  ? { scale: [1, 1.02, 1], opacity: 1 }
+                                  : { scale: 1, opacity: 0.5 }
+                              }
+                              className={cn(
+                                "absolute left-4 top-1/2 -translate-y-1/2 text-black/20 dark:text-slate-600 transition-colors",
+                                selectedSubject ? theme.text : "",
+                              )}
+                            >
+                              <Folder size={20} />
+                            </motion.div>
+                            <input
+                              type="text"
+                              list="existing-subjects"
+                              value={selectedSubject}
+                              onChange={(e) =>
+                                setSelectedSubject(e.target.value)
+                              }
+                              placeholder="Ex: Direito Constitucional, Português..."
+                              className={cn(
+                                "w-full bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-2 rounded-2xl py-4 pl-12 pr-4 transition-all outline-none font-bold dark:text-white",
+                                selectedSubject
+                                  ? "border-emerald-500/30"
+                                  : "border-black/5 dark:border-slate-800",
+                                `focus:${theme.border}`,
+                                theme.ring,
+                              )}
+                            />
+                            <datalist id="existing-subjects">
+                              {Array.from(new Set(subjects)).map((s) => (
+                                <option key={s} value={s} />
+                              ))}
+                            </datalist>
+                          </div>
                         </div>
 
                         <div className="max-w-xl mx-auto space-y-3">
-                          <label className="block text-left px-1 text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">2. Selecione o Material</label>
-                          
-                          <div 
+                          <label className="block text-left px-1 text-xs font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">
+                            2. Selecione o Material
+                          </label>
+
+                          <div
                             onClick={() => {
                               fileInputRef.current?.click();
                             }}
@@ -9336,29 +12200,48 @@ function QuizApp() {
                               }
                             }}
                             className={cn(
-                              "group relative border-2 border-dashed rounded-3xl p-8 cursor-pointer transition-all duration-300", 
-                              pendingContent && pendingFileName ? cn(theme.border, theme.bg, "border-solid") : "border-black/10 dark:border-slate-800",
-                              `hover:${theme.border}/50`, `hover:${theme.bg}/30`, `dark:hover:${theme.bgDark}`
+                              "group relative border-2 border-dashed rounded-3xl p-8 cursor-pointer transition-all duration-300",
+                              pendingContent && pendingFileName
+                                ? cn(theme.border, theme.bg, "border-solid")
+                                : "border-black/10 dark:border-slate-800",
+                              `hover:${theme.border}/50`,
+                              `hover:${theme.bg}/30`,
+                              `dark:hover:${theme.bgDark}`,
                             )}
                           >
-                            <input 
-                              type="file" 
-                              ref={fileInputRef} 
-                              onChange={handleFileUpload} 
+                            <input
+                              type="file"
+                              ref={fileInputRef}
+                              onChange={handleFileUpload}
                               multiple
-                              className="hidden" 
+                              className="hidden"
                               accept=".txt,.md,.pdf,.docx,image/*"
                             />
                             <div className="flex flex-col items-center gap-3">
-                              <div className={cn("w-12 h-12 rounded-xl shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300", pendingContent ? cn(theme.primary, theme.contrastText) : "bg-white dark:bg-slate-800")}>
-                                {pendingContent ? <Check size={24} /> : <Upload className={theme.icon} size={24} />}
+                              <div
+                                className={cn(
+                                  "w-12 h-12 rounded-xl shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300",
+                                  pendingContent
+                                    ? cn(theme.primary, theme.contrastText)
+                                    : "bg-white dark:bg-slate-800",
+                                )}
+                              >
+                                {pendingContent ? (
+                                  <Check size={24} />
+                                ) : (
+                                  <Upload className={theme.icon} size={24} />
+                                )}
                               </div>
                               <div>
                                 <p className="font-bold text-base dark:text-slate-100">
-                                  {pendingContent ? "Material Selecionado" : "Carregar Arquivos"}
+                                  {pendingContent
+                                    ? "Material Selecionado"
+                                    : "Carregar Arquivos"}
                                 </p>
                                 <p className="text-xs text-black/40 dark:text-slate-500">
-                                  {pendingContent ? pendingFileName : "PDF, DOCX, Imagens, TXT ou MD"}
+                                  {pendingContent
+                                    ? pendingFileName
+                                    : "PDF, DOCX, Imagens, TXT ou MD"}
                                 </p>
                               </div>
                             </div>
@@ -9366,33 +12249,56 @@ function QuizApp() {
 
                           <div className="relative flex items-center gap-4 py-2">
                             <div className="flex-1 h-px bg-black/5 dark:bg-slate-800"></div>
-                            <span className="text-[10px] font-bold text-black/20 dark:text-slate-600 uppercase tracking-widest text-center">ou use links</span>
+                            <span className="text-[10px] font-bold text-black/20 dark:text-slate-600 uppercase tracking-widest text-center">
+                              ou use links
+                            </span>
                             <div className="flex-1 h-px bg-black/5 dark:bg-slate-800"></div>
                           </div>
 
                           <div className="space-y-3">
                             <div className="relative group">
-                              <div className={cn("absolute left-4 top-4 text-black/20 dark:text-slate-600 transition-colors", urlInput ? theme.text : "")}>
+                              <div
+                                className={cn(
+                                  "absolute left-4 top-4 text-black/20 dark:text-slate-600 transition-colors",
+                                  urlInput ? theme.text : "",
+                                )}
+                              >
                                 <LinkIcon size={18} />
                               </div>
                               <textarea
                                 value={urlInput}
                                 onChange={(e) => setUrlInput(e.target.value)}
                                 placeholder="Cole links da web ou YouTube..."
-                                className={cn("w-full bg-white dark:bg-slate-900 border-2 border-black/5 dark:border-slate-800 rounded-2xl py-3 pl-12 pr-4 min-h-[80px] transition-all outline-none resize-none text-sm dark:text-slate-100 dark:placeholder:text-slate-600", `focus:${theme.border}`, theme.ring)}
+                                className={cn(
+                                  "w-full bg-white dark:bg-slate-900 border-2 border-black/5 dark:border-slate-800 rounded-2xl py-3 pl-12 pr-4 min-h-[80px] transition-all outline-none resize-none text-sm dark:text-slate-100 dark:placeholder:text-slate-600",
+                                  `focus:${theme.border}`,
+                                  theme.ring,
+                                )}
                               />
                             </div>
                             {urlInput.trim() && (
-                              <button 
+                              <button
                                 onClick={() => {
-                                  const urls = urlInput.split('\n').map(u => u.trim()).filter(u => u.startsWith('http'));
+                                  const urls = urlInput
+                                    .split("\n")
+                                    .map((u) => u.trim())
+                                    .filter((u) => u.startsWith("http"));
                                   if (urls.length > 0) {
                                     setPendingContent(urls);
-                                    setPendingFileName(urls.length === 1 ? urls[0] : `${urls.length} links`);
-                                    setUrlInput('');
+                                    setPendingFileName(
+                                      urls.length === 1
+                                        ? urls[0]
+                                        : `${urls.length} links`,
+                                    );
+                                    setUrlInput("");
                                   }
                                 }}
-                                className={cn("w-full py-2 rounded-xl text-xs font-bold transition-all", theme.bg, theme.text, "hover:opacity-80")}
+                                className={cn(
+                                  "w-full py-2 rounded-xl text-xs font-bold transition-all",
+                                  theme.bg,
+                                  theme.text,
+                                  "hover:opacity-80",
+                                )}
                               >
                                 Confirmar Links
                               </button>
@@ -9403,32 +12309,46 @@ function QuizApp() {
                         <div className="max-w-xl mx-auto pt-4">
                           <button
                             type="button"
-                            disabled={(!pendingContent && !urlInput.trim()) || !selectedSubject.trim()}
+                            disabled={
+                              (!pendingContent && !urlInput.trim()) ||
+                              !selectedSubject.trim()
+                            }
                             onClick={handleCreateQuiz}
                             className={cn(
                               "w-full py-5 rounded-[2rem] font-black text-lg transition-all shadow-2xl flex items-center justify-center gap-3 active:scale-[0.98]",
-                              (pendingContent || urlInput.trim()) && selectedSubject.trim()
-                                ? cn(theme.primary, theme.contrastText, theme.shadow, theme.primaryHover)
-                                : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-700 cursor-not-allowed"
+                              (pendingContent || urlInput.trim()) &&
+                                selectedSubject.trim()
+                                ? cn(
+                                    theme.primary,
+                                    theme.contrastText,
+                                    theme.shadow,
+                                    theme.primaryHover,
+                                  )
+                                : "bg-black/5 dark:bg-white/5 text-black/20 dark:text-slate-700 cursor-not-allowed",
                             )}
                           >
                             <BrainCircuit size={24} />
                             CRIAR QUIZ AGORA
                           </button>
-                          
+
                           {!pendingContent && !urlInput.trim() && (
-                            <p className="mt-3 text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-widest">Selecione um material para habilitar</p>
+                            <p className="mt-3 text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-widest">
+                              Selecione um material para habilitar
+                            </p>
                           )}
-                          {(pendingContent || urlInput.trim()) && !selectedSubject.trim() && (
-                            <p className="mt-3 text-[10px] font-bold text-amber-500 uppercase tracking-widest">Informe a matéria para continuar</p>
-                          )}
+                          {(pendingContent || urlInput.trim()) &&
+                            !selectedSubject.trim() && (
+                              <p className="mt-3 text-[10px] font-bold text-amber-500 uppercase tracking-widest">
+                                Informe a matéria para continuar
+                              </p>
+                            )}
                         </div>
                       </>
                     )}
                   </div>
 
                   {error && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="p-4 bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/20 rounded-2xl text-rose-600 dark:text-rose-400 text-sm flex items-center justify-between gap-3"
@@ -9437,8 +12357,8 @@ function QuizApp() {
                         <AlertCircle size={18} className="shrink-0" />
                         <p className="font-medium">{error}</p>
                       </div>
-                      {(error.includes('API') || error.includes('chave')) && (
-                        <button 
+                      {(error.includes("API") || error.includes("chave")) && (
+                        <button
                           onClick={handleOpenSelectKey}
                           className="px-3 py-1 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 transition-colors whitespace-nowrap"
                         >
@@ -9449,7 +12369,7 @@ function QuizApp() {
                   )}
 
                   {!hasApiKey && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20 rounded-2xl text-amber-700 dark:text-amber-400 text-sm flex flex-col gap-3"
@@ -9457,26 +12377,31 @@ function QuizApp() {
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 text-left">
                           <AlertCircle size={18} className="shrink-0" />
-                          <p className="font-medium">Uma chave de API é necessária para usar os modelos avançados.</p>
+                          <p className="font-medium">
+                            Uma chave de API é necessária para usar os modelos
+                            avançados.
+                          </p>
                         </div>
-                        <button 
+                        <button
                           onClick={handleOpenSelectKey}
                           className="px-3 py-1 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors whitespace-nowrap"
                         >
-                          {window.aistudio ? 'Selecionar Chave' : 'Inserir Chave'}
+                          {window.aistudio
+                            ? "Selecionar Chave"
+                            : "Inserir Chave"}
                         </button>
                       </div>
 
                       {showApiKeyInput && !window.aistudio && (
                         <div className="flex gap-2 mt-2">
-                          <input 
+                          <input
                             type="password"
                             placeholder="Insira sua Gemini API Key..."
                             value={manualApiKey}
                             onChange={(e) => setManualApiKey(e.target.value)}
                             className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 border border-amber-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 dark:text-slate-100"
                           />
-                          <button 
+                          <button
                             onClick={handleSaveManualKey}
                             className="px-4 py-2 bg-amber-600 text-white rounded-xl text-sm font-bold hover:bg-amber-700 transition-colors"
                           >
@@ -9487,7 +12412,7 @@ function QuizApp() {
                     </motion.div>
                   )}
                 </motion.div>
-              ) : state === 'loading' ? (
+              ) : state === "loading" ? (
                 <motion.div
                   key="loading"
                   initial={{ opacity: 0 }}
@@ -9498,46 +12423,73 @@ function QuizApp() {
                   <div className="w-full space-y-6">
                     <div className="flex items-center justify-between text-sm font-medium">
                       <div className="flex items-center gap-2">
-                        <BrainCircuit className={cn("animate-pulse", theme.text, theme.textDark)} size={18} />
+                        <BrainCircuit
+                          className={cn(
+                            "animate-pulse",
+                            theme.text,
+                            theme.textDark,
+                          )}
+                          size={18}
+                        />
                         <span className="dark:text-slate-300">
                           Formulando Questionário...
                         </span>
                       </div>
-                      <span className={cn("font-mono", theme.text, theme.textDark)}>{Math.round(loadingProgress)}%</span>
+                      <span
+                        className={cn("font-mono", theme.text, theme.textDark)}
+                      >
+                        {Math.round(loadingProgress)}%
+                      </span>
                     </div>
-                    
+
                     <div className="h-3 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden border border-black/5 dark:border-white/5">
-                      <motion.div 
+                      <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${loadingProgress}%` }}
-                        transition={{ type: "spring", bounce: 0, duration: 0.5 }}
-                        className={cn("h-full rounded-full shadow-lg", theme.primary)}
+                        transition={{
+                          type: "spring",
+                          bounce: 0,
+                          duration: 0.5,
+                        }}
+                        className={cn(
+                          "h-full rounded-full shadow-lg",
+                          theme.primary,
+                        )}
                       />
                     </div>
 
                     <div className="flex justify-between items-start gap-4">
                       <div className="flex-1 space-y-1">
-                        <p className="text-xs font-medium uppercase tracking-wider text-black/40 dark:text-slate-500">Status</p>
+                        <p className="text-xs font-medium uppercase tracking-wider text-black/40 dark:text-slate-500">
+                          Status
+                        </p>
                         <p className="text-sm dark:text-slate-300">
-                          {loadingStatus || (
-                            isSimulado ? (
-                              loadingProgress < 20 ? "Iniciando modo simulado oficial..." :
-                              loadingProgress < 50 ? "Buscando questões reais nas fontes das bancas..." :
-                              loadingProgress < 80 ? "Verificando autenticidade e gabaritos oficiais..." :
-                              "Organizando seu caderno de prova..."
-                            ) : (
-                              loadingProgress < 20 ? "Iniciando análise de conteúdo..." :
-                              loadingProgress < 40 ? "Mapeando conceitos fundamentais..." :
-                              loadingProgress < 60 ? "Estruturando questões estratégicas..." :
-                              loadingProgress < 80 ? "Refinando alternativas e explicações..." :
-                              loadingProgress < 95 ? "Finalizando detalhes técnicos..." :
-                              "Quase pronto! Organizando sua sessão..."
-                            )
-                          )}
+                          {loadingStatus ||
+                            (isSimulado
+                              ? loadingProgress < 20
+                                ? "Iniciando modo simulado oficial..."
+                                : loadingProgress < 50
+                                  ? "Buscando questões reais nas fontes das bancas..."
+                                  : loadingProgress < 80
+                                    ? "Verificando autenticidade e gabaritos oficiais..."
+                                    : "Organizando seu caderno de prova..."
+                              : loadingProgress < 20
+                                ? "Iniciando análise de conteúdo..."
+                                : loadingProgress < 40
+                                  ? "Mapeando conceitos fundamentais..."
+                                  : loadingProgress < 60
+                                    ? "Estruturando questões estratégicas..."
+                                    : loadingProgress < 80
+                                      ? "Refinando alternativas e explicações..."
+                                      : loadingProgress < 95
+                                        ? "Finalizando detalhes técnicos..."
+                                        : "Quase pronto! Organizando sua sessão...")}
                         </p>
                       </div>
                       <div className="flex-1 space-y-1 text-right">
-                        <p className="text-xs font-medium uppercase tracking-wider text-black/40 dark:text-slate-500">Objetivo</p>
+                        <p className="text-xs font-medium uppercase tracking-wider text-black/40 dark:text-slate-500">
+                          Objetivo
+                        </p>
                         <p className="text-sm dark:text-slate-300">
                           {questionCount} Questões
                         </p>
@@ -9546,76 +12498,328 @@ function QuizApp() {
                   </div>
 
                   <div className="text-center space-y-2 pt-4">
-                    <h2 className="text-xl font-medium dark:text-slate-100">Quase pronto!</h2>
-                    <p className="text-sm text-black/40 dark:text-slate-500">A inteligência artificial está processando seu material para garantir o melhor aprendizado.</p>
+                    <h2 className="text-xl font-medium dark:text-slate-100">
+                      Quase pronto!
+                    </h2>
+                    <p className="text-sm text-black/40 dark:text-slate-500">
+                      A inteligência artificial está processando seu material
+                      para garantir o melhor aprendizado.
+                    </p>
                   </div>
                 </motion.div>
-              ) : state === 'active' && currentQuestion ? (
+              ) : state === "active" && currentQuestion ? (
                 <motion.div
                   key="active"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className={cn(
                     "grid grid-cols-1 lg:grid-cols-12 gap-8 items-start",
-                    isDeepDiveExpanded && "lg:grid-cols-1"
+                    isDeepDiveExpanded && "lg:grid-cols-1",
                   )}
                 >
                   {/* Question Area */}
                   {!isDeepDiveExpanded && (
-                    <div className={cn(
-                      "lg:col-span-12 transition-all duration-500",
-                      showDeepDive && "lg:col-span-5"
-                    )}>
+                    <div
+                      className={cn(
+                        "lg:col-span-12 transition-all duration-500",
+                        showDeepDive && "lg:col-span-5",
+                      )}
+                    >
                       <div className="bg-white dark:bg-slate-900 rounded-t-2xl rounded-b-[32px] shadow-xl shadow-black/5 border border-black/5 dark:border-slate-800 relative overflow-hidden flex flex-col h-[calc(100vh-80px)] sm:min-h-[750px] min-h-[500px]">
                         {isSimulado && (
                           <div className="bg-slate-100 dark:bg-slate-800/50 px-6 py-2 flex items-center justify-between border-b border-black/5 dark:border-white/5">
                             <div className="flex items-center gap-3">
-                              <div className="bg-black text-white dark:bg-white dark:text-black text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-tighter">CADERNO OFICIAL</div>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Simulado de Alta Fidelidade</span>
+                              <div className="bg-black text-white dark:bg-white dark:text-black text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-tighter">
+                                CADERNO OFICIAL
+                              </div>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">
+                                Simulado de Alta Fidelidade
+                              </span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Globe size={12} className="text-emerald-500 animate-pulse" />
-                              <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter">Grounding Ativo: Questões Reais</span>
+                              <Globe
+                                size={12}
+                                className="text-emerald-500 animate-pulse"
+                              />
+                              <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter">
+                                Grounding Ativo: Questões Reais
+                              </span>
                             </div>
                           </div>
                         )}
                         {/* Timeline Progress */}
-                        <div className="px-4 py-3 bg-black/[0.02] dark:bg-white/[0.02] border-b border-black/5 dark:border-slate-800">
-                          <div className="flex items-center gap-1.5 h-14">
-                            {questions.map((_, idx) => {
-                              const isAnswered = answers[idx] !== null;
-                              const isCorrect = isAnswered && answers[idx] === questions[idx]?.correctAnswer;
-                              const isWrong = isAnswered && answers[idx] !== questions[idx]?.correctAnswer;
-                              const isCurrent = idx === currentIndex;
-
-                              return (
-                                <button 
-                                  key={idx} 
-                                  onClick={() => {
-                                    setCurrentIndex(idx);
-                                    setQuestionTime(timeAlertThreshold);
-                                    setIsQuestionStarted(true);
-                                  }}
+                        <div
+                          className={cn(
+                            "px-6 py-4 bg-[#FDFDFB] dark:bg-slate-900 border-b-2 border-black/5 dark:border-slate-800 transition-all duration-300",
+                            isPaused && "blur-sm",
+                          )}
+                        >
+                          <div className="max-w-6xl mx-auto space-y-4 text-black dark:text-white">
+                            {pendingSession && (
+                              <motion.div
+                                initial={{ opacity: 0, y: -20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="p-4 bg-amber-500/10 border-2 border-amber-500/20 rounded-3xl flex items-center justify-between gap-4"
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center text-white shadow-lg">
+                                    <History size={24} />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-sm font-bold">
+                                      Quiz em andamento detectado!
+                                    </h4>
+                                    <p className="text-xs text-black/50 dark:text-white/50">
+                                      Deseja continuar de onde parou em{" "}
+                                      <b>{pendingSession.lastFileName}</b>?
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() =>
+                                      clearActiveSession().then(() =>
+                                        setPendingSession(null),
+                                      )
+                                    }
+                                    className="px-4 py-2 rounded-xl text-xs font-bold hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                                  >
+                                    Descartar
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      resumeSession(pendingSession)
+                                    }
+                                    className="px-6 py-2 bg-amber-500 text-white rounded-xl text-xs font-black shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all"
+                                  >
+                                    Continuar Quiz
+                                  </button>
+                                </div>
+                              </motion.div>
+                            )}
+                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                              <div className="flex items-center gap-4">
+                                <div
                                   className={cn(
-                                    "transition-all duration-500 flex items-center justify-center font-mono font-bold rounded-md shadow-sm h-full flex-1 min-w-0 border border-black/5 dark:border-white/5 relative",
-                                    (isCurrent || isAnswered) 
-                                      ? cn(theme.primary, isCurrent && "z-10 shadow-lg scale-y-105") 
-                                      : "bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10"
+                                    "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transform -rotate-3 transition-all hover:rotate-0",
+                                    theme.primary,
+                                    theme.contrastText,
                                   )}
                                 >
-                                  <span className={cn(
-                                    "transition-all duration-300 flex items-center justify-center shrink-0",
-                                    isCurrent ? "text-2xl font-black" : "text-base font-bold",
-                                    (isCurrent || isAnswered) ? theme.contrastText : "text-black/40 dark:text-white/20"
-                                  )}>
-                                    {idx + 1}
-                                  </span>
-                                  {isWrong && (
-                                    <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-1 bg-[#B91C1C] shadow-[0_0_8px_rgba(185,28,28,0.8)] rounded-full" />
-                                  )}
-                                </button>
-                              );
-                            })}
+                                  <LayoutDashboard size={24} />
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="text-[10px] font-black dark:text-white uppercase tracking-[0.2em] text-black/30">
+                                      Progresso
+                                    </h3>
+                                    <div className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[8px] font-black uppercase">
+                                      Ativo
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <div className="h-2.5 w-48 sm:w-56 bg-black/[0.05] dark:bg-white/10 rounded-full overflow-hidden shadow-inner border border-black/5 dark:border-white/5 relative">
+                                      <motion.div
+                                        initial={{ width: 0 }}
+                                        animate={{
+                                          width: `${(answers.filter((a) => a !== null).length / (questions.length || 1)) * 100}%`,
+                                        }}
+                                        className={cn(
+                                          "h-full relative z-10",
+                                          theme.primary,
+                                        )}
+                                      />
+                                    </div>
+                                    <div className="flex items-baseline gap-1 px-3 py-1 rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-black/5 dark:border-white/10">
+                                      <span className="text-sm font-black dark:text-emerald-400 text-emerald-600 tabular-nums">
+                                        {
+                                          answers.filter((a) => a !== null)
+                                            .length
+                                        }
+                                      </span>
+                                      <span className="text-[9px] font-black text-black/30 dark:text-slate-500 uppercase">
+                                        / {questions.length}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-6">
+                                <div className="flex flex-col items-center lg:items-end">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() =>
+                                        setShowExitQuizConfirmation(true)
+                                      }
+                                      className="px-3 py-1.5 rounded-xl bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 transition-all text-[10px] font-black uppercase tracking-wider"
+                                    >
+                                      Sair
+                                    </button>
+                                    <button
+                                      onClick={resetCurrentQuiz}
+                                      className="px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-all text-[10px] font-black uppercase tracking-wider"
+                                    >
+                                      Reiniciar
+                                    </button>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 relative mt-1">
+                                    <span className="text-xl font-black italic dark:text-white leading-none tracking-tighter tabular-nums drop-shadow-sm">
+                                      #{currentIndex + 1}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="h-10 w-[1.5px] bg-black/5 dark:bg-white/10 hidden sm:block rounded-full" />
+
+                                <div className="flex flex-wrap items-center gap-4">
+                                  {/* Stats Compact */}
+                                  <div className="flex items-center gap-4">
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-[7px] font-black text-emerald-500 uppercase tracking-widest leading-none mb-0.5">
+                                        Acertos
+                                      </span>
+                                      <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 tabular-nums leading-none">
+                                        {
+                                          answers.filter(
+                                            (a, i) =>
+                                              a !== null &&
+                                              a
+                                                .toString()
+                                                .trim()
+                                                .toLowerCase() ===
+                                                (
+                                                  questions[i]?.correctAnswer ||
+                                                  ""
+                                                )
+                                                  .toString()
+                                                  .trim()
+                                                  .toLowerCase(),
+                                          ).length
+                                        }
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-[7px] font-black text-rose-500 uppercase tracking-widest leading-none mb-0.5">
+                                        Erros
+                                      </span>
+                                      <span className="text-lg font-black text-rose-600 dark:text-rose-400 tabular-nums leading-none">
+                                        {
+                                          answers.filter(
+                                            (a, i) =>
+                                              a !== null &&
+                                              a
+                                                .toString()
+                                                .trim()
+                                                .toLowerCase() !==
+                                                (
+                                                  questions[i]?.correctAnswer ||
+                                                  ""
+                                                )
+                                                  .toString()
+                                                  .trim()
+                                                  .toLowerCase(),
+                                          ).length
+                                        }
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-[7px] font-black text-blue-500 uppercase tracking-widest leading-none mb-0.5">
+                                        Feitas
+                                      </span>
+                                      <span className="text-lg font-black text-blue-600 dark:text-blue-400 tabular-nums leading-none">
+                                        {
+                                          answers.filter((a) => a !== null)
+                                            .length
+                                        }
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="bg-rose-500/5 dark:bg-rose-500/10 px-5 py-2 rounded-2xl border border-rose-500/20 flex flex-col items-center lg:items-end min-w-[100px]">
+                                    <span className="text-[8px] font-black text-rose-500 dark:text-rose-400 uppercase tracking-[0.2em] mb-0.5 italic">
+                                      Restantes
+                                    </span>
+                                    <div className="flex items-baseline gap-1">
+                                      <motion.span
+                                        key={
+                                          questions.length -
+                                          answers.filter((a) => a !== null)
+                                            .length
+                                        }
+                                        initial={{ y: -10, opacity: 0 }}
+                                        animate={{ y: 0, opacity: 1 }}
+                                        className="text-3xl font-black italic text-rose-600 dark:text-rose-500 leading-none tabular-nums tracking-tighter"
+                                      >
+                                        {questions.length -
+                                          answers.filter((a) => a !== null)
+                                            .length}
+                                      </motion.span>
+                                      <span className="text-[9px] font-black text-rose-500/40 dark:text-rose-400/40 uppercase">
+                                        Faltam
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-black/5 dark:bg-white/5 p-1 rounded-2xl border border-black/5 dark:border-white/5 shadow-inner">
+                              <div className="flex items-center w-full gap-1.5 h-12 px-1">
+                                {questions.map((_, idx) => {
+                                  const isAnswered = answers[idx] !== null;
+                                  const isCorrect =
+                                    isAnswered &&
+                                    answers[idx] ===
+                                      questions[idx]?.correctAnswer;
+                                  const isCurrent = idx === currentIndex;
+                                  return (
+                                    <button
+                                      key={idx}
+                                      onClick={() => {
+                                        setCurrentIndex(idx);
+                                        setQuestionTime(timeAlertThreshold);
+                                        setIsQuestionStarted(true);
+                                      }}
+                                      className={cn(
+                                        "transition-all duration-200 flex-1 flex items-center justify-center font-mono text-[13px] font-black rounded-lg h-9 relative border-b-2 min-w-0 transition-all",
+                                        isCurrent
+                                          ? cn(
+                                              theme.primary,
+                                              theme.contrastText,
+                                              "shadow-lg scale-105 z-10 border-black/10 -translate-y-0.5",
+                                            )
+                                          : isAnswered
+                                            ? isCorrect
+                                              ? "bg-emerald-500 border-emerald-700 text-white"
+                                              : "bg-rose-500 border-rose-700 text-white"
+                                            : cn(
+                                                "border-black/5 dark:border-white/10 text-black/60 dark:text-slate-300 shadow-sm transition-colors",
+                                                theme.bg,
+                                                "bg-opacity-40 dark:bg-white/10 hover:bg-white/40 dark:hover:bg-white/15",
+                                              ),
+                                      )}
+                                      id={`q-nav-${idx}`}
+                                    >
+                                      <span className="truncate">
+                                        {idx + 1}
+                                      </span>
+                                      {isAnswered && !isCurrent && (
+                                        <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-900 bg-white dark:bg-slate-900 shadow-sm flex items-center justify-center">
+                                          <div
+                                            className={cn(
+                                              "w-full h-full rounded-full",
+                                              isCorrect
+                                                ? "bg-emerald-400"
+                                                : "bg-rose-400",
+                                            )}
+                                          />
+                                        </div>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -9626,12 +12830,23 @@ function QuizApp() {
                                 <Pause size={40} />
                               </div>
                               <div className="space-y-2">
-                                <h3 className="text-2xl font-bold dark:text-slate-100">Quiz Pausado</h3>
-                                <p className="text-black/60 dark:text-slate-400">O tempo está parado. Clique em retomar para continuar.</p>
+                                <h3 className="text-2xl font-bold dark:text-slate-100">
+                                  Quiz Pausado
+                                </h3>
+                                <p className="text-black/60 dark:text-slate-400">
+                                  O tempo está parado. Clique em retomar para
+                                  continuar.
+                                </p>
                               </div>
                               <button
                                 onClick={() => setIsPaused(false)}
-                                className={cn("flex items-center gap-3 px-10 py-4 rounded-2xl font-bold transition-all transform hover:scale-105", theme.primary, theme.contrastText, theme.primaryHover, theme.shadow)}
+                                className={cn(
+                                  "flex items-center gap-3 px-10 py-4 rounded-2xl font-bold transition-all transform hover:scale-105",
+                                  theme.primary,
+                                  theme.contrastText,
+                                  theme.primaryHover,
+                                  theme.shadow,
+                                )}
                               >
                                 <Play size={24} />
                                 Retomar Quiz
@@ -9639,27 +12854,50 @@ function QuizApp() {
                             </div>
                           )}
 
-                          {!isQuestionStarted && !isReviewMode && currentIndex === 0 && (
-                            <div className="absolute inset-0 z-20 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center space-y-8">
-                              <motion.div 
-                                initial={{ scale: 0.8, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                className={cn("w-24 h-24 bg-gradient-to-br rounded-[2rem] flex items-center justify-center shadow-2xl rotate-12", theme.gradientFrom, theme.gradientTo, theme.shadowLg)}
+                          {!isQuestionStarted && !isReviewMode && (
+                            <div className="absolute inset-0 z-20 bg-white/98 dark:bg-slate-950/98 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center space-y-10">
+                              <motion.div
+                                initial={{
+                                  scale: 0.8,
+                                  opacity: 0,
+                                  rotate: -15,
+                                }}
+                                animate={{ scale: 1, opacity: 1, rotate: 12 }}
+                                className={cn(
+                                  "w-32 h-32 bg-gradient-to-br rounded-[3rem] flex items-center justify-center shadow-2xl",
+                                  theme.gradientFrom,
+                                  theme.gradientTo,
+                                )}
                               >
-                                <BrainCircuit size={48} className="text-white" />
+                                <BrainCircuit
+                                  size={64}
+                                  className="text-white"
+                                />
                               </motion.div>
-                              <div className="space-y-3 max-w-sm">
-                                <h3 className="text-3xl font-bold tracking-tight dark:text-slate-100">Pronto para o desafio?</h3>
-                                <p className="text-black/50 dark:text-slate-400 leading-relaxed">
-                                  Analise a questão com calma. O tempo começará a contar assim que você iniciar.
+                              <div className="space-y-4 max-w-md">
+                                <h3 className="text-4xl font-black tracking-tight dark:text-slate-100 uppercase">
+                                  Pronto?
+                                </h3>
+                                <p className="text-black/50 dark:text-slate-400 text-lg leading-relaxed font-serif italic">
+                                  "O conhecimento é a única ferramenta que
+                                  ninguém pode tirar de você."
                                 </p>
                               </div>
                               <button
                                 onClick={() => setIsQuestionStarted(true)}
-                                className={cn("group relative flex items-center gap-4 px-12 py-5 rounded-[2rem] font-bold transition-all transform hover:scale-105 active:scale-95 shadow-xl", theme.primary, theme.contrastText, theme.primaryHover, theme.shadow)}
+                                className={cn(
+                                  "group relative flex items-center gap-5 px-16 py-6 rounded-[2.5rem] font-black text-xl transition-all transform hover:scale-110 active:scale-95 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.3)]",
+                                  theme.primary,
+                                  theme.contrastText,
+                                  theme.primaryHover,
+                                  theme.shadow,
+                                )}
                               >
-                                <ArrowRight size={24} className="group-hover:translate-x-1 transition-transform" />
-                                <span className="text-lg">Iniciar Questão</span>
+                                <ArrowRight
+                                  size={32}
+                                  className="group-hover:translate-x-2 transition-transform"
+                                />
+                                <span>Iniciar Questão #{currentIndex + 1}</span>
                               </button>
                             </div>
                           )}
@@ -9667,46 +12905,71 @@ function QuizApp() {
                           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 flex-shrink-0">
                             <div className="flex items-center gap-4 sm:gap-8 overflow-x-auto no-scrollbar w-full sm:w-auto">
                               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                                <span className="text-[8px] sm:text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Dificuldade</span>
-                                <span 
+                                <span className="text-[8px] sm:text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">
+                                  Dificuldade
+                                </span>
+                                <span
                                   className={cn(
                                     "px-2 sm:px-3 py-0.5 sm:py-1 rounded-lg text-[8px] sm:text-[10px] font-bold uppercase tracking-wider w-fit cursor-help",
-                                    currentQuestion.difficulty === 'easy' ? theme.difficultyEasy :
-                                    currentQuestion.difficulty === 'medium' ? "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" :
-                                    "bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400"
+                                    currentQuestion.difficulty === "easy"
+                                      ? theme.difficultyEasy
+                                      : currentQuestion.difficulty === "medium"
+                                        ? "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400"
+                                        : "bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400",
                                   )}
                                   title={
-                                    currentQuestion.difficulty === 'easy' ? "Fácil: Questões com conceitos diretos e fundamentais." :
-                                    currentQuestion.difficulty === 'medium' ? "Médio: Questões que exigem aplicação de conceitos e análise moderada." :
-                                    "Difícil: Questões complexas que exigem síntese de múltiplos conceitos e análise profunda."
+                                    currentQuestion.difficulty === "easy"
+                                      ? "Fácil: Questões com conceitos diretos e fundamentais."
+                                      : currentQuestion.difficulty === "medium"
+                                        ? "Médio: Questões que exigem aplicação de conceitos e análise moderada."
+                                        : "Difícil: Questões complexas que exigem síntese de múltiplos conceitos e análise profunda."
                                   }
                                 >
-                                  {currentQuestion.difficulty === 'easy' ? 'Fácil' : 
-                                   currentQuestion.difficulty === 'medium' ? 'Médio' : 'Difícil'}
+                                  {currentQuestion.difficulty === "easy"
+                                    ? "Fácil"
+                                    : currentQuestion.difficulty === "medium"
+                                      ? "Médio"
+                                      : "Difícil"}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                                <span className="text-[8px] sm:text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">Tempo</span>
-                                <div className={cn(
-                                  "flex items-center gap-1 sm:gap-1.5 font-mono font-bold transition-all duration-300",
-                                  questionTime <= 15 
-                                    ? "text-rose-600 text-lg sm:text-xl animate-pulse" 
-                                    : cn(theme.text, theme.textDark, "text-base sm:text-lg")
-                                )}>
+                                <span className="text-[8px] sm:text-[10px] font-bold text-black/30 dark:text-slate-600 uppercase tracking-[0.2em]">
+                                  Tempo
+                                </span>
+                                <div
+                                  className={cn(
+                                    "flex items-center gap-1 sm:gap-1.5 font-mono font-bold transition-all duration-300",
+                                    questionTime <= 15
+                                      ? "text-rose-600 text-lg sm:text-xl animate-pulse"
+                                      : cn(
+                                          theme.text,
+                                          theme.textDark,
+                                          "text-base sm:text-lg",
+                                        ),
+                                  )}
+                                >
                                   <Clock size={questionTime <= 15 ? 18 : 14} />
                                   {formatTime(questionTime)}
                                 </div>
                               </div>
                               <div className="flex items-center gap-3 sm:gap-5 shrink-0 ml-4">
-                                <span className="text-[10px] sm:text-[12px] font-bold text-black/40 dark:text-slate-600 uppercase tracking-[0.2em]">Total</span>
-                                <div className={cn("flex items-center gap-2 sm:gap-3 font-mono font-bold text-base sm:text-lg pl-3 border-l border-black/10 dark:border-white/10", theme.text, theme.textDark)}>
+                                <span className="text-[10px] sm:text-[12px] font-bold text-black/40 dark:text-slate-600 uppercase tracking-[0.2em]">
+                                  Total
+                                </span>
+                                <div
+                                  className={cn(
+                                    "flex items-center gap-2 sm:gap-3 font-mono font-bold text-base sm:text-lg pl-3 border-l border-black/10 dark:border-white/10",
+                                    theme.text,
+                                    theme.textDark,
+                                  )}
+                                >
                                   <Timer size={16} />
                                   {formatTime(totalTime)}
                                 </div>
                               </div>
                             </div>
 
-                            <button 
+                            <button
                               onClick={() => setShowExitQuizConfirmation(true)}
                               className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-rose-500/10 hover:text-rose-600 transition-all text-[10px] font-bold dark:text-slate-400 shrink-0"
                             >
@@ -9725,272 +12988,577 @@ function QuizApp() {
                               className="flex flex-col gap-6"
                             >
                               <div className="space-y-4">
-                              <span className={cn("text-sm font-serif italic", theme.textLight, theme.textLightDark)}>
-                                {currentQuestion.type === 'cebraspe' ? 'Julgue o item abaixo:' : 'Selecione a alternativa correta:'}
-                              </span>
-                              <div className="p-6 md:p-10 rounded-3xl bg-black/10 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-inner">
-                                <h2 className="text-xl md:text-2xl font-medium leading-relaxed tracking-tight text-balance text-black dark:text-white">
-                                  {currentQuestion.question}
-                                </h2>
+                                <span
+                                  className={cn(
+                                    "text-sm font-serif italic",
+                                    theme.textLight,
+                                    theme.textLightDark,
+                                  )}
+                                >
+                                  {currentQuestion.type === "cebraspe"
+                                    ? "Julgue o item abaixo:"
+                                    : "Selecione a alternativa correta:"}
+                                </span>
+                                <div className="p-3.5 md:p-5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-inner">
+                                  <h2 className="text-lg md:text-[23px] font-medium leading-relaxed tracking-tight text-left text-balance text-black dark:text-white">
+                                    {currentQuestion.question}
+                                  </h2>
+                                </div>
+
+                                {currentQuestion.hint &&
+                                  currentAnswer === null &&
+                                  !isReviewMode && (
+                                    <div className="flex flex-col items-center">
+                                      <button
+                                        onClick={() => setShowHint(!showHint)}
+                                        className={cn(
+                                          "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all",
+                                          showHint
+                                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                                            : "bg-black/5 dark:bg-white/5 text-black/40 dark:text-slate-500 hover:bg-amber-50 dark:hover:bg-amber-900/10 hover:text-amber-600",
+                                        )}
+                                      >
+                                        <Lightbulb
+                                          size={16}
+                                          className={cn(
+                                            showHint && "fill-amber-500",
+                                          )}
+                                        />
+                                        {showHint
+                                          ? "Esconder Dica"
+                                          : "Ver Dica"}
+                                      </button>
+
+                                      <AnimatePresence>
+                                        {showHint && (
+                                          <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{
+                                              opacity: 1,
+                                              height: "auto",
+                                            }}
+                                            exit={{ opacity: 0, height: 0 }}
+                                            className="mt-3 w-full"
+                                          >
+                                            <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-900/30 text-center">
+                                              <p className="text-sm font-medium text-amber-800 dark:text-amber-300 italic">
+                                                "{currentQuestion.hint}"
+                                              </p>
+                                            </div>
+                                          </motion.div>
+                                        )}
+                                      </AnimatePresence>
+                                    </div>
+                                  )}
                               </div>
 
-                              {currentQuestion.hint && currentAnswer === null && !isReviewMode && (
-                                <div className="flex flex-col items-center">
-                                  <button
-                                    onClick={() => setShowHint(!showHint)}
-                                    className={cn(
-                                      "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all",
-                                      showHint 
-                                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" 
-                                        : "bg-black/5 dark:bg-white/5 text-black/40 dark:text-slate-500 hover:bg-amber-50 dark:hover:bg-amber-900/10 hover:text-amber-600"
-                                    )}
-                                  >
-                                    <Lightbulb size={16} className={cn(showHint && "fill-amber-500")} />
-                                    {showHint ? 'Esconder Dica' : 'Ver Dica'}
-                                  </button>
-                                  
-                                  <AnimatePresence>
-                                    {showHint && (
+                              <div className="grid grid-cols-1 gap-4">
+                                {currentQuestion.options &&
+                                currentQuestion.options.length > 0
+                                  ? currentQuestion.options.map(
+                                      (option, idx) => (
+                                        <motion.div
+                                          key={option}
+                                          initial={{ opacity: 0, x: -20 }}
+                                          animate={{ opacity: 1, x: 0 }}
+                                          transition={{ delay: idx * 0.1 }}
+                                          role="button"
+                                          tabIndex={
+                                            currentAnswer !== null ||
+                                            isReviewMode
+                                              ? -1
+                                              : 0
+                                          }
+                                          onClick={() => {
+                                            if (
+                                              !(
+                                                currentAnswer !== null ||
+                                                isReviewMode
+                                              )
+                                            ) {
+                                              handleAnswer(option);
+                                            }
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (
+                                              (e.key === "Enter" ||
+                                                e.key === " ") &&
+                                              !(
+                                                currentAnswer !== null ||
+                                                isReviewMode
+                                              )
+                                            ) {
+                                              e.preventDefault();
+                                              handleAnswer(option);
+                                            }
+                                          }}
+                                          className={cn(
+                                            "group flex flex-col px-4 py-3 rounded-2xl border-2 transition-all duration-300 text-left relative overflow-hidden",
+                                            !(
+                                              currentAnswer !== null ||
+                                              isReviewMode
+                                            ) && "cursor-pointer",
+                                            currentAnswer === null ||
+                                              (isSimulado && !isReviewMode)
+                                              ? cn(
+                                                  "border-black/5 dark:border-slate-800",
+                                                  `hover:${theme.border}`,
+                                                  `dark:hover:${theme.border}`,
+                                                  `hover:${theme.bg}/50`,
+                                                  `dark:hover:${theme.bgDark}`,
+                                                )
+                                              : option
+                                                    .toString()
+                                                    .trim()
+                                                    .toLowerCase() ===
+                                                  (
+                                                    currentQuestion.correctAnswer ||
+                                                    ""
+                                                  )
+                                                    .toString()
+                                                    .trim()
+                                                    .toLowerCase()
+                                                ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-inner"
+                                                : (currentAnswer || "")
+                                                      .toString()
+                                                      .trim()
+                                                      .toLowerCase() ===
+                                                    option
+                                                      .toString()
+                                                      .trim()
+                                                      .toLowerCase()
+                                                  ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10"
+                                                  : "border-black/5 dark:border-slate-800 opacity-50",
+                                          )}
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <div className="flex items-center gap-4">
+                                              <div
+                                                className={cn(
+                                                  "w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-colors shrink-0",
+                                                  currentAnswer === null ||
+                                                    (isSimulado &&
+                                                      !isReviewMode)
+                                                    ? cn(
+                                                        theme.bgLight,
+                                                        theme.bgLightDark,
+                                                        "text-black dark:text-white",
+                                                      )
+                                                    : option ===
+                                                        currentQuestion.correctAnswer
+                                                      ? "bg-emerald-600 text-white"
+                                                      : currentAnswer === option
+                                                        ? "bg-rose-600 text-white"
+                                                        : "bg-black/5 dark:bg-slate-800 dark:text-slate-600",
+                                                )}
+                                              >
+                                                {String.fromCharCode(65 + idx)}
+                                              </div>
+                                              <span
+                                                className={cn(
+                                                  "font-medium text-base md:text-lg transition-colors text-black dark:text-white line-clamp-2",
+                                                )}
+                                              >
+                                                {option}
+                                              </span>
+                                            </div>
+                                            {currentAnswer !== null &&
+                                              !(isSimulado && !isReviewMode) &&
+                                              option ===
+                                                currentQuestion.correctAnswer && (
+                                                <motion.div
+                                                  initial={{ scale: 0 }}
+                                                  animate={{ scale: 1 }}
+                                                >
+                                                  <CheckCircle2
+                                                    className="text-emerald-600"
+                                                    size={28}
+                                                  />
+                                                </motion.div>
+                                              )}
+                                            {currentAnswer === option &&
+                                              !(isSimulado && !isReviewMode) &&
+                                              option !==
+                                                currentQuestion.correctAnswer && (
+                                                <motion.div
+                                                  initial={{ scale: 0 }}
+                                                  animate={{ scale: 1 }}
+                                                >
+                                                  <XCircle
+                                                    className="text-rose-600"
+                                                    size={28}
+                                                  />
+                                                </motion.div>
+                                              )}
+                                          </div>
+
+                                          {(currentAnswer !== null &&
+                                          !(isSimulado && !isReviewMode)
+                                            ? currentAnswer === option
+                                            : isReviewMode &&
+                                              option ===
+                                                currentQuestion.correctAnswer) && (
+                                            <motion.div
+                                              initial={{
+                                                opacity: 0,
+                                                height: 0,
+                                              }}
+                                              animate={{
+                                                opacity: 1,
+                                                height: "auto",
+                                              }}
+                                              className="mt-4 pt-4 border-t border-black/5 dark:border-white/10"
+                                            >
+                                              <div className="flex items-start gap-4">
+                                                <div
+                                                  className={cn(
+                                                    "w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center transition-colors",
+                                                    option ===
+                                                      currentQuestion.correctAnswer
+                                                      ? "bg-emerald-600 text-white"
+                                                      : "bg-rose-600 text-white",
+                                                  )}
+                                                >
+                                                  {option ===
+                                                  currentQuestion.correctAnswer ? (
+                                                    <Trophy size={20} />
+                                                  ) : (
+                                                    <AlertCircle size={20} />
+                                                  )}
+                                                </div>
+                                                <div className="flex-1 space-y-3">
+                                                  <div className="flex items-center justify-between">
+                                                    <h4 className="text-base font-normal font-sans text-[#3b3b3b] dark:text-slate-300 uppercase tracking-tighter">
+                                                      {option ===
+                                                      currentQuestion.correctAnswer
+                                                        ? "Análise do Especialista"
+                                                        : "Ponto de Atenção"}
+                                                    </h4>
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handlePlayAudio(
+                                                          currentQuestion.explanation,
+                                                        );
+                                                      }}
+                                                      disabled={isAudioLoading}
+                                                      className={cn(
+                                                        "p-2 rounded-xl transition-all shadow-sm",
+                                                        isAudioPlaying
+                                                          ? cn(
+                                                              theme.bgLight,
+                                                              theme.bgLightDark,
+                                                              theme.text,
+                                                              theme.textDark,
+                                                              "animate-pulse",
+                                                            )
+                                                          : "hover:bg-black/5 dark:hover:bg-slate-800 text-black/40 dark:text-slate-500 bg-white dark:bg-slate-900",
+                                                        isAudioLoading &&
+                                                          "opacity-50 cursor-wait",
+                                                      )}
+                                                    >
+                                                      {isAudioLoading ? (
+                                                        <Loader2
+                                                          size={16}
+                                                          className="animate-spin"
+                                                        />
+                                                      ) : (
+                                                        <Volume2 size={16} />
+                                                      )}
+                                                    </button>
+                                                  </div>
+                                                  <div
+                                                    className={cn(
+                                                      "explanation-text prose prose-sm max-w-none prose-slate dark:prose-invert prose-p:text-black/80 dark:prose-p:text-white/95 leading-relaxed text-[17px] font-['Arial']",
+                                                      theme.prose,
+                                                    )}
+                                                  >
+                                                    <Markdown
+                                                      remarkPlugins={[
+                                                        remarkGfm,
+                                                      ]}
+                                                      components={{
+                                                        p: ({ node, ...props }) => (
+                                                          <p
+                                                            className="mb-4 font-['Arial'] text-[17px] font-bold last:mb-0"
+                                                            {...props}
+                                                          />
+                                                        ),
+                                                        strong: ({
+                                                          node,
+                                                          ...props
+                                                        }) => (
+                                                          <strong
+                                                            className={cn(
+                                                              "font-black text-rose-600 dark:text-rose-400 decoration-rose-500/20",
+                                                              theme.text,
+                                                              theme.textDark,
+                                                            )}
+                                                            {...props}
+                                                          />
+                                                        ),
+                                                      }}
+                                                    >
+                                                      {
+                                                        currentQuestion.explanation
+                                                      }
+                                                    </Markdown>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </motion.div>
+                                          )}
+                                        </motion.div>
+                                      ),
+                                    )
+                                  : ["Certo", "Errado"].map((option, idx) => (
                                       <motion.div
-                                        initial={{ opacity: 0, height: 0 }}
-                                        animate={{ opacity: 1, height: 'auto' }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        className="mt-3 w-full"
+                                        key={option}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: idx * 0.1 }}
+                                        role="button"
+                                        tabIndex={
+                                          currentAnswer !== null || isReviewMode
+                                            ? -1
+                                            : 0
+                                        }
+                                        onClick={() => {
+                                          if (
+                                            !(
+                                              currentAnswer !== null ||
+                                              isReviewMode
+                                            )
+                                          ) {
+                                            handleAnswer(option);
+                                          }
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (
+                                            (e.key === "Enter" ||
+                                              e.key === " ") &&
+                                            !(
+                                              currentAnswer !== null ||
+                                              isReviewMode
+                                            )
+                                          ) {
+                                            e.preventDefault();
+                                            handleAnswer(option);
+                                          }
+                                        }}
+                                        className={cn(
+                                          "group flex flex-col px-4 py-3 rounded-2xl border-2 transition-all duration-300 text-left relative overflow-hidden",
+                                          !(
+                                            currentAnswer !== null ||
+                                            isReviewMode
+                                          ) && "cursor-pointer",
+                                          currentAnswer === null ||
+                                            (isSimulado && !isReviewMode)
+                                            ? cn(
+                                                "border-black/5 dark:border-slate-800",
+                                                `hover:${theme.border}`,
+                                                `dark:hover:${theme.border}`,
+                                                `hover:${theme.bg}/50`,
+                                                `dark:hover:${theme.bgDark}`,
+                                              )
+                                            : option
+                                                  .toString()
+                                                  .trim()
+                                                  .toLowerCase() ===
+                                                (
+                                                  currentQuestion.correctAnswer ||
+                                                  ""
+                                                )
+                                                  .toString()
+                                                  .trim()
+                                                  .toLowerCase()
+                                              ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-inner"
+                                              : (currentAnswer || "")
+                                                    .toString()
+                                                    .trim()
+                                                    .toLowerCase() ===
+                                                  option
+                                                    .toString()
+                                                    .trim()
+                                                    .toLowerCase()
+                                                ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10"
+                                                : "border-black/5 dark:border-slate-800 opacity-50",
+                                        )}
                                       >
-                                        <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-900/30 text-center">
-                                          <p className="text-sm font-medium text-amber-800 dark:text-amber-300 italic">
-                                            "{currentQuestion.hint}"
-                                          </p>
-                                        </div>
-                                      </motion.div>
-                                    )}
-                                  </AnimatePresence>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className={cn(
-                              "grid gap-4",
-                              currentQuestion.type === 'cebraspe' ? "grid-cols-1" : "grid-cols-1"
-                            )}>
-                            {currentQuestion.type === 'cebraspe' ? (
-                              ['Certo', 'Errado'].map((option, idx) => (
-                                <motion.div
-                                  key={option}
-                                  initial={{ opacity: 0, x: -20 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  transition={{ delay: idx * 0.1 }}
-                                  role="button"
-                                  tabIndex={currentAnswer !== null || isReviewMode ? -1 : 0}
-                                  onClick={() => {
-                                    if (!(currentAnswer !== null || isReviewMode)) {
-                                      handleAnswer(option);
-                                    }
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if ((e.key === 'Enter' || e.key === ' ') && !(currentAnswer !== null || isReviewMode)) {
-                                      e.preventDefault();
-                                      handleAnswer(option);
-                                    }
-                                  }}
-                                  className={cn(
-                                    "group flex flex-col px-6 py-5 rounded-3xl border-2 transition-all duration-300 text-left relative overflow-hidden",
-                                    !(currentAnswer !== null || isReviewMode) && "cursor-pointer",
-                                    (currentAnswer === null || (isSimulado && !isReviewMode)) ? cn("border-black/5 dark:border-slate-800", `hover:${theme.border}`, `dark:hover:${theme.border}`, `hover:${theme.bg}/50`, `dark:hover:${theme.bgDark}`, `hover:${theme.shadowLight}`, `dark:hover:${theme.shadowDark}`) :
-                                    option === currentQuestion.correctAnswer ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-inner" :
-                                    currentAnswer === option ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10" : "border-black/5 dark:border-slate-800 opacity-50"
-                                  )}
-                                >
-                                  <div className="flex items-center justify-between w-full">
-                                    <div className="flex items-center gap-4">
-                                      <div className={cn(
-                                        "w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-colors shrink-0",
-                                        (currentAnswer === null || (isSimulado && !isReviewMode)) ? cn(theme.bgLight, theme.bgLightDark, "text-black dark:text-white") :
-                                        option === currentQuestion.correctAnswer ? "bg-emerald-600 text-white" :
-                                        currentAnswer === option ? "bg-rose-600 text-white" : "bg-black/5 dark:bg-slate-800 dark:text-slate-600"
-                                      )}>
-                                        {option === 'Certo' ? 'C' : 'E'}
-                                      </div>
-                                      <span className={cn(
-                                        "font-medium text-lg transition-colors text-black dark:text-white line-clamp-2"
-                                      )}>{option}</span>
-                                    </div>
-                                    {currentAnswer !== null && !(isSimulado && !isReviewMode) && option === currentQuestion.correctAnswer && (
-                                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                                        <CheckCircle2 className="text-emerald-600" size={28} />
-                                      </motion.div>
-                                    )}
-                                    {currentAnswer === option && !(isSimulado && !isReviewMode) && option !== currentQuestion.correctAnswer && (
-                                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                                        <XCircle className="text-rose-600" size={28} />
-                                      </motion.div>
-                                    )}
-                                  </div>
-
-                                  {(currentAnswer !== null && !(isSimulado && !isReviewMode) ? currentAnswer === option : (isReviewMode && option === currentQuestion.correctAnswer)) && (
-                                    <motion.div
-                                      initial={{ opacity: 0, height: 0 }}
-                                      animate={{ opacity: 1, height: 'auto' }}
-                                      className="mt-4 pt-4 border-t border-black/5 dark:border-white/5"
-                                    >
-                                      <div className="flex items-start gap-3">
-                                        <div className={cn(
-                                          "w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center",
-                                          option === currentQuestion.correctAnswer ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"
-                                        )}>
-                                          {option === currentQuestion.correctAnswer ? <Trophy size={16} /> : <AlertCircle size={16} />}
-                                        </div>
-                                        <div className="flex-1 space-y-2">
-                                          <div className="flex items-center justify-between">
-                                            <h4 className={cn(
-                                              "text-sm font-bold",
-                                              option === currentQuestion.correctAnswer ? "text-emerald-900 dark:text-emerald-300" : "text-rose-900 dark:text-rose-300"
-                                            )}>
-                                              {option === currentQuestion.correctAnswer ? 'Resposta Correta!' : 'Quase lá...'}
-                                            </h4>
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handlePlayAudio(currentQuestion.explanation);
-                                              }}
-                                              disabled={isAudioLoading}
+                                        <div className="flex items-center justify-between w-full">
+                                          <div className="flex items-center gap-4">
+                                            <div
                                               className={cn(
-                                                "p-1.5 rounded-lg transition-all",
-                                                isAudioPlaying ? cn(theme.bgLight, theme.bgLightDark, theme.text, theme.textDark, "animate-pulse") : "hover:bg-black/5 dark:hover:bg-slate-800 text-black/40 dark:text-slate-500",
-                                                isAudioLoading && "opacity-50 cursor-wait"
+                                                "w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-colors shrink-0",
+                                                currentAnswer === null ||
+                                                  (isSimulado && !isReviewMode)
+                                                  ? cn(
+                                                      theme.bgLight,
+                                                      theme.bgLightDark,
+                                                      "text-black dark:text-white",
+                                                    )
+                                                  : option ===
+                                                      currentQuestion.correctAnswer
+                                                    ? "bg-emerald-600 text-white"
+                                                    : currentAnswer === option
+                                                      ? "bg-rose-600 text-white"
+                                                      : "bg-black/5 dark:bg-slate-800 dark:text-slate-600",
                                               )}
                                             >
-                                              {isAudioLoading ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />}
-                                            </button>
-                                          </div>
-                                          <div className={cn("prose prose-xs max-w-none prose-slate dark:prose-invert prose-p:text-black/70 dark:prose-p:text-white/70", theme.prose)}>
-                                            <Markdown 
-                                              remarkPlugins={[remarkGfm]}
-                                              components={{
-                                                strong: ({node, ...props}) => (
-                                                  <strong className={cn("font-bold", theme.text, theme.textDark)} {...props} />
-                                                )
-                                              }}
-                                            >
-                                              {currentQuestion.explanation}
-                                            </Markdown>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </motion.div>
-                                  )}
-                                </motion.div>
-                              ))
-                            ) : (
-                              currentQuestion.options?.map((option, idx) => (
-                                <motion.div
-                                  key={option}
-                                  initial={{ opacity: 0, x: -20 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  transition={{ delay: idx * 0.1 }}
-                                  role="button"
-                                  tabIndex={currentAnswer !== null || isReviewMode ? -1 : 0}
-                                  onClick={() => {
-                                    if (!(currentAnswer !== null || isReviewMode)) {
-                                      handleAnswer(option);
-                                    }
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if ((e.key === 'Enter' || e.key === ' ') && !(currentAnswer !== null || isReviewMode)) {
-                                      e.preventDefault();
-                                      handleAnswer(option);
-                                    }
-                                  }}
-                                  className={cn(
-                                    "group flex flex-col px-6 py-5 rounded-3xl border-2 transition-all duration-300 text-left relative overflow-hidden",
-                                    !(currentAnswer !== null || isReviewMode) && "cursor-pointer",
-                                    (currentAnswer === null || (isSimulado && !isReviewMode)) ? cn("border-black/5 dark:border-slate-800", `hover:${theme.border}`, `dark:hover:${theme.border}`, `hover:${theme.bg}/50`, `dark:hover:${theme.bgDark}`, `hover:${theme.shadowLight}`, `dark:hover:${theme.shadowDark}`) :
-                                    option === currentQuestion.correctAnswer ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-inner" :
-                                    currentAnswer === option ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10" : "border-black/5 dark:border-slate-800 opacity-50"
-                                  )}
-                                >
-                                  <div className="flex items-center justify-between w-full">
-                                    <div className="flex items-center gap-4">
-                                      <div className={cn(
-                                        "w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-colors shrink-0",
-                                        (currentAnswer === null || (isSimulado && !isReviewMode)) ? cn(theme.bgLight, theme.bgLightDark, "text-black dark:text-white") :
-                                        option === currentQuestion.correctAnswer ? "bg-emerald-600 text-white" :
-                                        currentAnswer === option ? "bg-rose-600 text-white" : "bg-black/5 dark:bg-slate-800 dark:text-slate-600"
-                                      )}>
-                                        {String.fromCharCode(65 + idx)}
-                                      </div>
-                                      <span className={cn(
-                                        "font-medium text-base md:text-lg transition-colors text-black dark:text-white line-clamp-2"
-                                      )}>{option}</span>
-                                    </div>
-                                    {currentAnswer !== null && !(isSimulado && !isReviewMode) && option === currentQuestion.correctAnswer && (
-                                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                                        <CheckCircle2 className="text-emerald-600" size={28} />
-                                      </motion.div>
-                                    )}
-                                    {currentAnswer === option && !(isSimulado && !isReviewMode) && option !== currentQuestion.correctAnswer && (
-                                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                                        <XCircle className="text-rose-600" size={28} />
-                                      </motion.div>
-                                    )}
-                                  </div>
-
-                                  {(currentAnswer !== null && !(isSimulado && !isReviewMode) ? currentAnswer === option : (isReviewMode && option === currentQuestion.correctAnswer)) && (
-                                    <motion.div
-                                      initial={{ opacity: 0, height: 0 }}
-                                      animate={{ opacity: 1, height: 'auto' }}
-                                      className="mt-4 pt-4 border-t border-black/5 dark:border-white/5"
-                                    >
-                                      <div className="flex items-start gap-3">
-                                        <div className={cn(
-                                          "w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center",
-                                          option === currentQuestion.correctAnswer ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"
-                                        )}>
-                                          {option === currentQuestion.correctAnswer ? <Trophy size={16} /> : <AlertCircle size={16} />}
-                                        </div>
-                                        <div className="flex-1 space-y-2">
-                                          <div className="flex items-center justify-between">
-                                            <h4 className={cn(
-                                              "text-sm font-bold",
-                                              option === currentQuestion.correctAnswer ? "text-emerald-900 dark:text-emerald-300" : "text-rose-900 dark:text-rose-300"
-                                            )}>
-                                              {option === currentQuestion.correctAnswer ? 'Resposta Correta!' : 'Quase lá...'}
-                                            </h4>
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handlePlayAudio(currentQuestion.explanation);
-                                              }}
-                                              disabled={isAudioLoading}
+                                              {option === "Certo" ? "C" : "E"}
+                                            </div>
+                                            <span
                                               className={cn(
-                                                "p-1.5 rounded-lg transition-all",
-                                                isAudioPlaying ? cn(theme.bgLight, theme.bgLightDark, theme.text, theme.textDark, "animate-pulse") : "hover:bg-black/5 dark:hover:bg-slate-800 text-black/40 dark:text-slate-500",
-                                                isAudioLoading && "opacity-50 cursor-wait"
+                                                "font-medium text-lg transition-colors text-black dark:text-white line-clamp-2",
                                               )}
                                             >
-                                              {isAudioLoading ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />}
-                                            </button>
+                                              {option}
+                                            </span>
                                           </div>
-                                          <div className={cn("prose prose-xs max-w-none prose-slate dark:prose-invert prose-p:text-black/70 dark:prose-p:text-white/70", theme.prose)}>
-                                            <Markdown 
-                                              remarkPlugins={[remarkGfm]}
-                                              components={{
-                                                strong: ({node, ...props}) => (
-                                                  <strong className={cn("font-bold", theme.text, theme.textDark)} {...props} />
-                                                )
-                                              }}
-                                            >
-                                              {currentQuestion.explanation}
-                                            </Markdown>
-                                          </div>
+                                          {currentAnswer !== null &&
+                                            !(isSimulado && !isReviewMode) &&
+                                            option ===
+                                              currentQuestion.correctAnswer && (
+                                              <motion.div
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                              >
+                                                <CheckCircle2
+                                                  className="text-emerald-600"
+                                                  size={28}
+                                                />
+                                              </motion.div>
+                                            )}
+                                          {currentAnswer === option &&
+                                            !(isSimulado && !isReviewMode) &&
+                                            option !==
+                                              currentQuestion.correctAnswer && (
+                                              <motion.div
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                              >
+                                                <XCircle
+                                                  className="text-rose-600"
+                                                  size={28}
+                                                />
+                                              </motion.div>
+                                            )}
                                         </div>
-                                      </div>
-                                    </motion.div>
-                                  )}
-                                </motion.div>
-                              ))
-                            )}
-                            </div>
+
+                                        {(currentAnswer !== null &&
+                                        !(isSimulado && !isReviewMode)
+                                          ? currentAnswer === option
+                                          : isReviewMode &&
+                                            option ===
+                                              currentQuestion.correctAnswer) && (
+                                          <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{
+                                              opacity: 1,
+                                              height: "auto",
+                                            }}
+                                            className="mt-4 pt-4 border-t border-black/5 dark:border-white/5"
+                                          >
+                                            <div className="flex items-start gap-4">
+                                              <div
+                                                className={cn(
+                                                  "w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center transition-colors",
+                                                  option ===
+                                                    currentQuestion.correctAnswer
+                                                    ? "bg-emerald-600 text-white"
+                                                    : "bg-rose-600 text-white",
+                                                )}
+                                              >
+                                                {option ===
+                                                currentQuestion.correctAnswer ? (
+                                                  <Trophy size={20} />
+                                                ) : (
+                                                  <AlertCircle size={20} />
+                                                )}
+                                              </div>
+                                              <div className="flex-1 space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                  <h4 className="text-base font-normal font-sans text-[#3b3b3b] dark:text-slate-300 uppercase tracking-tighter">
+                                                    {option ===
+                                                    currentQuestion.correctAnswer
+                                                      ? "Análise do Especialista"
+                                                      : "Ponto de Atenção"}
+                                                  </h4>
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handlePlayAudio(
+                                                        currentQuestion.explanation,
+                                                      );
+                                                    }}
+                                                    disabled={isAudioLoading}
+                                                    className={cn(
+                                                      "p-2 rounded-xl transition-all shadow-sm",
+                                                      isAudioPlaying
+                                                        ? cn(
+                                                            theme.bgLight,
+                                                            theme.bgLightDark,
+                                                            theme.text,
+                                                            theme.textDark,
+                                                            "animate-pulse",
+                                                          )
+                                                        : "hover:bg-black/5 dark:hover:bg-slate-800 text-black/40 dark:text-slate-500 bg-white dark:bg-slate-900",
+                                                      isAudioLoading &&
+                                                        "opacity-50 cursor-wait",
+                                                    )}
+                                                  >
+                                                    {isAudioLoading ? (
+                                                      <Loader2
+                                                        size={16}
+                                                        className="animate-spin"
+                                                      />
+                                                    ) : (
+                                                      <Volume2 size={16} />
+                                                    )}
+                                                  </button>
+                                                </div>
+                                                <div
+                                                  className={cn(
+                                                    "explanation-text prose prose-sm max-w-none prose-slate dark:prose-invert prose-p:text-black/80 dark:prose-p:text-white/95 leading-relaxed text-[17px] font-['Arial']",
+                                                    theme.prose,
+                                                  )}
+                                                >
+                                                  <Markdown
+                                                    remarkPlugins={[remarkGfm]}
+                                                    components={{
+                                                      p: ({ node, ...props }) => (
+                                                        <p
+                                                          className="mb-4 font-['Arial'] text-[17px] font-bold last:mb-0"
+                                                          {...props}
+                                                        />
+                                                      ),
+                                                      strong: ({
+                                                        node,
+                                                        ...props
+                                                      }) => (
+                                                        <strong
+                                                          className={cn(
+                                                            "font-black text-rose-600 dark:text-rose-400 decoration-rose-500/20",
+                                                            theme.text,
+                                                            theme.textDark,
+                                                          )}
+                                                          {...props}
+                                                        />
+                                                      ),
+                                                    }}
+                                                  >
+                                                    {
+                                                      currentQuestion.explanation
+                                                    }
+                                                  </Markdown>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </motion.div>
+                                        )}
+                                      </motion.div>
+                                    ))}
+                              </div>
                             </motion.div>
                           </AnimatePresence>
 
@@ -10024,22 +13592,32 @@ function QuizApp() {
                                     onClick={handleToggleDeepDive}
                                     className={cn(
                                       "flex items-center gap-2 px-6 py-4 rounded-xl font-normal transition-all active:scale-95 shadow-lg",
-                                      showDeepDive ? "bg-rose-600 text-white" : "bg-black dark:bg-slate-800 text-white hover:bg-black/80 dark:hover:bg-slate-700"
+                                      showDeepDive
+                                        ? "bg-rose-600 text-white"
+                                        : "bg-black dark:bg-slate-800 text-white hover:bg-black/80 dark:hover:bg-slate-700",
                                     )}
                                   >
                                     <BrainCircuit size={20} />
-                                    {showDeepDive ? 'Fechar Explicação' : 'Explicar Matéria'}
+                                    {showDeepDive
+                                      ? "Fechar Explicação"
+                                      : "Explicar Matéria"}
                                   </button>
                                 </div>
                                 <button
                                   onClick={nextQuestion}
                                   className={cn(
-                                   "w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-4 rounded-xl font-bold text-white transition-all active:scale-95 shadow-lg",
+                                    "w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-4 rounded-xl font-bold text-white transition-all active:scale-95 shadow-lg",
                                     theme.primary,
-                                    theme.primaryHover
+                                    theme.primaryHover,
                                   )}
                                 >
-                                  <span>{currentIndex === questions.length - 1 ? (isReviewMode ? 'Voltar ao Início' : 'Finalizar') : 'Próxima Questão'}</span>
+                                  <span>
+                                    {currentIndex === questions.length - 1
+                                      ? isReviewMode
+                                        ? "Voltar ao Início"
+                                        : "Finalizar"
+                                      : "Próxima Questão"}
+                                  </span>
                                   <ArrowRight size={20} />
                                 </button>
                               </div>
@@ -10059,47 +13637,83 @@ function QuizApp() {
                         exit={{ opacity: 0, x: 20 }}
                         className={cn(
                           "transition-all duration-500",
-                          isDeepDiveExpanded ? "lg:col-span-12" : "lg:col-span-7"
+                          isDeepDiveExpanded
+                            ? "lg:col-span-12"
+                            : "lg:col-span-7",
                         )}
                       >
-                        <div className={cn(
-                          "flex flex-col overflow-hidden shadow-[0_0_150px_rgba(0,0,0,0.6)] font-arial",
-                          isDeepDiveExpanded 
-                            ? "fixed inset-0 z-[99999] bg-white dark:bg-slate-950 w-screen h-screen" 
-                            : cn("sticky top-24 h-[75vh] sm:rounded-[48px] rounded-3xl sm:border-8 border-4 border-black/10 dark:border-white/10", theme.bg)
-                        )}>
+                        <div
+                          className={cn(
+                            "flex flex-col overflow-hidden shadow-[0_0_150px_rgba(0,0,0,0.6)] font-arial",
+                            isDeepDiveExpanded
+                              ? "fixed inset-0 z-[99999] bg-white dark:bg-slate-950 w-screen h-screen"
+                              : cn(
+                                  "sticky top-24 h-[75vh] sm:rounded-[48px] rounded-3xl sm:border-8 border-4 border-black/10 dark:border-white/10",
+                                  theme.bg,
+                                ),
+                          )}
+                        >
                           {/* Header - Rigidly Anchored */}
-                          <div className={cn(
-                            "p-6 border-b-4 border-black/5 dark:border-white/5 z-[100000] flex-shrink-0", 
-                            isDeepDiveExpanded ? "bg-white dark:bg-slate-900" : theme.deepDiveBg
-                          )}>
-                            <div className={cn("flex items-center justify-between", isDeepDiveExpanded && "max-w-6xl mx-auto w-full")}>
+                          <div
+                            className={cn(
+                              "p-6 border-b-4 border-black/5 dark:border-white/5 z-[100000] flex-shrink-0",
+                              isDeepDiveExpanded
+                                ? "bg-white dark:bg-slate-900"
+                                : theme.deepDiveBg,
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "flex items-center justify-between",
+                                isDeepDiveExpanded &&
+                                  "max-w-6xl mx-auto w-full",
+                              )}
+                            >
                               <div className="flex items-center gap-4">
-                                <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl transform -rotate-3", theme.deepDiveIcon)}>
+                                <div
+                                  className={cn(
+                                    "w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl transform -rotate-3",
+                                    theme.deepDiveIcon,
+                                  )}
+                                >
                                   <BookOpen className="text-white" size={24} />
                                 </div>
                                 <div>
-                                  <h3 className="font-normal text-xl tracking-tighter text-black dark:text-white leading-none uppercase">Aprofundamento</h3>
+                                  <h3 className="font-normal text-xl tracking-tighter text-black dark:text-white leading-none uppercase">
+                                    Aprofundamento
+                                  </h3>
                                   <p className="mt-1 text-[9px] uppercase tracking-[0.4em] text-black/50 dark:text-white/50 font-normal">
-                                    {isDeepDiveExpanded ? "MODO IMERSIVO TOTAL" : "DETALHES DO TEMA"}
+                                    {isDeepDiveExpanded
+                                      ? "MODO IMERSIVO TOTAL"
+                                      : "DETALHES DO TEMA"}
                                   </p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-4">
-                                 {currentQuestion.deepDive && (
-                                   <button
-                                     onClick={() => setIsDeepDiveExpanded(!isDeepDiveExpanded)}
-                                     className={cn(
-                                       "flex items-center gap-2 px-3 py-1.5 rounded-lg font-normal text-[9px] uppercase tracking-widest transition-all shadow-md hover:scale-105 active:scale-95 border-2",
-                                       isDeepDiveExpanded 
-                                         ? "bg-black text-white border-black" 
-                                         : "bg-white dark:bg-slate-800 text-black dark:text-white border-black/20 dark:border-white/20"
-                                     )}
-                                   >
-                                     {isDeepDiveExpanded ? <><Minimize2 size={12} /> Recuar</> : <><Maximize2 size={12} /> Expandir</>}
-                                   </button>
-                                 )}
-                                <button 
+                                {currentQuestion.deepDive && (
+                                  <button
+                                    onClick={() =>
+                                      setIsDeepDiveExpanded(!isDeepDiveExpanded)
+                                    }
+                                    className={cn(
+                                      "flex items-center gap-2 px-3 py-1.5 rounded-lg font-normal text-[9px] uppercase tracking-widest transition-all shadow-md hover:scale-105 active:scale-95 border-2",
+                                      isDeepDiveExpanded
+                                        ? "bg-black text-white border-black"
+                                        : "bg-white dark:bg-slate-800 text-black dark:text-white border-black/20 dark:border-white/20",
+                                    )}
+                                  >
+                                    {isDeepDiveExpanded ? (
+                                      <>
+                                        <Minimize2 size={12} /> Recuar
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Maximize2 size={12} /> Expandir
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+                                <button
                                   onClick={() => {
                                     setShowDeepDive(false);
                                     setIsDeepDiveExpanded(false);
@@ -10112,64 +13726,122 @@ function QuizApp() {
                               </div>
                             </div>
                           </div>
-                          
+
                           {/* Main Content Area - Scrollable and Flexible */}
-                          <div className={cn(
-                            "flex-1 overflow-y-auto custom-scrollbar bg-transparent scroll-smooth",
-                            isDeepDiveExpanded ? "p-12 md:p-24" : "p-10"
-                          )} id="deep-dive-scroll-container">
-                            <div className={cn(
-                              "space-y-20 pb-40",
-                              isDeepDiveExpanded && "max-w-5xl mx-auto w-full"
-                            )}>
-                            {isDeepDiveLoading ? (
-                              <div className="flex-1 flex flex-col items-center justify-center space-y-10 py-20 px-4">
-                                <div className="w-full max-w-md space-y-6">
-                                  <div className="flex items-center justify-between text-xs font-normal uppercase tracking-widest">
-                                    <div className="flex items-center gap-2">
-                                      <BrainCircuit className={cn("animate-pulse", theme.text, theme.textDark)} size={16} />
-                                      <span className="dark:text-slate-300">Aprofundando Conhecimento...</span>
+                          <div
+                            className={cn(
+                              "flex-1 overflow-y-auto custom-scrollbar bg-transparent scroll-smooth",
+                              isDeepDiveExpanded ? "p-12 md:p-24" : "p-10",
+                            )}
+                            id="deep-dive-scroll-container"
+                          >
+                            <div
+                              className={cn(
+                                "space-y-20 pb-40",
+                                isDeepDiveExpanded &&
+                                  "max-w-5xl mx-auto w-full",
+                              )}
+                            >
+                              {isDeepDiveLoading ? (
+                                <div className="flex-1 flex flex-col items-center justify-center space-y-10 py-20 px-4">
+                                  <div className="w-full max-w-md space-y-6">
+                                    <div className="flex items-center justify-between text-xs font-normal uppercase tracking-widest">
+                                      <div className="flex items-center gap-2">
+                                        <BrainCircuit
+                                          className={cn(
+                                            "animate-pulse",
+                                            theme.text,
+                                            theme.textDark,
+                                          )}
+                                          size={16}
+                                        />
+                                        <span className="dark:text-slate-300">
+                                          Aprofundando Conhecimento...
+                                        </span>
+                                      </div>
+                                      <span
+                                        className={cn(
+                                          "font-mono",
+                                          theme.text,
+                                          theme.textDark,
+                                        )}
+                                      >
+                                        {Math.round(deepDiveProgress)}%
+                                      </span>
                                     </div>
-                                    <span className={cn("font-mono", theme.text, theme.textDark)}>{Math.round(deepDiveProgress)}%</span>
-                                  </div>
-                                  
-                                  <div className="h-2 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden border border-black/5 dark:border-white/5">
-                                    <motion.div 
-                                      initial={{ width: 0 }}
-                                      animate={{ width: `${deepDiveProgress}%` }}
-                                      transition={{ type: "spring", bounce: 0, duration: 0.5 }}
-                                      className={cn("h-full rounded-full shadow-lg", theme.primary)}
-                                    />
+
+                                    <div className="h-2 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden border border-black/5 dark:border-white/5">
+                                      <motion.div
+                                        initial={{ width: 0 }}
+                                        animate={{
+                                          width: `${deepDiveProgress}%`,
+                                        }}
+                                        transition={{
+                                          type: "spring",
+                                          bounce: 0,
+                                          duration: 0.5,
+                                        }}
+                                        className={cn(
+                                          "h-full rounded-full shadow-lg",
+                                          theme.primary,
+                                        )}
+                                      />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <p className="text-[10px] font-normal uppercase tracking-wider text-black/40 dark:text-slate-500">
+                                        Status do Professor
+                                      </p>
+                                      <p className="text-xs dark:text-slate-300 italic">
+                                        {deepDiveStatus ||
+                                          (deepDiveProgress < 30
+                                            ? "Revisando o contexto da questão..."
+                                            : deepDiveProgress < 60
+                                              ? "Consultando referências técnicas..."
+                                              : deepDiveProgress < 85
+                                                ? "Sintetizando explicação pedagógica..."
+                                                : "Finalizando detalhes do aprofundamento...")}
+                                      </p>
+                                    </div>
                                   </div>
 
-                                  <div className="space-y-1">
-                                    <p className="text-[10px] font-normal uppercase tracking-wider text-black/40 dark:text-slate-500">Status do Professor</p>
-                                    <p className="text-xs dark:text-slate-300 italic">
-                                      {deepDiveStatus || (
-                                        deepDiveProgress < 30 ? "Revisando o contexto da questão..." :
-                                        deepDiveProgress < 60 ? "Consultando referências técnicas..." :
-                                        deepDiveProgress < 85 ? "Sintetizando explicação pedagógica..." :
-                                        "Finalizando detalhes do aprofundamento..."
-                                      )}
+                                  <div className="text-center space-y-2">
+                                    <p className="text-black/60 dark:text-white/60 text-base font-normal">
+                                      Preparando aula personalizada
+                                    </p>
+                                    <p className="text-black/30 dark:text-white/30 text-[10px] uppercase tracking-widest">
+                                      Aguarde um instante
                                     </p>
                                   </div>
                                 </div>
-
-                                <div className="text-center space-y-2">
-                                  <p className="text-black/60 dark:text-white/60 text-base font-normal">Preparando aula personalizada</p>
-                                  <p className="text-black/30 dark:text-white/30 text-[10px] uppercase tracking-widest">Aguarde um instante</p>
-                                </div>
-                              </div>
-                            ) : currentQuestion.deepDive ? (
-                              <>
-                                  <div className={cn("prose prose-slate dark:prose-invert max-w-none prose-p:text-black dark:prose-p:text-white prose-headings:text-black dark:prose-headings:text-white prose-li:text-black dark:prose-li:text-white prose-headings:font-normal prose-strong:font-normal", theme.prose)}>
+                              ) : currentQuestion.deepDive ? (
+                                <>
+                                  <div
+                                    className={cn(
+                                      "prose prose-slate dark:prose-invert max-w-none prose-p:text-black dark:prose-p:text-white prose-headings:text-black dark:prose-headings:text-white prose-li:text-black dark:prose-li:text-white prose-headings:font-normal prose-strong:font-normal",
+                                      theme.prose,
+                                    )}
+                                  >
                                     <div className="text-black/90 dark:text-white/90 leading-relaxed text-lg font-normal">
-                                      <Markdown 
+                                      <Markdown
                                         remarkPlugins={[remarkGfm]}
                                         components={{
-                                          strong: ({node, ...props}) => (
-                                            <strong className={cn("font-normal", theme.text, theme.textDark)} {...props} />
-                                          )
+                                          p: ({ node, ...props }) => (
+                                            <p
+                                              className="mb-6 font-['Arial'] text-[17px] font-bold last:mb-0"
+                                              {...props}
+                                            />
+                                          ),
+                                          strong: ({ node, ...props }) => (
+                                            <strong
+                                              className={cn(
+                                                "font-normal",
+                                                theme.text,
+                                                theme.textDark,
+                                              )}
+                                              {...props}
+                                            />
+                                          ),
                                         }}
                                       >
                                         {currentQuestion.deepDive}
@@ -10177,133 +13849,224 @@ function QuizApp() {
                                     </div>
                                   </div>
 
-                                  {currentQuestion.studyLinks && currentQuestion.studyLinks.length > 0 && (
-                                    <div className="mt-8 pt-8 border-t border-black/5 dark:border-white/5">
-                                      <p className="text-[10px] uppercase tracking-[0.2em] text-black/40 dark:text-white/40 font-normal mb-4 flex items-center gap-2">
-                                        <ExternalLink size={14} />
-                                        Materiais de Estudo Relacionados
-                                      </p>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        {currentQuestion.studyLinks.map((link, idx) => (
-                                          <a 
-                                            key={idx}
-                                            href={link.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center justify-between p-4 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all group"
-                                          >
-                                            <span className="text-sm font-normal dark:text-slate-300 truncate pr-2">{link.title}</span>
-                                            <ArrowUpRight size={16} className="text-black/20 dark:text-white/20 group-hover:text-black dark:group-hover:text-white transition-colors" />
-                                          </a>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                {chatHistory.length > 0 && (
-                                  <div className="space-y-8 pt-6 border-t-4 border-black/5 dark:border-white/5">
-                                    <div className="flex items-center justify-between mb-4">
-                                      <p className="text-xs uppercase tracking-[0.3em] text-black/40 dark:text-white/40 font-normal">Interação com o Professor</p>
-                                      {isChatLoading && (
-                                        <div className="flex items-center gap-3 text-blue-500 animate-pulse">
-                                          <Loader2 size={18} className="animate-spin" />
-                                          <span className="text-[10px] font-normal uppercase tracking-widest">Professor está digitando...</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                    {chatHistory.map((msg, idx) => (
-                                      <div key={idx} className={cn(
-                                        "flex gap-6",
-                                        msg.role === 'user' ? "flex-row-reverse" : "flex-row"
-                                      )}>
-                                        <div className={cn(
-                                          "w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-xl",
-                                          msg.role === 'user' ? theme.chatUser : "bg-black/10 dark:bg-white/10"
-                                        )}>
-                                          {msg.role === 'user' ? <UserIcon size={24} /> : <BrainCircuit size={24} />}
-                                        </div>
-                                        <div className={cn(
-                                          "max-w-[80%] p-6 rounded-[32px] text-lg leading-relaxed shadow-sm",
-                                          msg.role === 'user' ? cn(theme.chatUserBubble, "rounded-tr-none") : "bg-black/5 dark:bg-white/5 text-black/90 dark:text-white/90 rounded-tl-none border border-black/5 dark:border-white/5"
-                                        )}>
-                                          <Markdown 
-                                            remarkPlugins={[remarkGfm]}
-                                            components={{
-                                              strong: ({node, ...props}) => (
-                                                <strong className={cn("font-normal", theme.text, theme.textDark)} {...props} />
-                                              )
-                                            }}
-                                          >
-                                            {msg.text}
-                                          </Markdown>
-                                        </div>
-                                      </div>
-                                    ))}
-                                    {isChatLoading && (
-                                      <div className="flex gap-6 animate-pulse">
-                                        <div className="w-12 h-12 rounded-2xl bg-black/10 dark:bg-white/10 flex items-center justify-center">
-                                          <BrainCircuit size={24} className="text-black/20 dark:text-white/20" />
-                                        </div>
-                                        <div className="bg-black/5 dark:bg-white/5 p-6 rounded-[32px] rounded-tl-none w-32 h-16 flex items-center justify-center gap-1">
-                                          <div className="w-2 h-2 bg-black/20 dark:bg-white/20 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                          <div className="w-2 h-2 bg-black/20 dark:bg-white/20 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                                          <div className="w-2 h-2 bg-black/20 dark:bg-white/20 rounded-full animate-bounce"></div>
+                                  {currentQuestion.studyLinks &&
+                                    currentQuestion.studyLinks.length > 0 && (
+                                      <div className="mt-8 pt-8 border-t border-black/5 dark:border-white/5">
+                                        <p className="text-[10px] uppercase tracking-[0.2em] text-black/40 dark:text-white/40 font-normal mb-4 flex items-center gap-2">
+                                          <ExternalLink size={14} />
+                                          Materiais de Estudo Relacionados
+                                        </p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                          {currentQuestion.studyLinks.map(
+                                            (link, idx) => (
+                                              <a
+                                                key={idx}
+                                                href={link.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center justify-between p-4 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all group"
+                                              >
+                                                <span className="text-sm font-normal dark:text-slate-300 truncate pr-2">
+                                                  {link.title}
+                                                </span>
+                                                <ArrowUpRight
+                                                  size={16}
+                                                  className="text-black/20 dark:text-white/20 group-hover:text-black dark:group-hover:text-white transition-colors"
+                                                />
+                                              </a>
+                                            ),
+                                          )}
                                         </div>
                                       </div>
                                     )}
-                                    <div ref={chatEndRef} />
-                                  </div>
-                                )}
 
-                                <div className="pt-8 border-t border-black/5 dark:border-white/5">
-                                  <div className="flex items-center gap-2 mb-4">
-                                    <BrainCircuit size={16} className={theme.deepDiveTipIcon} />
-                                    <p className="text-[10px] uppercase tracking-[0.2em] text-black/40 dark:text-white/40 font-normal">Dica de Estudo</p>
+                                  {chatHistory.length > 0 && (
+                                    <div className="space-y-8 pt-6 border-t-4 border-black/5 dark:border-white/5">
+                                      <div className="flex items-center justify-between mb-4">
+                                        <p className="text-xs uppercase tracking-[0.3em] text-black/40 dark:text-white/40 font-normal">
+                                          Interação com o Professor
+                                        </p>
+                                        {isChatLoading && (
+                                          <div className="flex items-center gap-3 text-blue-500 animate-pulse">
+                                            <Loader2
+                                              size={18}
+                                              className="animate-spin"
+                                            />
+                                            <span className="text-[10px] font-normal uppercase tracking-widest">
+                                              Professor está digitando...
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      {chatHistory.map((msg, idx) => (
+                                        <div
+                                          key={idx}
+                                          className={cn(
+                                            "flex gap-6",
+                                            msg.role === "user"
+                                              ? "flex-row-reverse"
+                                              : "flex-row",
+                                          )}
+                                        >
+                                          <div
+                                            className={cn(
+                                              "w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-xl",
+                                              msg.role === "user"
+                                                ? theme.chatUser
+                                                : "bg-black/10 dark:bg-white/10",
+                                            )}
+                                          >
+                                            {msg.role === "user" ? (
+                                              <UserIcon size={24} />
+                                            ) : (
+                                              <BrainCircuit size={24} />
+                                            )}
+                                          </div>
+                                          <div
+                                            className={cn(
+                                              "max-w-[80%] p-6 rounded-[32px] text-lg leading-relaxed shadow-sm",
+                                              msg.role === "user"
+                                                ? cn(
+                                                    theme.chatUserBubble,
+                                                    "rounded-tr-none",
+                                                  )
+                                                : "bg-black/5 dark:bg-white/5 text-black/90 dark:text-white/90 rounded-tl-none border border-black/5 dark:border-white/5",
+                                            )}
+                                          >
+                                            <Markdown
+                                              remarkPlugins={[remarkGfm]}
+                                              components={{
+                                                strong: ({
+                                                  node,
+                                                  ...props
+                                                }) => (
+                                                  <strong
+                                                    className={cn(
+                                                      "font-normal",
+                                                      theme.text,
+                                                      theme.textDark,
+                                                    )}
+                                                    {...props}
+                                                  />
+                                                ),
+                                              }}
+                                            >
+                                              {msg.text}
+                                            </Markdown>
+                                          </div>
+                                        </div>
+                                      ))}
+                                      {isChatLoading && (
+                                        <div className="flex gap-6 animate-pulse">
+                                          <div className="w-12 h-12 rounded-2xl bg-black/10 dark:bg-white/10 flex items-center justify-center">
+                                            <BrainCircuit
+                                              size={24}
+                                              className="text-black/20 dark:text-white/20"
+                                            />
+                                          </div>
+                                          <div className="bg-black/5 dark:bg-white/5 p-6 rounded-[32px] rounded-tl-none w-32 h-16 flex items-center justify-center gap-1">
+                                            <div className="w-2 h-2 bg-black/20 dark:bg-white/20 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                            <div className="w-2 h-2 bg-black/20 dark:bg-white/20 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                            <div className="w-2 h-2 bg-black/20 dark:bg-white/20 rounded-full animate-bounce"></div>
+                                          </div>
+                                        </div>
+                                      )}
+                                      <div ref={chatEndRef} />
+                                    </div>
+                                  )}
+
+                                  <div className="pt-8 border-t border-black/5 dark:border-white/5">
+                                    <div className="flex items-center gap-2 mb-4">
+                                      <BrainCircuit
+                                        size={16}
+                                        className={theme.deepDiveTipIcon}
+                                      />
+                                      <p className="text-[10px] uppercase tracking-[0.2em] text-black/40 dark:text-white/40 font-normal">
+                                        Dica de Estudo
+                                      </p>
+                                    </div>
+                                    <div
+                                      className={cn(
+                                        "border rounded-2xl p-6 text-sm italic leading-relaxed",
+                                        theme.deepDiveTip,
+                                      )}
+                                    >
+                                      "O erro é a melhor oportunidade para o
+                                      cérebro consolidar novas conexões. Revise
+                                      este trecho com atenção para fixar o
+                                      conceito."
+                                    </div>
                                   </div>
-                                  <div className={cn("border rounded-2xl p-6 text-sm italic leading-relaxed", theme.deepDiveTip)}>
-                                    "O erro é a melhor oportunidade para o cérebro consolidar novas conexões. Revise este trecho com atenção para fixar o conceito."
-                                  </div>
+                                </>
+                              ) : (
+                                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 py-12">
+                                  <AlertCircle
+                                    className="text-black/20 dark:text-white/20"
+                                    size={48}
+                                  />
+                                  <p className="text-black/40 dark:text-white/40 text-sm">
+                                    Clique em "Ver Explicação" para carregar os
+                                    detalhes.
+                                  </p>
                                 </div>
-                              </>
-                            ) : (
-                              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 py-12">
-                                <AlertCircle className="text-black/20 dark:text-white/20" size={48} />
-                                <p className="text-black/40 dark:text-white/40 text-sm">Clique em "Ver Explicação" para carregar os detalhes.</p>
-                              </div>
-                            )}
+                              )}
                             </div>
                           </div>
 
                           {/* Footer - Rigidly Anchored Input Area */}
                           {currentQuestion.deepDive && (
-                            <div className={cn(
-                              "p-3 border-t-2 border-black/5 dark:border-white/5 z-[100000] shadow-[0_-10px_20px_rgba(0,0,0,0.05)] flex-shrink-0",
-                              isDeepDiveExpanded ? "bg-white dark:bg-slate-900" : "bg-black/5 dark:bg-white/5"
-                            )}>
-                              <div className={cn(isDeepDiveExpanded && "max-w-4xl mx-auto w-full")}>
-                                <form onSubmit={handleSendMessage} className="relative group">
+                            <div
+                              className={cn(
+                                "p-3 border-t-2 border-black/5 dark:border-white/5 z-[100000] shadow-[0_-10px_20px_rgba(0,0,0,0.05)] flex-shrink-0",
+                                isDeepDiveExpanded
+                                  ? "bg-white dark:bg-slate-900"
+                                  : "bg-black/5 dark:bg-white/5",
+                              )}
+                            >
+                              <div
+                                className={cn(
+                                  isDeepDiveExpanded &&
+                                    "max-w-4xl mx-auto w-full",
+                                )}
+                              >
+                                <form
+                                  onSubmit={handleSendMessage}
+                                  className="relative group"
+                                >
                                   <input
                                     type="text"
                                     value={chatInput}
-                                    onChange={(e) => setChatInput(e.target.value)}
+                                    onChange={(e) =>
+                                      setChatInput(e.target.value)
+                                    }
                                     placeholder="Ficou com dúvida? Pergunte ao Professor..."
                                     disabled={isChatLoading}
                                     className={cn(
                                       "w-full bg-white dark:bg-black/80 border-2 rounded-xl py-3 pl-6 pr-16 text-base text-black dark:text-white placeholder:text-black/20 dark:placeholder:text-white/20 focus:outline-none transition-all shadow-lg font-normal tracking-tight",
-                                      theme.border, theme.borderDark,
-                                      `focus:ring-4 ${theme.ring}`
+                                      theme.border,
+                                      theme.borderDark,
+                                      `focus:ring-4 ${theme.ring}`,
                                     )}
                                   />
                                   <button
                                     type="submit"
-                                    disabled={!chatInput.trim() || isChatLoading}
+                                    disabled={
+                                      !chatInput.trim() || isChatLoading
+                                    }
                                     className={cn(
                                       "absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-[12px] flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl hover:scale-110 active:scale-90",
-                                      theme.primary, 
-                                      theme.primaryHover
+                                      theme.primary,
+                                      theme.primaryHover,
                                     )}
                                   >
-                                    {isChatLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                                    {isChatLoading ? (
+                                      <Loader2
+                                        size={18}
+                                        className="animate-spin"
+                                      />
+                                    ) : (
+                                      <Send size={18} />
+                                    )}
                                   </button>
                                 </form>
                               </div>
@@ -10314,7 +14077,7 @@ function QuizApp() {
                     )}
                   </AnimatePresence>
                 </motion.div>
-              ) : state === 'finished' ? (
+              ) : state === "finished" ? (
                 <motion.div
                   key="finished"
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -10323,51 +14086,83 @@ function QuizApp() {
                 >
                   <div className="bg-white dark:bg-slate-900 rounded-[40px] p-12 shadow-sm border border-black/5 dark:border-slate-800 text-center space-y-12">
                     <div className="space-y-4">
-                      <div className={cn("w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6", theme.bgLight, theme.bgLightDark, theme.text, theme.textDark)}>
+                      <div
+                        className={cn(
+                          "w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6",
+                          theme.bgLight,
+                          theme.bgLightDark,
+                          theme.text,
+                          theme.textDark,
+                        )}
+                      >
                         <Trophy size={48} />
                       </div>
-                      <h2 className="text-4xl font-medium tracking-tight dark:text-slate-100">Quiz Concluído!</h2>
-                      <p className="text-black/40 dark:text-slate-500">Veja como você se saiu no conteúdo analisado.</p>
+                      <h2 className="text-4xl font-medium tracking-tight dark:text-slate-100">
+                        Quiz Concluído!
+                      </h2>
+                      <p className="text-black/40 dark:text-slate-500">
+                        Veja como você se saiu no conteúdo analisado.
+                      </p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
                         className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8"
                       >
-                        <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">Acertos</p>
-                        <p className={cn("text-5xl font-medium", theme.text, theme.textDark)}>{correctCount}</p>
+                        <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">
+                          Acertos
+                        </p>
+                        <p
+                          className={cn(
+                            "text-5xl font-medium",
+                            theme.text,
+                            theme.textDark,
+                          )}
+                        >
+                          {correctCount}
+                        </p>
                       </motion.div>
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2 }}
                         className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8"
                       >
-                        <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">Erros</p>
-                        <p className="text-5xl font-medium text-rose-600 dark:text-rose-400">{questions.length - correctCount}</p>
+                        <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">
+                          Erros
+                        </p>
+                        <p className="text-5xl font-medium text-rose-600 dark:text-rose-400">
+                          {questions.length - correctCount}
+                        </p>
                       </motion.div>
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.3 }}
                         className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8"
                       >
-                        <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">Precisão</p>
+                        <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">
+                          Precisão
+                        </p>
                         <p className="text-5xl font-medium text-black dark:text-slate-100">
                           {Math.round((correctCount / questions.length) * 100)}%
                         </p>
                       </motion.div>
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4 }}
                         className="bg-[#F5F5F0] dark:bg-slate-800 rounded-3xl p-8"
                       >
-                        <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">Tempo Total</p>
-                        <p className="text-5xl font-medium text-black dark:text-slate-100">{formatTime(totalTime)}</p>
+                        <p className="text-sm font-bold uppercase tracking-widest text-black/30 dark:text-slate-500 mb-2">
+                          Tempo Total
+                        </p>
+                        <p className="text-5xl font-medium text-black dark:text-slate-100">
+                          {formatTime(totalTime)}
+                        </p>
                       </motion.div>
                     </div>
 
@@ -10375,35 +14170,60 @@ function QuizApp() {
                       <div className="bg-[#F5F5F0] dark:bg-slate-800 rounded-[32px] p-8 space-y-6">
                         <div className="flex items-center gap-3 border-b border-black/5 dark:border-slate-700 pb-4">
                           <TrendingUp size={20} className="text-blue-500" />
-                          <h3 className="font-bold text-sm uppercase tracking-widest text-blue-600 dark:text-blue-400">Desempenho por Matéria</h3>
+                          <h3 className="font-bold text-sm uppercase tracking-widest text-blue-600 dark:text-blue-400">
+                            Desempenho por Matéria
+                          </h3>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {Array.from(new Set(questions.map(q => q.subject || 'Geral'))).map(subj => {
-                            const subjQuestions = questions.filter(q => (q.subject || 'Geral') === subj);
-                            const subjCorrect = answers.filter((ans, idx) => 
-                              (questions[idx]?.subject || 'Geral') === subj && 
-                              ans === questions[idx]?.correctAnswer
+                          {Array.from(
+                            new Set(questions.map((q) => q.subject || "Geral")),
+                          ).map((subj) => {
+                            const subjQuestions = questions.filter(
+                              (q) => (q.subject || "Geral") === subj,
+                            );
+                            const subjCorrect = answers.filter(
+                              (ans, idx) =>
+                                (questions[idx]?.subject || "Geral") === subj &&
+                                ans === questions[idx]?.correctAnswer,
                             ).length;
                             const subjTotal = subjQuestions.length;
-                            const subjAccuracy = Math.round((subjCorrect / subjTotal) * 100);
-                            
+                            const subjAccuracy = Math.round(
+                              (subjCorrect / subjTotal) * 100,
+                            );
+
                             return (
-                              <div key={subj} className="bg-white dark:bg-slate-900/50 p-5 rounded-2xl border border-black/5 dark:border-slate-800">
+                              <div
+                                key={subj}
+                                className="bg-white dark:bg-slate-900/50 p-5 rounded-2xl border border-black/5 dark:border-slate-800"
+                              >
                                 <div className="flex justify-between items-start mb-3">
-                                  <span className="font-bold text-xs uppercase tracking-tight text-black/60 dark:text-slate-300 truncate max-w-[150px]">{subj}</span>
-                                  <span className={cn(
-                                    "text-[10px] font-black px-2 py-0.5 rounded-full",
-                                    subjAccuracy >= 80 ? "bg-emerald-500/10 text-emerald-600" :
-                                    subjAccuracy >= 50 ? "bg-amber-500/10 text-amber-600" :
-                                    "bg-rose-500/10 text-rose-600"
-                                  )}>
+                                  <span className="font-bold text-xs uppercase tracking-tight text-black/60 dark:text-slate-300 truncate max-w-[150px]">
+                                    {subj}
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      "text-[10px] font-black px-2 py-0.5 rounded-full",
+                                      subjAccuracy >= 80
+                                        ? "bg-emerald-500/10 text-emerald-600"
+                                        : subjAccuracy >= 50
+                                          ? "bg-amber-500/10 text-amber-600"
+                                          : "bg-rose-500/10 text-rose-600",
+                                    )}
+                                  >
                                     {subjAccuracy}%
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between gap-4">
                                   <div className="flex-1 h-2 bg-black/5 dark:bg-slate-800 rounded-full overflow-hidden">
-                                    <div 
-                                      className={cn("h-full", subjAccuracy >= 80 ? "bg-emerald-500" : subjAccuracy >= 50 ? "bg-amber-500" : "bg-rose-500")}
+                                    <div
+                                      className={cn(
+                                        "h-full",
+                                        subjAccuracy >= 80
+                                          ? "bg-emerald-500"
+                                          : subjAccuracy >= 50
+                                            ? "bg-amber-500"
+                                            : "bg-rose-500",
+                                      )}
                                       style={{ width: `${subjAccuracy}%` }}
                                     />
                                   </div>
@@ -10418,82 +14238,163 @@ function QuizApp() {
                       </div>
                     )}
 
-                    <QuizSummary questions={questions} answers={answers} theme={theme} />
+                    <QuizSummary
+                      questions={questions}
+                      answers={answers}
+                      theme={theme}
+                    />
 
-                    <div className="flex flex-wrap items-center justify-center gap-4">
-                      {error && (
-                        <div className="w-full mb-4 p-4 bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/20 rounded-2xl text-rose-600 dark:text-rose-400 text-sm flex items-center gap-3 text-left">
-                          <AlertCircle size={18} className="shrink-0" />
-                          <p className="font-medium">{error}</p>
-                        </div>
+                    <div className="flex flex-col items-center justify-center gap-6 w-full py-6">
+                      {questions.filter(
+                        (q, i) => answers[i] !== q.correctAnswer,
+                      ).length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="w-full flex flex-col items-center gap-4 bg-indigo-50/50 dark:bg-indigo-900/10 p-6 rounded-3xl border border-indigo-100/50 dark:border-indigo-500/20 shadow-sm"
+                        >
+                          <div className="flex flex-col items-center text-center">
+                            <div className="p-3 bg-indigo-500/20 rounded-2xl mb-3">
+                              <BrainCircuit
+                                size={24}
+                                className="text-indigo-600 dark:text-indigo-400"
+                              />
+                            </div>
+                            <h4 className="text-lg font-black dark:text-white tracking-tight italic">
+                              Transforme seus erros em Flashcards!
+                            </h4>
+                            <p className="text-[11px] text-black/50 dark:text-slate-400 font-bold uppercase tracking-widest mt-1">
+                              Foque exatamente no que você errou para não
+                              esquecer nunca mais
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const incorrectQuestions = questions.filter(
+                                (q, i) => answers[i] !== q.correctAnswer,
+                              );
+                              handleCreateFlashcards(
+                                incorrectQuestions,
+                                lastFileName,
+                                selectedSubject,
+                              );
+                            }}
+                            disabled={isGeneratingFlashcards}
+                            className={cn(
+                              "w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-95 disabled:opacity-50",
+                              theme.primary,
+                              theme.contrastText,
+                              theme.shadow,
+                            )}
+                          >
+                            {isGeneratingFlashcards ? (
+                              <Loader2 size={18} className="animate-spin" />
+                            ) : (
+                              <Zap size={18} />
+                            )}
+                            {isGeneratingFlashcards
+                              ? "Processando agora..."
+                              : "Gerar Flashcards de Fixação"}
+                          </button>
+                        </motion.div>
                       )}
-                      <button
-                        onClick={resetQuiz}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400 hover:bg-black/10 dark:hover:bg-white/10 transition-all active:scale-95"
-                      >
-                        <ChevronLeft size={20} />
-                        {activeRevisionTaskId ? 'Agenda de Revisão' : 'Voltar'}
-                      </button>
-                      <button
-                        onClick={redoQuiz}
-                        className={cn("flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold transition-all shadow-lg", theme.primary, theme.contrastText, theme.primaryHover, theme.shadow)}
-                      >
-                        <RotateCcw size={20} />
-                        Refazer
-                      </button>
-                      {questions.length - correctCount > 0 && (
+
+                      <div className="flex flex-wrap items-center justify-center gap-4 w-full">
+                        {error && (
+                          <div className="w-full mb-4 p-4 bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/20 rounded-2xl text-rose-600 dark:text-rose-400 text-sm flex items-center gap-3 text-left">
+                            <AlertCircle size={18} className="shrink-0" />
+                            <p className="font-medium">{error}</p>
+                          </div>
+                        )}
                         <button
-                          onClick={retryIncorrectOnly}
-                          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold bg-rose-600 text-white hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 dark:shadow-rose-900/20"
+                          onClick={resetQuiz}
+                          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400 hover:bg-black/10 dark:hover:bg-white/10 transition-all active:scale-95"
+                        >
+                          <ChevronLeft size={20} />
+                          {activeRevisionTaskId
+                            ? "Agenda de Revisão"
+                            : "Voltar"}
+                        </button>
+                        <button
+                          onClick={redoQuiz}
+                          className={cn(
+                            "flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold transition-all shadow-lg",
+                            theme.primary,
+                            theme.contrastText,
+                            theme.primaryHover,
+                            theme.shadow,
+                          )}
                         >
                           <RotateCcw size={20} />
-                          Refazer Apenas Erros
+                          Refazer
                         </button>
-                      )}
-                      <button
-                        onClick={() => reviewQuiz('all')}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold bg-black dark:bg-slate-800 text-white hover:bg-black/80 dark:hover:bg-slate-700 transition-all"
-                      >
-                        <BookOpen size={20} />
-                        Rever Tudo
-                      </button>
-                      <button
-                        onClick={() => reviewQuiz('incorrect')}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold bg-rose-600 text-white hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 dark:shadow-rose-900/20"
-                      >
-                        <AlertCircle size={20} />
-                        Rever Erros
-                      </button>
-                      {!isSimulado && (
+                        {questions.length - correctCount > 0 && (
+                          <button
+                            onClick={retryIncorrectOnly}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold bg-rose-600 text-white hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 dark:shadow-rose-900/20"
+                          >
+                            <RotateCcw size={20} />
+                            Refazer Apenas Erros
+                          </button>
+                        )}
                         <button
-                          onClick={generateAnother}
-                          className={cn("flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold border-2 transition-all", theme.border, theme.text, theme.textDark, `hover:${theme.bg}`, `dark:hover:${theme.bgDark}`)}
+                          onClick={() => reviewQuiz("all")}
+                          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold bg-black dark:bg-slate-800 text-white hover:bg-black/80 dark:hover:bg-slate-700 transition-all"
                         >
-                          <BrainCircuit size={20} />
-                          Novo do Mesmo Material
+                          <BookOpen size={20} />
+                          Rever Tudo
                         </button>
-                      )}
-                      <button
-                        onClick={downloadResults}
-                        disabled={isGeneratingPDF}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold border-2 border-black/5 dark:border-slate-800 text-black dark:text-slate-100 hover:bg-black/5 dark:hover:bg-slate-800 transition-all disabled:opacity-50"
-                      >
-                        {isGeneratingPDF ? <Loader2 size={20} className="animate-spin" /> : <FileText size={20} />}
-                        {isGeneratingPDF ? 'Gerando PDF...' : 'Salvar Resultados'}
-                      </button>
-                      <button
-                        onClick={resetQuiz}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold text-black/40 dark:text-slate-500 hover:text-black dark:hover:text-slate-300 transition-all"
-                      >
-                        {activeRevisionTaskId ? 'Voltar para Agenda' : 'Sair'}
-                      </button>
+                        <button
+                          onClick={() => reviewQuiz("incorrect")}
+                          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold bg-rose-600 text-white hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 dark:shadow-rose-900/20"
+                        >
+                          <AlertCircle size={20} />
+                          Rever Erros
+                        </button>
+                        {!isSimulado && (
+                          <button
+                            onClick={generateAnother}
+                            className={cn(
+                              "flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold border-2 transition-all",
+                              theme.border,
+                              theme.text,
+                              theme.textDark,
+                              `hover:${theme.bg}`,
+                              `dark:hover:${theme.bgDark}`,
+                            )}
+                          >
+                            <BrainCircuit size={20} />
+                            Novo do Mesmo Material
+                          </button>
+                        )}
+                        <button
+                          onClick={downloadResults}
+                          disabled={isGeneratingPDF}
+                          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold border-2 border-black/5 dark:border-slate-800 text-black dark:text-slate-100 hover:bg-black/5 dark:hover:bg-slate-800 transition-all disabled:opacity-50"
+                        >
+                          {isGeneratingPDF ? (
+                            <Loader2 size={20} className="animate-spin" />
+                          ) : (
+                            <FileText size={20} />
+                          )}
+                          {isGeneratingPDF
+                            ? "Gerando PDF..."
+                            : "Salvar Resultados"}
+                        </button>
+                        <button
+                          onClick={resetQuiz}
+                          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold text-black/40 dark:text-slate-500 hover:text-black dark:hover:text-slate-300 transition-all"
+                        >
+                          {activeRevisionTaskId ? "Voltar para Agenda" : "Sair"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
               ) : null}
             </AnimatePresence>
 
-            <ConfirmationModal 
+            <ConfirmationModal
               isOpen={showExitQuizConfirmation}
               onClose={() => setShowExitQuizConfirmation(false)}
               onConfirm={() => {
@@ -10501,7 +14402,7 @@ function QuizApp() {
                   setShowRevisionAgenda(true);
                   setActiveRevisionTaskId(null);
                 }
-                setState('idle');
+                setState("idle");
                 setShowExitQuizConfirmation(false);
               }}
               title="Sair do Quiz"
@@ -10509,16 +14410,18 @@ function QuizApp() {
               theme={theme}
             />
 
-            <ConfirmationModal 
+            <ConfirmationModal
               isOpen={!!subjectToDelete}
               onClose={() => setSubjectToDelete(null)}
-              onConfirm={() => subjectToDelete && handleDeleteSubjectHistory(subjectToDelete)}
+              onConfirm={() =>
+                subjectToDelete && handleDeleteSubjectHistory(subjectToDelete)
+              }
               title="Excluir Histórico"
               message={`Deseja mover TODO o histórico da matéria "${subjectToDelete}" para a lixeira? Você poderá restaurá-lo mais tarde.`}
               theme={theme}
             />
 
-            <ConfirmationModal 
+            <ConfirmationModal
               isOpen={!!quizToDelete}
               onClose={() => setQuizToDelete(null)}
               onConfirm={() => quizToDelete && handleDeleteQuiz(quizToDelete)}
@@ -10529,94 +14432,160 @@ function QuizApp() {
           </div>
         </main>
         {/* Hidden PDF Content */}
-        <div 
+        <div
           id="pdf-content-container"
-          className="absolute opacity-0 pointer-events-none z-[-100] top-0 w-[800px] bg-white p-12 space-y-12 text-slate-900 font-sans" 
+          className="absolute opacity-0 pointer-events-none z-[-100] top-0 w-[800px] bg-white p-12 space-y-12 text-slate-900 font-sans"
           ref={pdfContentRef}
         >
           <div className="flex items-center justify-between border-b-2 border-slate-100 pb-8">
             <div className="flex items-center gap-5">
-              <div className={cn("w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg", theme.primary, theme.contrastText)}>
+              <div
+                className={cn(
+                  "w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg",
+                  theme.primary,
+                  theme.contrastText,
+                )}
+              >
                 <BrainCircuit size={40} />
               </div>
               <div>
-                <h1 className="text-4xl font-bold tracking-tight text-slate-900">Quiz AI Expert</h1>
-                <p className={cn("text-slate-500 font-medium", getDynamicFontSize(lastFileName || 'Documento Analisado', "text-lg"))}>
-                  {lastFileName || 'Documento Analisado'}
+                <h1 className="text-4xl font-bold tracking-tight text-slate-900">
+                  Quiz AI Expert
+                </h1>
+                <p
+                  className={cn(
+                    "text-slate-500 font-medium",
+                    getDynamicFontSize(
+                      lastFileName || "Documento Analisado",
+                      "text-lg",
+                    ),
+                  )}
+                >
+                  {lastFileName || "Documento Analisado"}
                 </p>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Relatório Gerado em</p>
-              <p className="text-xl font-bold text-slate-700">{format(new Date(), "dd/MM/yyyy HH:mm")}</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">
+                Relatório Gerado em
+              </p>
+              <p className="text-xl font-bold text-slate-700">
+                {format(new Date(), "dd/MM/yyyy HH:mm")}
+              </p>
             </div>
           </div>
 
           <div className="grid grid-cols-4 gap-8">
             <div className="bg-slate-50 rounded-[32px] p-8 border border-slate-100 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Acertos</p>
-              <p className={cn("text-4xl font-bold", theme.text)}>{correctCount}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">
+                Acertos
+              </p>
+              <p className={cn("text-4xl font-bold", theme.text)}>
+                {correctCount}
+              </p>
             </div>
             <div className="bg-slate-50 rounded-[32px] p-8 border border-slate-100 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Erros</p>
-              <p className="text-4xl font-bold text-rose-600">{questions.length - correctCount}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">
+                Erros
+              </p>
+              <p className="text-4xl font-bold text-rose-600">
+                {questions.length - correctCount}
+              </p>
             </div>
             <div className="bg-slate-50 rounded-[32px] p-8 border border-slate-100 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Precisão</p>
-              <p className="text-4xl font-bold text-slate-900">{Math.round((correctCount / questions.length) * 100)}%</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">
+                Precisão
+              </p>
+              <p className="text-4xl font-bold text-slate-900">
+                {Math.round((correctCount / questions.length) * 100)}%
+              </p>
             </div>
             <div className="bg-slate-50 rounded-[32px] p-8 border border-slate-100 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Tempo Total</p>
-              <p className="text-4xl font-bold text-slate-900">{formatTime(totalTime)}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">
+                Tempo Total
+              </p>
+              <p className="text-4xl font-bold text-slate-900">
+                {formatTime(totalTime)}
+              </p>
             </div>
           </div>
 
           <div className="space-y-10">
             <div className="flex items-center gap-4 border-b-2 border-slate-100 pb-4">
               <FileText className="text-slate-400" size={24} />
-              <h2 className="text-2xl font-bold text-slate-800">Revisão Detalhada</h2>
+              <h2 className="text-2xl font-bold text-slate-800">
+                Revisão Detalhada
+              </h2>
             </div>
-            
+
             {questions.map((q, i) => (
-              <div key={i} className="space-y-6 p-10 rounded-[40px] border border-slate-100 bg-white shadow-sm relative overflow-hidden">
-                <div className={cn("absolute top-0 left-0 w-2 h-full", answers[i] === q.correctAnswer ? "bg-emerald-500" : "bg-rose-500")} />
-                
+              <div
+                key={i}
+                className="space-y-6 p-10 rounded-[40px] border border-slate-100 bg-white shadow-sm relative overflow-hidden"
+              >
+                <div
+                  className={cn(
+                    "absolute top-0 left-0 w-2 h-full",
+                    answers[i] === q.correctAnswer
+                      ? "bg-emerald-500"
+                      : "bg-rose-500",
+                  )}
+                />
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500">
                       {i + 1}
                     </span>
-                    <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Questão</span>
+                    <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+                      Questão
+                    </span>
                   </div>
-                  <div className={cn(
-                    "px-5 py-2 rounded-2xl text-xs font-bold uppercase tracking-widest shadow-sm",
-                    answers[i] === q.correctAnswer ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"
-                  )}>
-                    {answers[i] === q.correctAnswer ? 'Correto' : 'Incorreto'}
+                  <div
+                    className={cn(
+                      "px-5 py-2 rounded-2xl text-xs font-bold uppercase tracking-widest shadow-sm",
+                      answers[i] === q.correctAnswer
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                        : "bg-rose-50 text-rose-700 border border-rose-100",
+                    )}
+                  >
+                    {answers[i] === q.correctAnswer ? "Correto" : "Incorreto"}
                   </div>
                 </div>
 
                 <div className="space-y-4">
                   <p className="text-sm font-serif italic text-slate-400">
-                    {q.type === 'cebraspe' ? 'Julgue o item abaixo:' : 'Alternativa selecionada:'}
+                    {q.type === "cebraspe"
+                      ? "Julgue o item abaixo:"
+                      : "Alternativa selecionada:"}
                   </p>
                   <div className="p-8 rounded-3xl bg-slate-50 border border-slate-100">
-                    <p className="text-xl font-medium leading-relaxed text-slate-800">{q.question}</p>
+                    <p className="text-xl font-medium leading-relaxed text-slate-800">
+                      {q.question}
+                    </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-8">
                   <div className="space-y-2">
-                    <p className="font-bold text-slate-400 uppercase text-[10px] tracking-[0.2em]">Sua Resposta</p>
-                    <div className={cn(
-                      "p-4 rounded-2xl font-bold text-lg border",
-                      answers[i] === q.correctAnswer ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-rose-50 border-rose-100 text-rose-700"
-                    )}>
-                      {answers[i] || 'Não respondida'}
+                    <p className="font-bold text-slate-400 uppercase text-[10px] tracking-[0.2em]">
+                      Sua Resposta
+                    </p>
+                    <div
+                      className={cn(
+                        "p-4 rounded-2xl font-bold text-lg border",
+                        answers[i] === q.correctAnswer
+                          ? "bg-emerald-50 border-emerald-100 text-emerald-700"
+                          : "bg-rose-50 border-rose-100 text-rose-700",
+                      )}
+                    >
+                      {answers[i] || "Não respondida"}
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <p className="font-bold text-slate-400 uppercase text-[10px] tracking-[0.2em]">Resposta Correta</p>
+                    <p className="font-bold text-slate-400 uppercase text-[10px] tracking-[0.2em]">
+                      Resposta Correta
+                    </p>
                     <div className="p-4 rounded-2xl font-bold text-lg border bg-emerald-50 border-emerald-100 text-emerald-700">
                       {q.correctAnswer}
                     </div>
@@ -10626,7 +14595,9 @@ function QuizApp() {
                 <div className="pt-6 border-t border-slate-100">
                   <div className="flex items-center gap-2 mb-3">
                     <BrainCircuit size={16} className="text-slate-400" />
-                    <p className="font-bold text-slate-400 uppercase text-[10px] tracking-[0.2em]">Explicação do Especialista</p>
+                    <p className="font-bold text-slate-400 uppercase text-[10px] tracking-[0.2em]">
+                      Explicação do Especialista
+                    </p>
                   </div>
                   <p className="text-slate-600 leading-relaxed text-base italic bg-slate-50/50 p-6 rounded-2xl border border-slate-50">
                     {q.explanation}
@@ -10635,57 +14606,90 @@ function QuizApp() {
               </div>
             ))}
           </div>
-          
+
           <div className="pt-12 border-t-2 border-slate-100 text-center text-slate-400 text-xs">
-            <p className="font-medium">Relatório gerado automaticamente pelo Quiz AI Expert</p>
+            <p className="font-medium">
+              Relatório gerado automaticamente pelo Quiz AI Expert
+            </p>
             <p className="mt-1">© 2026 Todos os direitos reservados</p>
           </div>
         </div>
         {/* Hidden Deep Dive PDF Content */}
         {currentQuestion && (
-          <div 
+          <div
             id="deep-dive-pdf-container"
-            className="absolute opacity-0 pointer-events-none z-[-100] top-0 w-[800px] bg-white p-12 space-y-12 text-slate-900 font-arial" 
+            className="absolute opacity-0 pointer-events-none z-[-100] top-0 w-[800px] bg-white p-12 space-y-12 text-slate-900 font-arial"
             ref={deepDivePdfRef}
           >
             <div className="flex items-center justify-between border-b-2 border-slate-100 pb-8">
               <div className="flex items-center gap-5">
-                <div className={cn("w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg", theme.primary, theme.contrastText)}>
+                <div
+                  className={cn(
+                    "w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg",
+                    theme.primary,
+                    theme.contrastText,
+                  )}
+                >
                   <BookOpen size={40} />
                 </div>
                 <div>
-                  <h1 className="text-4xl font-normal tracking-tight text-slate-900">Aprofundamento Técnico</h1>
-                  <p className="text-slate-500 font-normal text-lg">Questão {currentIndex + 1} - {lastFileName || 'Documento'}</p>
+                  <h1 className="text-4xl font-normal tracking-tight text-slate-900">
+                    Aprofundamento Técnico
+                  </h1>
+                  <p className="text-slate-500 font-normal text-lg">
+                    Questão {currentIndex + 1} - {lastFileName || "Documento"}
+                  </p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-xs font-normal text-slate-400 uppercase tracking-[0.2em] mb-1">Relatório Gerado em</p>
-                <p className="text-xl font-normal text-slate-700">{format(new Date(), "dd/MM/yyyy HH:mm")}</p>
+                <p className="text-xs font-normal text-slate-400 uppercase tracking-[0.2em] mb-1">
+                  Relatório Gerado em
+                </p>
+                <p className="text-xl font-normal text-slate-700">
+                  {format(new Date(), "dd/MM/yyyy HH:mm")}
+                </p>
               </div>
             </div>
 
             <div className="space-y-10">
               <div className="p-10 rounded-[40px] border border-slate-100 bg-slate-50 shadow-sm relative overflow-hidden">
-                <div className={cn("absolute top-0 left-0 w-2 h-full", theme.primary)} />
-                <p className="text-sm font-serif italic text-slate-400 mb-4">A questão analisada:</p>
-                <p className="text-2xl font-normal leading-relaxed text-slate-800">{currentQuestion.question}</p>
+                <div
+                  className={cn(
+                    "absolute top-0 left-0 w-2 h-full",
+                    theme.primary,
+                  )}
+                />
+                <p className="text-sm font-serif italic text-slate-400 mb-4">
+                  A questão analisada:
+                </p>
+                <p className="text-2xl font-normal leading-relaxed text-slate-800">
+                  {currentQuestion.question}
+                </p>
               </div>
 
               <div className="space-y-6">
                 <div className="flex items-center gap-4 border-b-2 border-slate-100 pb-4">
                   <BrainCircuit className="text-slate-400" size={24} />
-                  <h2 className="text-2xl font-normal text-slate-800">Explicação Detalhada</h2>
+                  <h2 className="text-2xl font-normal text-slate-800">
+                    Explicação Detalhada
+                  </h2>
                 </div>
                 <div className="prose prose-slate max-w-none prose-p:text-slate-700 prose-headings:text-slate-900 prose-strong:text-slate-900 prose-headings:font-normal prose-strong:font-normal leading-relaxed text-lg">
-                  <Markdown 
+                  <Markdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      strong: ({node, ...props}) => (
+                      p: ({ node, ...props }) => (
+                        <p
+                          className="mb-4 font-['Arial'] text-[17px] font-bold last:mb-0"
+                          {...props}
+                        />
+                      ),
+                      strong: ({ node, ...props }) => (
                         <strong className="font-normal" {...props} />
-                      )
+                      ),
                     }}
                   >
-                    {currentQuestion.deepDive || ''}
+                    {currentQuestion.deepDive || ""}
                   </Markdown>
                 </div>
               </div>
@@ -10694,24 +14698,39 @@ function QuizApp() {
                 <div className="space-y-8 pt-10 border-t-2 border-slate-100">
                   <div className="flex items-center gap-4 border-b-2 border-slate-100 pb-4">
                     <History className="text-slate-400" size={24} />
-                    <h2 className="text-2xl font-normal text-slate-800">Histórico de Dúvidas</h2>
+                    <h2 className="text-2xl font-normal text-slate-800">
+                      Histórico de Dúvidas
+                    </h2>
                   </div>
                   <div className="space-y-6">
                     {chatHistory.map((msg, idx) => (
-                      <div key={idx} className={cn(
-                        "p-8 rounded-[32px] border",
-                        msg.role === 'user' ? "bg-slate-50 border-slate-100 ml-12" : "bg-white border-slate-100 mr-12 shadow-sm"
-                      )}>
+                      <div
+                        key={idx}
+                        className={cn(
+                          "p-8 rounded-[32px] border",
+                          msg.role === "user"
+                            ? "bg-slate-50 border-slate-100 ml-12"
+                            : "bg-white border-slate-100 mr-12 shadow-sm",
+                        )}
+                      >
                         <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-normal mb-3">
-                          {msg.role === 'user' ? 'Sua Pergunta' : 'Resposta do Professor'}
+                          {msg.role === "user"
+                            ? "Sua Pergunta"
+                            : "Resposta do Professor"}
                         </p>
                         <div className="prose prose-slate prose-sm max-w-none prose-headings:font-normal prose-strong:font-normal">
-                          <Markdown 
+                          <Markdown
                             remarkPlugins={[remarkGfm]}
                             components={{
-                              strong: ({node, ...props}) => (
+                              p: ({ node, ...props }) => (
+                                <p
+                                  className="mb-4 font-['Arial'] text-[17px] font-bold last:mb-0"
+                                  {...props}
+                                />
+                              ),
+                              strong: ({ node, ...props }) => (
                                 <strong className="font-normal" {...props} />
-                              )
+                              ),
                             }}
                           >
                             {msg.text}
@@ -10723,7 +14742,7 @@ function QuizApp() {
                 </div>
               )}
             </div>
-            
+
             <div className="pt-12 border-t-2 border-slate-100 text-center text-slate-400 text-xs">
               <p className="font-normal">Conteúdo gerado por Quiz AI Expert</p>
               <p className="mt-1">© 2026 Todos os direitos reservados</p>
