@@ -36,11 +36,6 @@ export interface Flashcard {
   subject: string;
 }
 
-export interface MindMapData {
-  mermaidCode: string;
-  subject: string;
-}
-
 export const generateFlashcards = async (content: ContentItem | ContentItem[]): Promise<Flashcard[]> => {
   const ai = getAI();
   const contentArray = Array.isArray(content) ? content : [content];
@@ -114,35 +109,6 @@ export const generateFlashcardsFromIncorrectQuestions = async (
 
   const cards = JSON.parse(response.text || "[]");
   return cards.map((c: any) => ({ ...c, id: Math.random().toString(36).substr(2, 9) }));
-};
-
-export const generateMindMap = async (content: ContentItem | ContentItem[]): Promise<MindMapData> => {
-  const ai = getAI();
-  const contentArray = Array.isArray(content) ? content : [content];
-  const prompt = `Com base no conteúdo fornecido, crie um mapa mental estruturado usando a sintaxe Mermaid.js (graph TD).
-  O mapa deve ser hierárquico e cobrir os pontos principais.
-  Retorne apenas o código Mermaid.js dentro de um objeto JSON com a chave 'mermaidCode' e 'subject'.`;
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: [
-      ...contentArray.map(c => typeof c === 'string' ? { text: c } : { inlineData: c }),
-      { text: prompt }
-    ],
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          mermaidCode: { type: Type.STRING },
-          subject: { type: Type.STRING }
-        },
-        required: ["mermaidCode", "subject"]
-      }
-    }
-  });
-
-  return JSON.parse(response.text || "{}");
 };
 
 export async function generateQuiz(
@@ -231,6 +197,9 @@ async function _generateQuizBatch(
     ${subjectsInstruction}
     Com base no conteúdo fornecido (texto, materiais ou links) e na pesquisa por questões reais (se o Modo Simulado estiver ativado), elabore exatamente ${questionCount} questões de quiz.
     
+    IDIOMA: Português (Brasil).
+    IMPORTANTE: Use acentuação correta e NUNCA substitua caracteres acentuados por símbolos ou códigos (como #, &, $, etc). Exemplo: use "é" em vez de "#".
+    
     REGRAS:
     1. ${formatInstruction}
     2. Varie a dificuldade entre fácil, médio e difícil.
@@ -242,7 +211,6 @@ async function _generateQuizBatch(
        - Uma explicação curta e direta baseada no embasamento legal ou jurisprudencial.
        - 2 a 3 links de materiais de estudo relacionados.
     4. O formato de saída DEVE ser um JSON válido seguindo o schema fornecido.
-    5. Idioma: Português (Brasil).
   `;
 
   let contentParts: any[] = [];
@@ -343,7 +311,7 @@ export async function generateDeepDive(
     3. Foque em ajudar o aluno a entender o conceito por trás da questão, não apenas a resposta.
     4. INCLUA OBRIGATORIAMENTE uma seção chamada "Mnemônico de Ouro" formatada como uma TABELA Markdown (com bordas e colunas claras). A tabela deve ter colunas como "Conceito", "Gatilho de Memória" e "Aplicação Prática".
     5. INCLUA uma seção chamada "Links de Estudo Recomendados" com 3-5 links relevantes.
-    6. Idioma: Português (Brasil).
+    6. Idioma: Português (Brasil). Use acentuação correta e NUNCA substitua caracteres acentuados por símbolos ou códigos.
     7. Seja encorajador e técnico ao mesmo tempo.
   `;
 
@@ -391,6 +359,10 @@ export async function chatWithProfessor(
     config: {
       systemInstruction: `
         Você é o "Professor AI Expert". Seu objetivo é ajudar o aluno a entender profundamente o conteúdo.
+        
+        IDIOMA: Português (Brasil).
+        IMPORTANTE: Use acentuação correta e NUNCA substitua caracteres acentuados por símbolos ou códigos (como #, &, $, etc). Exemplo: use "é" em vez de "#".
+        
         Você está discutindo esta questão específica:
         QUESTÃO: ${question.question}
         RESPOSTA CORRETA: ${question.correctAnswer}
@@ -474,7 +446,7 @@ export async function transcribeAudio(
     3. NÃO use Markdown (negrito, itálico, listas, etc.). O resultado deve ser apenas texto puro (plain text).
     4. Formate o texto em parágrafos fluidos e naturais, como se fosse um roteiro de fala perfeitamente limpo.
     5. Ignore qualquer caractere que não seja essencial para a compreensão da fala (como símbolos, asteriscos, hashtags).
-    6. Idioma: Português (Brasil).
+    6. Idioma: Português (Brasil). Use acentuação correta e NUNCA substitua caracteres acentuados por símbolos ou códigos.
     
     O objetivo final é um texto que pareça uma fala real, fluida e extremamente fácil de ler.
   `;

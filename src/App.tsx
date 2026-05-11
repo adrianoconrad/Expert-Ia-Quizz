@@ -100,6 +100,9 @@ import {
   Table,
   Globe,
   WifiOff,
+  Crown,
+  FileUp,
+  Settings2,
 } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -173,6 +176,60 @@ const formatTime = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, "0")}`;
+};
+
+const flattenContentItems = (content: any): ContentItem[] => {
+  if (!content) return [];
+  const items = Array.isArray(content) ? content : [content];
+  const result: ContentItem[] = [];
+
+  const process = (item: any) => {
+    if (Array.isArray(item)) {
+      item.forEach(process);
+    } else if (item && typeof item === "object") {
+      if ("data" in item && "mimeType" in item) {
+        result.push({ data: item.data, mimeType: item.mimeType });
+      } else if ("text" in item) {
+        result.push(item.text);
+      }
+    } else if (typeof item === "string") {
+      result.push(item);
+    }
+  };
+
+  items.forEach(process);
+  return result;
+};
+
+const ensureNoNestedArrays = (obj: any): any => {
+  if (obj === undefined) return null;
+  if (Array.isArray(obj)) {
+    return obj.map((item) => {
+      if (Array.isArray(item)) {
+        // Flatten nested array
+        return ensureNoNestedArrays(item[0]);
+      }
+      return ensureNoNestedArrays(item);
+    });
+  }
+  if (
+    obj !== null &&
+    typeof obj === "object" &&
+    !(obj instanceof Date) &&
+    !(obj instanceof Timestamp)
+  ) {
+    const newObj: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        const val = ensureNoNestedArrays(obj[key]);
+        if (val !== undefined) {
+          newObj[key] = val;
+        }
+      }
+    }
+    return newObj;
+  }
+  return obj;
 };
 
 declare global {
@@ -974,6 +1031,7 @@ interface QuizResult {
   isReview?: boolean;
   subject?: string;
   revisionTasks?: string[]; // IDs of RevisionTask
+  simuladoType?: "auto" | "files" | "standard" | null;
 }
 
 const MultiDateCalendar = ({
@@ -3221,6 +3279,7 @@ const RevisionAgenda = ({
   onPracticeQuiz: (quizId: string, taskId: string) => void;
 }) => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [viewDate, setViewDate] = useState<Date>(new Date());
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
 
   const tasksByDate = React.useMemo(() => {
@@ -3307,14 +3366,45 @@ const RevisionAgenda = ({
         {/* Calendar Sidebar */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 dark:border-slate-800/50 shadow-xl">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-2">
               <h3 className="font-bold dark:text-white flex items-center gap-2">
                 <Calendar size={18} className={theme.text} />
                 Calendário
               </h3>
               <span className="text-[10px] font-black text-black/20 dark:text-slate-600 tracking-widest uppercase">
-                Selecione o Dia
+                Revisão Ativa
               </span>
+            </div>
+
+            <div className="flex items-center justify-between mb-4 bg-black/5 dark:bg-white/5 p-2 rounded-2xl">
+              <button
+                onClick={() => setViewDate(subMonths(viewDate, 1))}
+                className="p-2 hover:bg-black/10 dark:hover:bg-white/10 rounded-xl transition-all text-black/60 dark:text-slate-300"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div className="flex flex-col items-center">
+                <span className="text-sm font-black dark:text-white uppercase tracking-tighter">
+                  {format(viewDate, "MMMM", { locale: ptBR })}
+                </span>
+                <span className="text-[10px] font-bold text-black/40 dark:text-slate-500">
+                  {format(viewDate, "yyyy")}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setViewDate(new Date())}
+                  className="px-2 py-1 text-[9px] font-black uppercase tracking-tighter hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-all text-black/40 dark:text-slate-400"
+                >
+                  Hoje
+                </button>
+                <button
+                  onClick={() => setViewDate(addMonths(viewDate, 1))}
+                  className="p-2 hover:bg-black/10 dark:hover:bg-white/10 rounded-xl transition-all text-black/60 dark:text-slate-300"
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-7 gap-1">
@@ -3327,14 +3417,14 @@ const RevisionAgenda = ({
                 </div>
               ))}
               {(() => {
-                const start = startOfWeek(startOfMonth(selectedDate));
-                const end = endOfWeek(endOfMonth(selectedDate));
+                const start = startOfWeek(startOfMonth(viewDate));
+                const end = endOfWeek(endOfMonth(viewDate));
                 const days = eachDayOfInterval({ start, end });
 
                 return days.map((day) => {
                   const isSelected = isSameDay(day, selectedDate);
                   const isCurrentMonth =
-                    day.getMonth() === selectedDate.getMonth();
+                    day.getMonth() === viewDate.getMonth();
                   const hasTasks =
                     tasksByDate[format(day, "yyyy-MM-dd")]?.length > 0;
                   const allCompleted =
@@ -4883,7 +4973,7 @@ const StudyLogSpreadsheet = ({
                   <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 text-center w-[120px]">
                     Data
                   </th>
-                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 w-[160px]">
+                  <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 w-[320px]">
                     Matéria
                   </th>
                   <th className="px-6 py-5 text-[10px] font-black text-black/60 dark:text-slate-400 uppercase tracking-widest border-b border-black/5 dark:border-white/5 w-auto">
@@ -5027,7 +5117,7 @@ const StudyLogSpreadsheet = ({
                             ))}
                           </select>
                         ) : (
-                          <span className="text-sm font-black dark:text-white uppercase tracking-tight break-words">
+                          <span className="text-sm font-normal dark:text-white uppercase tracking-tight break-words font-mono" style={{ fontSize: '14px' }}>
                             {log.subject}
                           </span>
                         )}
@@ -7196,10 +7286,15 @@ function QuizApp() {
   const [flashcards, setFlashcards] = useState<any[]>([]);
   const [reviewFilter, setReviewFilter] = useState<"all" | "incorrect">("all");
   const [showDashboard, setShowDashboard] = useState(false);
+  const [showSimuladoModule, setShowSimuladoModule] = useState(false);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const [isCustomSimuladoCount, setIsCustomSimuladoCount] = useState(false);
+  const [simuladoTab, setSimuladoTab] = useState<"auto" | "files">("auto");
   const [showStudyMode, setShowStudyMode] = useState(false);
   const [showFlashcards, setShowFlashcards] = useState(false);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [showBancaDropdown, setShowBancaDropdown] = useState(false);
+  const [showSimuladoBancaDropdown, setShowSimuladoBancaDropdown] = useState(false);
   const [showQuantityDropdown, setShowQuantityDropdown] = useState(false);
 
   // Chat with Professor
@@ -7219,7 +7314,8 @@ function QuizApp() {
       | "dashboard"
       | "revision"
       | "schedule"
-      | "personal",
+      | "personal"
+      | "simulado",
   ) => {
     // Reset all view states
     setShowDashboard(module === "dashboard");
@@ -7227,29 +7323,33 @@ function QuizApp() {
     setShowRevisionAgenda(module === "revision");
     setShowStudySchedule(module === "schedule");
     setShowPersonalControl(module === "personal");
+    setShowSimuladoModule(module === "simulado");
 
     // Also reset sub-views
     setShowFlashcards(false);
     setShowRecycleBin(false);
     setActiveResultId(null);
 
-    // Ensure we are in idle state if switching modules
-    if (state !== "idle") setState("idle");
+    // We no longer force "idle" state when switching modules.
+    // This allows the user to navigate and then "Retomar Quiz" later.
+    // However, if we come back to "quiz" and state is "finished", we might want to keep it.
+    // For now, removing the forced idle state completely.
 
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const GlobalNav = () => {
-    const isModuleQuiz =
-      state === "active" ||
-      state === "finished" ||
-      (!showDashboard &&
-        !showStudyMode &&
-        !showStudySchedule &&
-        !showRevisionAgenda &&
-        !showPersonalControl &&
-        !showFlashcards &&
-        !showRecycleBin);
+    const isViewingQuiz =
+      !showDashboard &&
+      !showStudyMode &&
+      !showStudySchedule &&
+      !showRevisionAgenda &&
+      !showPersonalControl &&
+      !showSimuladoModule &&
+      !showFlashcards &&
+      !showRecycleBin;
+
+    const isModuleQuiz = state === "active" || state === "finished" || isViewingQuiz;
 
     return (
       <div className="flex justify-center mb-8 px-4 sticky top-0 z-[40] pt-2">
@@ -7259,13 +7359,28 @@ function QuizApp() {
             onClick={() => switchModule("quiz")}
             className={cn(
               "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap",
-              isModuleQuiz
+              isViewingQuiz
                 ? cn(theme.primary, theme.contrastText, "shadow-md")
                 : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5",
+              state === "active" && !isViewingQuiz && !showSimuladoModule && "animate-pulse ring-2 ring-blue-500/50"
             )}
           >
             <BrainCircuit size={16} />
-            Modo Quiz
+            {state === "active" && !isViewingQuiz && !showSimuladoModule ? "Retomar Quiz" : "Modo Quiz"}
+          </button>
+          <button
+            type="button"
+            onClick={() => switchModule("simulado")}
+            className={cn(
+              "flex items-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all relative whitespace-nowrap",
+              showSimuladoModule
+                ? cn(theme.primary, theme.contrastText, "shadow-md")
+                : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5",
+              state === "active" && showSimuladoModule && "animate-pulse ring-2 ring-blue-500/50"
+            )}
+          >
+            <TrendingUp size={16} />
+            Simulados
           </button>
           <button
             type="button"
@@ -7356,7 +7471,10 @@ function QuizApp() {
   const [selectedExamBoards, setSelectedExamBoards] = useState<string[]>([
     "Geral",
   ]);
+  const [simuladoSelectedExamBoards, setSimuladoSelectedExamBoards] = useState<string[]>(["Geral"]);
+  const [simuladoFormat, setSimuladoFormat] = useState<QuizFormat>("both");
   const [isBancaMindset, setIsBancaMindset] = useState(false);
+  const [showHypotheticalModal, setShowHypotheticalModal] = useState(false);
   const [hypotheticalCasesCount, setHypotheticalCasesCount] = useState(0);
   const [isSimulado, setIsSimulado] = useState(false);
   const [selectedSimuladoSubjects, setSelectedSimuladoSubjects] = useState<
@@ -7369,6 +7487,8 @@ function QuizApp() {
   const [showStudySchedule, setShowStudySchedule] = useState(false);
   const [showPersonalControl, setShowPersonalControl] = useState(false);
   const [studyLogs, setStudyLogs] = useState<StudyLog[]>([]);
+  const [currentQuizContent, setCurrentQuizContent] = useState<ContentItem | ContentItem[] | null>(null);
+  const [activeQuizFileName, setActiveQuizFileName] = useState("");
   const [revisionTasks, setRevisionTasks] = useState<RevisionTask[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [history, setHistory] = useState<QuizResult[]>([]);
@@ -8393,7 +8513,10 @@ function QuizApp() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    setState("loading");
+    setIsProcessingFile(true);
+    if (!showSimuladoModule) {
+      setState("loading");
+    }
     setError(null);
 
     try {
@@ -8450,10 +8573,16 @@ function QuizApp() {
       }
 
       // Don't call startQuiz immediately
-      setState("idle");
+      if (!showSimuladoModule) {
+        setState("idle");
+      }
     } catch (err: any) {
       setError(err.message || "Erro ao processar os materiais.");
-      setState("idle");
+      if (!showSimuladoModule) {
+        setState("idle");
+      }
+    } finally {
+      setIsProcessingFile(false);
     }
   };
 
@@ -8496,6 +8625,8 @@ function QuizApp() {
     setLoadingProgress(5);
     setError(null);
     setShowDashboard(false);
+    setShowSimuladoModule(false);
+    setIsSimulado(true);
 
     try {
       const totalQuestions = questionCount;
@@ -8511,24 +8642,15 @@ function QuizApp() {
       let allSimuladoQuestions: QuizQuestion[] = [];
       const missingSubjects: string[] = [];
 
-      // Derive format
-      const hasCebraspe = selectedExamBoards.includes("Cebraspe");
-      const hasMC =
-        selectedExamBoards.includes("Múltipla Escolha") ||
-        selectedExamBoards.some(
-          (b) => b !== "Cebraspe" && b !== "Múltipla Escolha",
-        ) ||
-        selectedExamBoards.includes("Geral");
-
-      let derivedFormat: QuizFormat = "multiple-choice";
-      if (hasCebraspe && hasMC) derivedFormat = "both";
-      else if (hasCebraspe) derivedFormat = "cebraspe";
-
-      const boardsToPass = selectedExamBoards.filter(
+      // Use specialized simulado settings
+      const derivedFormat = simuladoFormat;
+      const boardsToPass = simuladoSelectedExamBoards.filter(
         (b) => b !== "Múltipla Escolha" && b !== "Geral",
       );
       const examBoardStr =
         boardsToPass.length > 0 ? boardsToPass.join(", ") : "Geral";
+
+      const simuladoContents: ContentItem[] = [];
 
       for (let i = 0; i < selectedSimuladoSubjects.length; i++) {
         const subject = selectedSimuladoSubjects[i];
@@ -8570,6 +8692,20 @@ function QuizApp() {
           continue;
         }
 
+        if (content) {
+          if (Array.isArray(content)) {
+            content.forEach(item => {
+              if (!simuladoContents.includes(item)) {
+                simuladoContents.push(item);
+              }
+            });
+          } else {
+            if (!simuladoContents.includes(content)) {
+              simuladoContents.push(content);
+            }
+          }
+        }
+
         setLoadingProgress(10 + (i / selectedSimuladoSubjects.length) * 80);
 
         // Generate questions for this subject batch
@@ -8580,7 +8716,7 @@ function QuizApp() {
             derivedFormat,
             examBoardStr,
             isBancaMindset,
-            subjects,
+            [subject],
             hypotheticalCasesCount,
             true,
           );
@@ -8624,14 +8760,38 @@ function QuizApp() {
       setIsPaused(false);
       setState("active");
       setLastFileName(`Simulado: ${selectedSimuladoSubjects.join(", ")}`);
-      setLastContent(null); // Combined content is complex, we leave it null for now
+      setLastContent(flattenContentItems(simuladoContents));
+      setCurrentQuizContent(flattenContentItems(simuladoContents));
       setIsSimulado(true);
       setShowRevisionAgenda(false);
       setIsReviewMode(false);
 
       setLoadingProgress(100);
+      setHypotheticalCasesCount(0);
     } catch (err: any) {
       console.error("Erro ao gerar simulado:", err);
+      setError(err.message || "Erro ao gerar simulado.");
+      setState("idle");
+    }
+  };
+
+  const handleGenerateSimuladoFromFiles = async () => {
+    if (!pendingContent) {
+      setError("Por favor, carregue os arquivos primeiro.");
+      return;
+    }
+
+    setIsSimulado(true);
+    setIsRedoing(false);
+    setState("loading");
+    setLoadingProgress(5);
+    setError(null);
+    setShowSimuladoModule(false);
+
+    try {
+      await startQuiz(pendingContent, pendingFileName);
+    } catch (err: any) {
+      console.error("Erro ao gerar simulado de arquivos:", err);
       setError(err.message || "Erro ao gerar simulado.");
       setState("idle");
     }
@@ -8641,6 +8801,7 @@ function QuizApp() {
     content: ContentItem | ContentItem[],
     fileName: string,
   ) => {
+    const flattened = flattenContentItems(content);
     console.log("Iniciando geração de quiz...", {
       count: questionCount,
       fileName,
@@ -8650,46 +8811,49 @@ function QuizApp() {
     setState("loading");
     setError(null);
     setShowDashboard(false);
-    setLastContent(content);
+    setLastContent(flattened);
     setLastFileName(fileName);
     setActiveResultId(null);
     try {
       setLoadingProgress(10);
+      setCurrentQuizContent(flattened);
+      setActiveQuizFileName(fileName);
 
-      // Derive format based on selections
-      const hasCebraspe = selectedExamBoards.includes("Cebraspe");
-      const hasMC =
-        selectedExamBoards.includes("Múltipla Escolha") ||
-        selectedExamBoards.some(
-          (b) => b !== "Cebraspe" && b !== "Múltipla Escolha",
-        ) ||
-        selectedExamBoards.includes("Geral");
+      // Derive format based on selections (use simulado settings if in simulado mode)
+      const currentBoards = isSimulado ? simuladoSelectedExamBoards : selectedExamBoards;
+      const currentFormat = isSimulado ? simuladoFormat : null;
 
-      let derivedFormat: QuizFormat = "multiple-choice";
-      if (hasCebraspe && hasMC) derivedFormat = "both";
-      else if (hasCebraspe) derivedFormat = "cebraspe";
+      let derivedFormat: QuizFormat;
+      
+      if (currentFormat) {
+        derivedFormat = currentFormat;
+      } else {
+        const hasCebraspe = currentBoards.includes("Cebraspe");
+        const hasMC =
+          currentBoards.includes("Múltipla Escolha") ||
+          currentBoards.some(
+            (b) => b !== "Cebraspe" && b !== "Múltipla Escolha",
+          ) ||
+          currentBoards.includes("Geral");
 
-      const boardsToPass = selectedExamBoards.filter(
+        derivedFormat = "multiple-choice";
+        if (hasCebraspe && hasMC) derivedFormat = "both";
+        else if (hasCebraspe) derivedFormat = "cebraspe";
+      }
+
+      const boardsToPass = currentBoards.filter(
         (b) => b !== "Múltipla Escolha" && b !== "Geral",
       );
       const examBoardStr =
         boardsToPass.length > 0 ? boardsToPass.join(", ") : "Geral";
 
-      console.log("Chamando generateQuiz...", {
-        count: questionCount,
-        format: derivedFormat,
-        board: examBoardStr,
-        isBancaMindset,
-        hypotheticalCasesCount,
-        isSimulado,
-      });
       const generatedQuestions = await generateQuiz(
         content,
         questionCount,
         derivedFormat,
         examBoardStr,
         isBancaMindset,
-        subjects,
+        isSimulado ? selectedSimuladoSubjects : (selectedSubject ? [selectedSubject] : subjects),
         hypotheticalCasesCount,
         isSimulado,
       );
@@ -8742,6 +8906,7 @@ function QuizApp() {
       // Clear pending content only, keep selectedSubject so it can be saved in finishQuiz
       setPendingContent(null);
       setPendingFileName("");
+      setHypotheticalCasesCount(0);
     } catch (err: any) {
       console.error("Erro ao gerar quiz:", err);
       if (err.message?.includes("Requested entity was not found")) {
@@ -8765,6 +8930,7 @@ function QuizApp() {
   };
 
   const handleCreateQuiz = () => {
+    setIsSimulado(false);
     let contentToUse = pendingContent;
     let nameToUse = pendingFileName;
 
@@ -8943,14 +9109,14 @@ function QuizApp() {
     if (!user) return;
     try {
       const sessionRef = doc(db, "users", user.uid, "activeSession", "current");
-      await setDoc(sessionRef, {
+      await setDoc(sessionRef, ensureNoNestedArrays({
         questions: currentQuestions,
         answers: currentAnswers,
         currentIndex: index,
         lastFileName: fileName,
         isSimulado: simulado,
         updatedAt: Timestamp.now(),
-      });
+      }));
     } catch (err) {
       console.error("Erro ao salvar sessão:", err);
     }
@@ -8988,6 +9154,10 @@ function QuizApp() {
     setState("active");
     setIsReviewMode(false);
     setPendingSession(null);
+    const flattenedContent = flattenContentItems(session.content);
+    setCurrentQuizContent(flattenedContent);
+    setLastContent(flattenedContent);
+    setActiveQuizFileName(session.lastFileName || "");
     setIsResuming(false);
   };
 
@@ -9670,6 +9840,7 @@ function QuizApp() {
       isReview: isReviewMode,
       subject: selectedSubject,
       revisionTasks: [],
+      simuladoType: isSimulado ? (simuladoTab || "auto") : "standard",
     };
 
     // Finish UI immediately
@@ -9737,11 +9908,11 @@ function QuizApp() {
             content:
               contentStr.length > 800000
                 ? "Conteúdo muito grande para ser salvo no histórico."
-                : lastContent,
+                : flattenContentItems(lastContent),
             revisionTasks: scheduledTaskIds,
           };
 
-          batch.set(resultRef, resultToSave);
+          batch.set(resultRef, ensureNoNestedArrays(resultToSave));
 
           // Update stats
           const userRef = doc(db, "users", user.uid);
@@ -11386,6 +11557,14 @@ function QuizApp() {
           <GlobalNav />
           <div className="max-w-full mx-auto px-2 py-6">
             <AnimatePresence mode="wait">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                multiple
+                className="hidden"
+                accept=".txt,.md,.pdf,.docx,image/*"
+              />
               {showDashboard ? (
                 <Dashboard
                   key="dashboard"
@@ -11602,6 +11781,604 @@ function QuizApp() {
                   onUpdateLog={handleUpdateStudyLog}
                   onDeleteLog={handleDeleteStudyLog}
                 />
+              ) : showSimuladoModule ? (
+                <div key="simulado-module" className="max-w-5xl mx-auto space-y-4 pb-10">
+                  <div className="text-center space-y-2 mb-6">
+                     <h2 className="text-3xl font-black tracking-tight dark:text-white uppercase italic">
+                      Departamento de Simulados
+                    </h2>
+                    <p className="text-sm text-black/50 dark:text-slate-400 font-medium">
+                      Escolha como deseja gerar seu treinamento intensivo
+                    </p>
+                  </div>
+
+                  {/* Tab Switcher */}
+                  <div className="flex justify-center mb-6">
+                    <div className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-xl p-1.5 rounded-2xl flex gap-2 border border-black/5 dark:border-white/5 shadow-sm">
+                      <button
+                        onClick={() => setSimuladoTab("auto")}
+                        className={cn(
+                          "px-6 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
+                          simuladoTab === "auto"
+                            ? cn(theme.primary, theme.contrastText, "shadow-lg scale-105")
+                            : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+                        )}
+                      >
+                        <BrainCircuit size={18} />
+                        Gerado do Estudo
+                      </button>
+                      <button
+                        onClick={() => setSimuladoTab("files")}
+                        className={cn(
+                          "px-6 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
+                          simuladoTab === "files"
+                            ? cn(theme.primary, theme.contrastText, "shadow-lg scale-105")
+                            : "text-black/40 dark:text-slate-500 hover:bg-black/5 dark:hover:bg-white/5"
+                        )}
+                      >
+                        <FileUp size={18} />
+                        Gerado de Arquivos
+                      </button>
+                    </div>
+                  </div>
+
+                  <AnimatePresence mode="wait">
+                    {simuladoTab === "auto" ? (
+                      <motion.div
+                        key="simulado-auto"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="bg-white dark:bg-slate-900 rounded-3xl p-6 md:p-8 shadow-sm border border-black/5 dark:border-white/5"
+                      >
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+                          <div className="space-y-6">
+                            <div>
+                              <h3 className="text-xl font-bold dark:text-white mb-2 flex items-center gap-2">
+                                <Target size={24} className={theme.icon} />
+                                Configurações do Simulado
+                              </h3>
+                              <p className="text-sm text-black/50 dark:text-slate-400 leading-tight">
+                                Selecione as matérias e a quantidade de questões para seu simulado baseado no que você já estudou.
+                              </p>
+                            </div>
+
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-black/40 dark:text-slate-500 ml-1">
+                                    Quantidade
+                                  </label>
+                                  <div className="flex gap-2 h-[56px]">
+                                    <select
+                                      value={isCustomSimuladoCount ? "custom" : questionCount}
+                                      onChange={(e) => {
+                                        if (e.target.value === "custom") {
+                                          setIsCustomSimuladoCount(true);
+                                        } else {
+                                          setIsCustomSimuladoCount(false);
+                                          setQuestionCount(Number(e.target.value));
+                                        }
+                                      }}
+                                      className="flex-1 bg-black/5 dark:bg-white/5 border-2 border-black/5 dark:border-white/5 rounded-2xl px-4 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all dark:text-slate-100"
+                                    >
+                                      <option value="10">10 Questões</option>
+                                      <option value="20">20 Questões</option>
+                                      <option value="50">50 Questões</option>
+                                      <option value="100">100 Questões</option>
+                                      <option value="custom">Personalizado</option>
+                                    </select>
+                                    {isCustomSimuladoCount && (
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max="200"
+                                        value={questionCount}
+                                        onChange={(e) => setQuestionCount(Number(e.target.value))}
+                                        className="w-[72px] h-[56px] bg-black/5 dark:bg-white/5 border-2 border-black/5 dark:border-white/5 rounded-2xl px-3 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all dark:text-slate-100 text-center"
+                                        placeholder="Qtd"
+                                      />
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-black/40 dark:text-slate-500 ml-1">
+                                    Estilo
+                                  </label>
+                                  <select
+                                    value={simuladoFormat}
+                                    onChange={(e) => setSimuladoFormat(e.target.value as QuizFormat)}
+                                    className="w-full h-[56px] bg-black/5 dark:bg-white/5 border-2 border-black/5 dark:border-white/5 rounded-2xl px-4 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all dark:text-slate-100"
+                                  >
+                                    <option value="both">Ambas (M.E + C/E)</option>
+                                    <option value="multiple-choice">Múltipla Escolha</option>
+                                    <option value="cebraspe">Certo ou Errado</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-black/40 dark:text-slate-500 ml-1 block text-left">
+                                  Banca Examinadora
+                                </label>
+                                <div className="relative">
+                                  <button
+                                    onClick={() => setShowSimuladoBancaDropdown(!showSimuladoBancaDropdown)}
+                                    className={cn(
+                                      "w-full flex items-center justify-between gap-3 px-6 py-4 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95 h-[56px]",
+                                      showSimuladoBancaDropdown
+                                        ? cn(theme.border, theme.bg, theme.text)
+                                        : "bg-black/5 dark:bg-white/5 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20",
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Target size={18} className={cn(showSimuladoBancaDropdown ? "text-white" : theme.text)} />
+                                      <span>
+                                        Banca:{" "}
+                                        {simuladoSelectedExamBoards.length === 1 &&
+                                        simuladoSelectedExamBoards[0] === "Geral"
+                                          ? "Geral"
+                                          : simuladoSelectedExamBoards.length === 1
+                                            ? simuladoSelectedExamBoards[0]
+                                            : `${simuladoSelectedExamBoards.length} Selecionadas`}
+                                      </span>
+                                    </div>
+                                    <ChevronRight
+                                      size={16}
+                                      className={cn(
+                                        "transition-transform",
+                                        showSimuladoBancaDropdown ? "rotate-90" : "",
+                                      )}
+                                    />
+                                  </button>
+
+                                  <AnimatePresence>
+                                    {showSimuladoBancaDropdown && (
+                                      <>
+                                        <motion.div
+                                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                          className="absolute top-full left-0 mt-3 w-64 bg-white dark:bg-slate-900 rounded-3xl border border-black/5 dark:border-white/10 shadow-2xl z-50 p-5 space-y-4 backdrop-blur-xl"
+                                        >
+                                          <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-3">
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">
+                                              Selecionar Bancas
+                                            </span>
+                                            <span className="text-[9px] font-bold px-2 py-0.5 bg-amber-500/10 text-amber-600 rounded-full uppercase">
+                                              Multiseleção
+                                            </span>
+                                          </div>
+                                          <div className="grid grid-cols-2 gap-2">
+                                            {[
+                                              "Geral",
+                                              "Cebraspe",
+                                              "FGV",
+                                              "FCC",
+                                              "Vunesp",
+                                              "Cesgranrio",
+                                              "AOCP",
+                                            ].map((board) => (
+                                              <button
+                                                key={board}
+                                                onClick={() => {
+                                                  if (board === "Geral") {
+                                                    setSimuladoSelectedExamBoards(["Geral"]);
+                                                  } else {
+                                                    setSimuladoSelectedExamBoards((prev) => {
+                                                      const filtered = prev.filter(
+                                                        (b) => b !== "Geral",
+                                                      );
+                                                      if (filtered.includes(board)) {
+                                                        const next = filtered.filter(
+                                                          (b) => b !== board,
+                                                        );
+                                                        return next.length === 0
+                                                          ? ["Geral"]
+                                                          : next;
+                                                      } else {
+                                                        return [...filtered, board];
+                                                      }
+                                                    });
+                                                  }
+                                                }}
+                                                className={cn(
+                                                  "px-3 py-2 rounded-xl text-[10px] font-bold border-2 transition-all text-center flex items-center justify-center gap-1.5",
+                                                  simuladoSelectedExamBoards.includes(board)
+                                                    ? cn(
+                                                        theme.bg,
+                                                        "text-black dark:text-black border-black/20",
+                                                      )
+                                                    : "border-black/5 dark:border-slate-800 hover:border-black/10 dark:hover:border-slate-700 text-black/40 dark:text-slate-500",
+                                                )}
+                                              >
+                                                {simuladoSelectedExamBoards.includes(board) && (
+                                                  <CheckCircle2 size={10} />
+                                                )}
+                                                {board}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </motion.div>
+                                        <div
+                                          className="fixed inset-0 z-40"
+                                          onClick={() => setShowSimuladoBancaDropdown(false)}
+                                        />
+                                      </>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <label className="text-xs font-black uppercase tracking-widest text-black/40 dark:text-slate-500">
+                                    Matérias Selecionadas
+                                  </label>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 bg-black/5 dark:bg-white/5 rounded-full text-black/40 dark:text-slate-500">
+                                    {selectedSimuladoSubjects.length} matérias
+                                  </span>
+                                </div>
+                                <div className="flex flex-wrap gap-2 max-h-[200px] overflow-y-auto p-2 border-2 border-black/5 dark:border-white/5 rounded-2xl custom-scrollbar">
+                                  {subjects.length > 0 ? (
+                                    subjects.map((subject) => (
+                                      <button
+                                        key={subject}
+                                        onClick={() => {
+                                          if (selectedSimuladoSubjects.includes(subject)) {
+                                            setSelectedSimuladoSubjects(prev => prev.filter(s => s !== subject));
+                                          } else {
+                                            setSelectedSimuladoSubjects(prev => [...prev, subject]);
+                                          }
+                                        }}
+                                        className={cn(
+                                          "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2",
+                                          selectedSimuladoSubjects.includes(subject)
+                                            ? cn(theme.bg, "text-black dark:text-black")
+                                            : "bg-black/5 dark:bg-white/5 text-black/60 dark:text-slate-400 hover:bg-black/10 transition-colors"
+                                        )}
+                                      >
+                                        {selectedSimuladoSubjects.includes(subject) ? <Check size={12} /> : <Plus size={12} />}
+                                        {subject}
+                                      </button>
+                                    ))
+                                  ) : (
+                                    <div className="w-full text-center py-8">
+                                      <p className="text-xs text-black/40 dark:text-slate-500 italic">
+                                        Nenhuma matéria encontrada no seu histórico.
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-6">
+                            <div className="p-5 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/10 dark:border-amber-500/20 rounded-2xl space-y-3">
+                              <div className="flex items-center gap-3 mb-1">
+                                <div className="p-2 bg-amber-500/20 rounded-xl">
+                                  <Crown size={20} className="text-amber-600 dark:text-amber-400" />
+                                </div>
+                                <h4 className="font-bold text-amber-700 dark:text-amber-300">Modo Própria Banca</h4>
+                              </div>
+                              <p className="text-xs text-amber-600/80 dark:text-amber-400/80 leading-tight font-medium">
+                                No Modo Simulado, focamos na mentalidade da banca examinadora para te preparar para as armadilhas reais da prova.
+                              </p>
+                              <div className="flex items-center justify-between p-2.5 bg-white/50 dark:bg-black/20 rounded-xl">
+                                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-widest">Ativar Mentalidade</span>
+                                <button
+                                  onClick={() => setIsBancaMindset(!isBancaMindset)}
+                                  className={cn(
+                                    "w-10 h-5 rounded-full p-0.5 transition-colors relative",
+                                    isBancaMindset ? "bg-amber-500" : "bg-black/20 dark:bg-white/20"
+                                  )}
+                                >
+                                  <motion.div
+                                    animate={{ x: isBancaMindset ? 20 : 0 }}
+                                    className="w-4 h-4 bg-white rounded-full shadow-sm"
+                                  />
+                                </button>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => handleGenerateSimulado()}
+                              disabled={selectedSimuladoSubjects.length === 0}
+                              className={cn(
+                                "w-full py-4 rounded-2xl font-black text-base uppercase tracking-[0.2em] shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-4 group disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed",
+                                theme.primary,
+                                theme.contrastText,
+                                theme.shadow
+                              )}
+                            >
+                              <Zap size={24} className="group-hover:animate-pulse" />
+                              Gerar Simulado Realista
+                            </button>
+                            <p className="text-[10px] text-center text-black/30 dark:text-slate-500 font-bold uppercase tracking-widest">
+                               * Requer conexão com a Experte IA
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="simulado-files"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="bg-white dark:bg-slate-900 rounded-3xl p-6 md:p-8 shadow-sm border border-black/5 dark:border-white/5"
+                      >
+                         <div className="max-w-2xl mx-auto space-y-6">
+                            <div className="text-center space-y-1">
+                              <h3 className="text-xl font-bold dark:text-white">Simulado por Arquivos</h3>
+                              <p className="text-xs text-black/50 dark:text-slate-400">
+                                Carregue seus materiais (apostilas, provas, PDFs) e geraremos um simulado baseado exclusivamente neles.
+                              </p>
+                            </div>
+
+                            {/* Configuration First */}
+                            <div className="space-y-4 bg-black/5 dark:bg-white/5 p-6 rounded-2xl border border-black/5 dark:border-white/5">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-black/40 dark:text-slate-500 ml-1">
+                                      Quantidade
+                                    </label>
+                                    <div className="flex gap-2 h-[56px] items-center">
+                                      <div className="flex-1 h-full">
+                                        <select
+                                          value={isCustomSimuladoCount ? "custom" : questionCount}
+                                          onChange={(e) => {
+                                            if (e.target.value === "custom") {
+                                              setIsCustomSimuladoCount(true);
+                                            } else {
+                                              setIsCustomSimuladoCount(false);
+                                              setQuestionCount(Number(e.target.value));
+                                            }
+                                          }}
+                                          className="w-full h-full bg-black/5 dark:bg-white/5 border-2 border-black/5 dark:border-white/5 rounded-2xl px-4 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all dark:text-slate-100"
+                                        >
+                                          <option value="10">10 Questões</option>
+                                          <option value="20">20 Questões</option>
+                                          <option value="50">50 Questões</option>
+                                          <option value="100">100 Questões</option>
+                                          <option value="custom">Personalizado...</option>
+                                        </select>
+                                      </div>
+                                      {isCustomSimuladoCount && (
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max="200"
+                                          value={questionCount}
+                                          onChange={(e) => setQuestionCount(Number(e.target.value))}
+                                          className="w-[72px] h-[56px] bg-black/5 dark:bg-white/5 border-2 border-black/5 dark:border-white/5 rounded-2xl px-3 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all dark:text-slate-100 text-center flex-shrink-0"
+                                          placeholder="Qtd"
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-black/40 dark:text-slate-500 ml-1">
+                                      Estilo do Simulado
+                                    </label>
+                                    <select
+                                      value={simuladoFormat}
+                                      onChange={(e) => setSimuladoFormat(e.target.value as QuizFormat)}
+                                      className="w-full h-[56px] bg-black/5 dark:bg-white/5 border-2 border-black/5 dark:border-white/5 rounded-2xl px-4 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all dark:text-slate-100"
+                                    >
+                                      <option value="both">Ambas (M.E + C/E)</option>
+                                      <option value="multiple-choice">Múltipla Escolha</option>
+                                      <option value="cebraspe">Certo ou Errado</option>
+                                    </select>
+                                  </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-black/40 dark:text-slate-500 block text-left ml-1">
+                                  Banca Examinadora
+                                </label>
+                                <div className="relative">
+                                  <button
+                                    onClick={() => setShowSimuladoBancaDropdown(!showSimuladoBancaDropdown)}
+                                    className={cn(
+                                      "w-full flex items-center justify-between gap-3 px-6 py-4 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95 h-[56px]",
+                                      showSimuladoBancaDropdown
+                                        ? cn(theme.border, theme.bg, theme.text)
+                                        : "bg-black/5 dark:bg-white/5 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20",
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Target size={18} className={cn(showSimuladoBancaDropdown ? "text-white" : theme.text)} />
+                                      <span>
+                                        Banca:{" "}
+                                        {simuladoSelectedExamBoards.length === 1 &&
+                                        simuladoSelectedExamBoards[0] === "Geral"
+                                          ? "Geral"
+                                          : simuladoSelectedExamBoards.length === 1
+                                            ? simuladoSelectedExamBoards[0]
+                                            : `${simuladoSelectedExamBoards.length} Selecionadas`}
+                                      </span>
+                                    </div>
+                                    <ChevronRight
+                                      size={16}
+                                      className={cn(
+                                        "transition-transform",
+                                        showSimuladoBancaDropdown ? "rotate-90" : "",
+                                      )}
+                                    />
+                                  </button>
+                                  
+                                  <AnimatePresence>
+                                    {showSimuladoBancaDropdown && (
+                                      <>
+                                        <motion.div
+                                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                          className="absolute top-full left-0 mt-3 w-64 bg-white dark:bg-slate-900 rounded-3xl border border-black/5 dark:border-white/10 shadow-2xl z-50 p-5 space-y-4 backdrop-blur-xl"
+                                        >
+                                          <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-3">
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">
+                                              Selecionar Bancas
+                                            </span>
+                                            <span className="text-[9px] font-bold px-2 py-0.5 bg-amber-500/10 text-amber-600 rounded-full uppercase">
+                                              Multiseleção
+                                            </span>
+                                          </div>
+                                          <div className="grid grid-cols-2 gap-2">
+                                            {[
+                                              "Geral",
+                                              "Cebraspe",
+                                              "FGV",
+                                              "FCC",
+                                              "Vunesp",
+                                              "Cesgranrio",
+                                              "AOCP",
+                                            ].map((board) => (
+                                              <button
+                                                key={board}
+                                                onClick={() => {
+                                                  if (board === "Geral") {
+                                                    setSimuladoSelectedExamBoards(["Geral"]);
+                                                  } else {
+                                                    setSimuladoSelectedExamBoards((prev) => {
+                                                      const filtered = prev.filter(
+                                                        (b) => b !== "Geral",
+                                                      );
+                                                      if (filtered.includes(board)) {
+                                                        const next = filtered.filter(
+                                                          (b) => b !== board,
+                                                        );
+                                                        return next.length === 0
+                                                          ? ["Geral"]
+                                                          : next;
+                                                      } else {
+                                                        return [...filtered, board];
+                                                      }
+                                                    });
+                                                  }
+                                                }}
+                                                className={cn(
+                                                  "px-3 py-2 rounded-xl text-[10px] font-bold border-2 transition-all text-center flex items-center justify-center gap-1.5",
+                                                  simuladoSelectedExamBoards.includes(board)
+                                                    ? cn(
+                                                        theme.bg,
+                                                        "text-black dark:text-black border-black/20",
+                                                      )
+                                                    : "border-black/5 dark:border-slate-800 hover:border-black/10 dark:hover:border-slate-700 text-black/40 dark:text-slate-500",
+                                                )}
+                                              >
+                                                {simuladoSelectedExamBoards.includes(board) && (
+                                                  <CheckCircle2 size={10} />
+                                                )}
+                                                {board}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </motion.div>
+                                        <div
+                                          className="fixed inset-0 z-40"
+                                          onClick={() => setShowSimuladoBancaDropdown(false)}
+                                        />
+                                      </>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div
+                              onClick={() => !isProcessingFile && fileInputRef.current?.click()}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const files = e.dataTransfer.files;
+                                if (files && files.length > 0) {
+                                  const event = { target: { files } } as any;
+                                  handleFileUpload(event);
+                                }
+                              }}
+                              className={cn(
+                                "group cursor-pointer relative overflow-hidden border-4 border-dashed rounded-[48px] p-20 transition-all text-center",
+                                theme.border,
+                                `hover:${theme.bgLight}`,
+                                `dark:hover:${theme.bgLightDark}`,
+                                "bg-black/[0.02] dark:bg-white/[0.02]",
+                                isProcessingFile && "opacity-50 cursor-wait"
+                              )}
+                            >
+                               <div className="flex flex-col items-center gap-6">
+                                <div className={cn(
+                                  "w-24 h-24 rounded-[32px] flex items-center justify-center shadow-2xl transition-transform group-hover:scale-110",
+                                  theme.primary,
+                                  theme.contrastText
+                                )}>
+                                  {isProcessingFile ? (
+                                    <Loader2 size={40} className="animate-spin" />
+                                  ) : (
+                                    <FileUp size={40} />
+                                  )}
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-xl font-bold dark:text-white">
+                                    {isProcessingFile ? "Processando Materiais..." : "Clique para Carregar Arquivos"}
+                                  </p>
+                                  <p className="text-sm text-black/40 dark:text-slate-500 font-medium">
+                                    {isProcessingFile ? "Extraindo texto dos documentos" : "Arraste e solte PDF, Word ou Imagens aqui"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {pendingContent && (
+                              <div className="space-y-4">
+                                <div className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-3xl flex items-center justify-between">
+                                  <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-emerald-500/20 rounded-2xl">
+                                      <CheckCircle2 size={24} className="text-emerald-600" />
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-black uppercase tracking-widest text-emerald-700">Arquivo Carregado</p>
+                                      <p className="text-sm text-emerald-600/80 font-bold truncate max-w-[300px]">{pendingFileName}</p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPendingContent(null);
+                                      setPendingFileName("");
+                                    }}
+                                    className="p-2 hover:bg-emerald-500/20 rounded-xl transition-colors"
+                                  >
+                                    <X size={20} className="text-emerald-600" />
+                                  </button>
+                                </div>
+
+                                <button
+                                  onClick={() => handleGenerateSimuladoFromFiles()}
+                                  className={cn(
+                                    "w-full py-6 rounded-[32px] font-black text-lg uppercase tracking-[0.2em] shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-4 group",
+                                    theme.primary,
+                                    theme.contrastText,
+                                    theme.shadow
+                                  )}
+                                >
+                                  <Zap size={24} className="group-hover:animate-pulse" />
+                                  Gerar Simulado do Arquivo
+                                </button>
+                              </div>
+                            )}
+
+                         </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               ) : state === "idle" ? (
                 <motion.div
                   key="idle"
@@ -11719,7 +12496,7 @@ function QuizApp() {
                                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                className="absolute top-full left-0 mt-3 w-72 bg-white dark:bg-slate-900 rounded-3xl border border-black/5 dark:border-white/10 shadow-2xl z-50 p-5 space-y-4 backdrop-blur-xl"
+                                className="absolute top-full left-0 mt-3 w-64 bg-white dark:bg-slate-900 rounded-3xl border border-black/5 dark:border-white/10 shadow-2xl z-50 p-5 space-y-4 backdrop-blur-xl"
                               >
                                 <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-3">
                                   <span className="text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">
@@ -11732,12 +12509,12 @@ function QuizApp() {
                                 <div className="grid grid-cols-2 gap-2">
                                   {[
                                     "Geral",
-                                    "Múltipla Escolha",
                                     "Cebraspe",
                                     "FGV",
                                     "FCC",
                                     "Vunesp",
                                     "Cesgranrio",
+                                    "AOCP",
                                   ].map((board) => (
                                     <button
                                       key={board}
@@ -11823,7 +12600,7 @@ function QuizApp() {
                                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                className="absolute top-full right-0 md:left-0 mt-3 w-72 bg-white dark:bg-slate-900 rounded-3xl border border-black/5 dark:border-white/10 shadow-2xl z-50 p-6 space-y-6 backdrop-blur-xl"
+                                className="absolute top-full right-0 md:left-0 mt-3 w-64 bg-white dark:bg-slate-900 rounded-3xl border border-black/5 dark:border-white/10 shadow-2xl z-50 p-6 space-y-6 backdrop-blur-xl"
                               >
                                 <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-3">
                                   <span className="text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-slate-500">
@@ -11860,14 +12637,17 @@ function QuizApp() {
                                       MÁX (100)
                                     </span>
                                   </div>
-                                  <div className="grid grid-cols-4 gap-2">
+                                  <div className="grid grid-cols-5 gap-2">
                                     {[10, 20, 50, 100].map((val) => (
                                       <button
                                         key={val}
-                                        onClick={() => setQuestionCount(val)}
+                                        onClick={() => {
+                                          setQuestionCount(val);
+                                          setIsCustomSimuladoCount(false);
+                                        }}
                                         className={cn(
                                           "py-2 rounded-xl text-[10px] font-bold border transition-all",
-                                          questionCount === val
+                                          questionCount === val && !isCustomSimuladoCount
                                             ? cn(
                                                 theme.bg,
                                                 theme.border,
@@ -11879,73 +12659,51 @@ function QuizApp() {
                                         {val}
                                       </button>
                                     ))}
+                                    <button
+                                      onClick={() => setIsCustomSimuladoCount(!isCustomSimuladoCount)}
+                                      className={cn(
+                                        "py-2 rounded-xl text-[10px] font-bold border transition-all flex items-center justify-center",
+                                        isCustomSimuladoCount
+                                          ? cn(theme.bg, theme.border, theme.text)
+                                          : "border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 text-black/40 dark:text-slate-500",
+                                      )}
+                                    >
+                                      <Settings2 size={12} />
+                                    </button>
                                   </div>
+
+                                  {isCustomSimuladoCount && (
+                                    <div className="mt-2 animate-in slide-in-from-top-2 duration-300">
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max="200"
+                                        value={questionCount}
+                                        onChange={(e) => setQuestionCount(Number(e.target.value))}
+                                        className="w-full bg-black/5 dark:bg-white/5 border-2 border-black/5 dark:border-white/5 rounded-xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all dark:text-white text-center"
+                                        placeholder="Qtd"
+                                        autoFocus
+                                      />
+                                    </div>
+                                  )}
                                 </div>
                               </motion.div>
-                              <div
-                                className="fixed inset-0 z-40"
-                                onClick={() => setShowQuantityDropdown(false)}
-                              />
-                            </>
-                          )}
-                        </AnimatePresence>
-                      </div>
-
-                      {/* Simulado Toggle */}
-                      <button
-                        onClick={() => {
-                          const next = !isSimulado;
-                          setIsSimulado(next);
-                          if (!next) setSelectedSimuladoSubjects([]);
-                        }}
-                        className={cn(
-                          "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95",
-                          isSimulado
-                            ? cn(
-                                theme.border,
-                                theme.bg,
-                                theme.text,
-                                "ring-2 ring-offset-2",
-                                theme.ring,
-                              )
-                            : "bg-white dark:bg-slate-900 border-black/5 dark:border-white/10 text-black/60 dark:text-slate-400 hover:border-black/10 dark:hover:border-white/20",
-                        )}
-                        title="Modo Simulado: Cronômetro global, várias matérias e feedback apenas ao final."
-                      >
-                        <TrendingUp
-                          size={18}
-                          className={
-                            isSimulado
-                              ? theme.icon
-                              : "text-black/20 dark:text-slate-600"
-                          }
-                        />
-                        <span>Simulado</span>
-                        {isSimulado && (
-                          <div className="flex items-center gap-2 ml-auto">
-                            <span className="text-[10px] text-blue-500 font-black animate-pulse">
-                              SEARCH ON
-                            </span>
-                            <motion.span
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              className="flex h-2 w-2 rounded-full bg-blue-500"
+                            <div
+                              className="fixed inset-0 z-40"
+                              onClick={() => setShowQuantityDropdown(false)}
                             />
-                          </div>
+                          </>
                         )}
-                      </button>
-                      {isSimulado && (
-                        <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-1 ml-1 flex items-center gap-1">
-                          <Globe size={10} /> BUSCANDO QUESTÕES REAIS DA BANCA
-                        </p>
-                      )}
+                      </AnimatePresence>
+                    </div>
 
-                      <div className="relative">
+                    <div className="relative">
                         <button
                           onClick={() => {
-                            const next = !isBancaMindset;
-                            setIsBancaMindset(next);
-                            if (!next) setHypotheticalCasesCount(0);
+                            const nextState = !isBancaMindset;
+                            setIsBancaMindset(nextState);
+                            setShowHypotheticalModal(nextState);
+                            if (!nextState) setHypotheticalCasesCount(0);
                           }}
                           className={cn(
                             "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm shadow-sm active:scale-95 whitespace-nowrap",
@@ -11970,6 +12728,11 @@ function QuizApp() {
                             }
                           />
                           <span>Própria Banca</span>
+                          {isBancaMindset && hypotheticalCasesCount > 0 && (
+                            <span className="ml-1 text-[10px] font-black text-amber-500 bg-white dark:bg-amber-500/10 px-1.5 py-0.5 rounded-md border border-amber-500/20 shadow-sm">
+                              {hypotheticalCasesCount.toString().padStart(2, "0")}
+                            </span>
+                          )}
                           {isBancaMindset && (
                             <motion.span
                               initial={{ scale: 0 }}
@@ -11980,41 +12743,61 @@ function QuizApp() {
                         </button>
 
                         <AnimatePresence>
-                          {isBancaMindset && (
+                          {showHypotheticalModal && (
                             <motion.div
                               initial={{ opacity: 0, y: 10, scale: 0.95 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                              className="absolute top-full left-0 mt-3 w-64 bg-white dark:bg-slate-900 rounded-3xl border border-amber-500/20 shadow-2xl z-50 p-6 space-y-4 backdrop-blur-xl"
+                              className="absolute top-full left-0 mt-3 w-56 bg-white dark:bg-slate-900 rounded-2xl border border-amber-500/20 shadow-2xl z-50 p-2.5 space-y-1.5 backdrop-blur-xl"
                             >
-                              <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-3">
-                                <div className="flex items-center gap-2">
-                                  <Zap size={14} className="text-amber-500" />
-                                  <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                              <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  <Zap size={11} className="text-amber-500" />
+                                  <span className="text-[8px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">
                                     Casos Hipotéticos
                                   </span>
                                 </div>
-                                <span className="text-xs font-black text-amber-600 dark:text-amber-400">
-                                  {hypotheticalCasesCount}
-                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[8px] font-black text-white bg-amber-500 px-1.5 py-0.5 rounded-full shadow-sm">
+                                    {hypotheticalCasesCount.toString().padStart(2, "0")}
+                                  </span>
+                                </div>
                               </div>
-                              <input
-                                type="range"
-                                min="0"
-                                max={Math.min(questionCount, 10)}
-                                step="1"
-                                value={hypotheticalCasesCount}
-                                onChange={(e) =>
-                                  setHypotheticalCasesCount(
-                                    parseInt(e.target.value),
-                                  )
-                                }
-                                className="w-full h-1.5 bg-amber-500/20 rounded-full appearance-none cursor-pointer accent-amber-500"
-                              />
-                              <p className="text-[9px] text-amber-600/60 dark:text-amber-400/60 font-medium leading-tight italic">
-                                Define quantas questões serão baseadas em
-                                situações práticas para aplicar a teoria.
-                              </p>
+
+                              <div className="grid grid-cols-5 gap-1 py-0.5">
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                                  <button
+                                    key={n}
+                                    onClick={() => {
+                                      if (hypotheticalCasesCount === n) {
+                                        setHypotheticalCasesCount(0);
+                                      } else {
+                                        setHypotheticalCasesCount(n);
+                                      }
+                                    }}
+                                    className={cn(
+                                      "h-6 flex items-center justify-center rounded-md text-[9px] font-bold transition-all border",
+                                      hypotheticalCasesCount === n
+                                        ? "bg-amber-500 border-amber-600 text-white shadow-lg shadow-amber-500/20"
+                                        : "bg-black/5 dark:bg-white/5 border-transparent text-black/60 dark:text-white/60 hover:bg-black/10 dark:hover:bg-white/10"
+                                    )}
+                                  >
+                                    {n.toString().padStart(2, "0")}
+                                  </button>
+                                ))}
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 pt-0.5">
+                                <p className="text-[6.5px] text-amber-600/60 dark:text-amber-400/60 font-medium leading-tight flex-1">
+                                  Defina o total de questões.
+                                </p>
+                                <button
+                                  onClick={() => setShowHypotheticalModal(false)}
+                                  className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-[8px] font-black rounded-lg uppercase tracking-widest transition-all shadow-lg active:scale-95"
+                                >
+                                  OK
+                                </button>
+                              </div>
                             </motion.div>
                           )}
                         </AnimatePresence>
@@ -12023,103 +12806,7 @@ function QuizApp() {
                   </div>
 
                   <div className="space-y-6">
-                    {/* Simulado Multi-Subject Configuration */}
-                    {isSimulado && subjects.length > 0 && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="max-w-xl mx-auto space-y-4 p-6 rounded-[2.5rem] bg-blue-500/5 border border-blue-500/20 backdrop-blur-xl shadow-xl"
-                      >
-                        <div className="flex items-center gap-3 mb-2">
-                          <TrendingUp className="text-blue-500" size={20} />
-                          <h3 className="font-bold text-sm uppercase tracking-widest text-blue-600 dark:text-blue-400">
-                            Configuração do Simulado
-                          </h3>
-                        </div>
-                        <p className="text-xs text-black/40 dark:text-slate-500 leading-relaxed">
-                          Selecione as matérias que você já estudou para compor
-                          seu simulado. O sistema dividirá as {questionCount}{" "}
-                          questões proporcionalmente entre elas de forma
-                          sequencial.
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                          {Array.from(new Set(subjects)).map((subject) => {
-                            const hasContent = hasContentForSubject(subject);
-                            const isSelected =
-                              selectedSimuladoSubjects.includes(subject);
-
-                            return (
-                              <button
-                                key={subject}
-                                onClick={() => {
-                                  setSelectedSimuladoSubjects((prev) =>
-                                    prev.includes(subject)
-                                      ? prev.filter((s) => s !== subject)
-                                      : [...prev, subject],
-                                  );
-                                }}
-                                className={cn(
-                                  "px-4 py-3 rounded-2xl text-[11px] font-bold border-2 transition-all flex items-center justify-between text-left relative overflow-hidden",
-                                  isSelected
-                                    ? cn(theme.border, theme.bg, theme.text)
-                                    : "bg-white dark:bg-slate-900 border-black/5 dark:border-slate-800 text-black/40 dark:text-slate-500 hover:border-black/10",
-                                  !hasContent &&
-                                    !isSelected &&
-                                    "opacity-40 grayscale-[0.5]",
-                                )}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div
-                                    className={cn(
-                                      "w-2 h-2 rounded-full",
-                                      hasContent
-                                        ? "bg-emerald-500"
-                                        : "bg-rose-500",
-                                    )}
-                                  />
-                                  <span className="truncate max-w-[120px]">
-                                    {subject}
-                                  </span>
-                                </div>
-                                {!hasContent && (
-                                  <span className="text-[8px] uppercase tracking-tighter opacity-50">
-                                    Sem Material
-                                  </span>
-                                )}
-                                {isSelected && (
-                                  <Check
-                                    size={14}
-                                    className={
-                                      isSelected
-                                        ? "text-current"
-                                        : "text-blue-500"
-                                    }
-                                  />
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {selectedSimuladoSubjects.length > 0 && (
-                          <motion.button
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            onClick={handleGenerateSimulado}
-                            className={cn(
-                              "w-full py-4 rounded-2xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3 mt-4",
-                              theme.primary,
-                              theme.primaryHover,
-                            )}
-                          >
-                            <Zap size={20} />
-                            Gerar Simulado ({questionCount} questões)
-                          </motion.button>
-                        )}
-                      </motion.div>
-                    )}
-
-                    {!isSimulado && (
+                    {true && (
                       <>
                         {/* Subject Selection */}
                         <div className="max-w-xl mx-auto space-y-3">
@@ -12209,14 +12896,6 @@ function QuizApp() {
                               `dark:hover:${theme.bgDark}`,
                             )}
                           >
-                            <input
-                              type="file"
-                              ref={fileInputRef}
-                              onChange={handleFileUpload}
-                              multiple
-                              className="hidden"
-                              accept=".txt,.md,.pdf,.docx,image/*"
-                            />
                             <div className="flex flex-col items-center gap-3">
                               <div
                                 className={cn(
@@ -12532,8 +13211,18 @@ function QuizApp() {
                               <div className="bg-black text-white dark:bg-white dark:text-black text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-tighter">
                                 CADERNO OFICIAL
                               </div>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none flex items-center gap-2">
                                 Simulado de Alta Fidelidade
+                                {currentQuestion.subject && (
+                                  <>
+                                    <span className="text-black/20 dark:text-white/20">
+                                      •
+                                    </span>
+                                    <span className="text-amber-600 dark:text-amber-400 font-black">
+                                      {currentQuestion.subject}
+                                    </span>
+                                  </>
+                                )}
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
@@ -12969,13 +13658,15 @@ function QuizApp() {
                               </div>
                             </div>
 
-                            <button
-                              onClick={() => setShowExitQuizConfirmation(true)}
-                              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-rose-500/10 hover:text-rose-600 transition-all text-[10px] font-bold dark:text-slate-400 shrink-0"
-                            >
-                              <X size={14} />
-                              Sair
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setShowExitQuizConfirmation(true)}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-rose-500/10 hover:text-rose-600 transition-all text-[10px] font-bold dark:text-slate-400 shrink-0"
+                              >
+                                <X size={14} />
+                                Sair
+                              </button>
+                            </div>
                           </div>
 
                           <AnimatePresence mode="wait">
@@ -12988,6 +13679,17 @@ function QuizApp() {
                               className="flex flex-col gap-6"
                             >
                               <div className="space-y-4">
+                                {currentQuestion.subject && (
+                                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/20 rounded-xl">
+                                    <BookOpen
+                                      size={14}
+                                      className="text-amber-600 dark:text-amber-400"
+                                    />
+                                    <span className="text-xs font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                                      {currentQuestion.subject}
+                                    </span>
+                                  </div>
+                                )}
                                 <span
                                   className={cn(
                                     "text-sm font-serif italic",
